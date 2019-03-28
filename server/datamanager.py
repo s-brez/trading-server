@@ -117,7 +117,6 @@ class Datamanager:
 	# TODO
 	# Complete below functions.
 
-
 	def resample_data(self, symbol, source, target_tf):
 		""" Resample existing candles to target timeframe candles.
 			Save dataframe of resampled candles.
