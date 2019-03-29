@@ -1,1 +1,6 @@
 data/
+to_implement/
+versions/
+misc.txt
+testing/
+create_classes_from_string.py

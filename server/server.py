@@ -1,13 +1,12 @@
 from datamanager import Datamanager
 from exchanges import *
-import traceback
 
 
 class Server():
     """ Server model
         Interacts with all exchange objects and DataHandler to fetch data,
-        update datastores, and conduct order management
-        
+        transform native to non-native trimeframes, andupdate datastores,
+        and conduct order management (wip)
     """
 
     data = Datamanager()
@@ -36,8 +35,8 @@ class Server():
                 pairs = exchange.get_all_pairs()
                 for pair in pairs:
 
-                    # poll exchange REST APIs for all historical data
-                    # save polled data as CSVs
+                    # poll exchange APIs for all historical data
+                    # save polled data as CSV
                     data.create_new_datastore(
                         pair,
                         exchange.get_name(),
@@ -123,19 +122,31 @@ class Server():
         """ Returns a list of all exchange objects
         """
 
-        # load list of desired exchanges from file
-        with open("exchanges.txt", "r") as f:
-            names = f.read()
+        class_names = []
+
+        # load data sources (exchanges) from file
+        with open("./exchanges/exchanges.txt", "r") as f:
+            for line in f:
+                # list of strings by line
+                class_names.append(line.strip())
+
+        exchanges = list()
+
+        # create exchange objects from name list
+        for name in class_names:
+            exchanges.append(eval(name))
+
+        return exchanges
 
     def load_required_timeframes():
+        """ Returns a list of timeframes required for analysis
+            Includes native and non-native timeframes
+        """
 
+        timeframes = []
 
-
-    """ Current tasks
-        1. Build all Bitfinex datastores
-        2. Add websocket update capability to Bitfinex
-        3. Create "Exchange" interface
-        4. Bitfinex to inherit "Exchange" interface
-        5. Create baseline Bitmex class to further test Exchange interface
-        6. Move completed exchange classes to a library
-    """
+        # load timeframes from file
+        with open("./exchanges/required_timeframes.txt", "r") as f:
+            for line in f:
+                # list of strings by line
+                timeframes.append(line.strip())
