@@ -1,8 +1,8 @@
+from bitfinex import Bitfinex
 from datamanager import Datamanager
-from exchanges import *
 
 
-class Server():
+class Server:
     """ Server model
         Interacts with all exchange objects and DataHandler to fetch data,
         transform native to non-native trimeframes, andupdate datastores,
@@ -17,12 +17,12 @@ class Server():
     def __init__(self):
 
         # populate list of all exchange objects
-        self.exchanges = load_exchanges()
+        self.exchanges = self.load_exchanges()
 
         # load required timeframes from file
-        self.required_timeframes = load_required_timeframes()
+        self.required_timeframes = self.load_required_timeframes()
 
-    def build_native_timeframe_datastores():
+    def build_native_timeframe_datastores(self):
         """ Fetches all historical data for all pairs, all exchanges.
             Required to run only once for initial datastore build.
             Caution - takes many hours.
@@ -43,7 +43,7 @@ class Server():
                         timeframe,
                         exchange.get_all_candles(pair, timeframe))
 
-    def build_non_native_timeframe_datastores():
+    def build_non_native_timeframe_datastores(self):
         """ Creates missing timeframes from stored data where desired
             timeframes not available natively.
         """
@@ -66,7 +66,7 @@ class Server():
                             exchange.get_name(),
                             target_tf))
 
-    def update_datastores():
+    def update_datastores(self):
         """ Intended to be run manually intermittently
             during development. To be superceded by smarter
             websocket updating (live tick data stream convert to candles)
@@ -118,27 +118,35 @@ class Server():
                         exchange.get_name(),
                         timeframe)
 
-    def load_exchanges():
+    def load_exchanges(self):
         """ Returns a list of all exchange objects
         """
 
-        class_names = []
+        # TODO
+        # find a way to dynamically create exchange obejcts from
+        # text file of name strings
 
-        # load data sources (exchanges) from file
-        with open("./exchanges/exchanges.txt", "r") as f:
-            for line in f:
-                # list of strings by line
-                class_names.append(line.strip())
+        # class_names = []
+
+        # # load data sources (exchanges) from file
+        # with open("exchanges.txt", "r") as f:
+        #     for line in f:
+        #         # list of strings by line
+        #         class_names.append(line.strip())
 
         exchanges = list()
 
-        # create exchange objects from name list
-        for name in class_names:
-            exchanges.append(eval(name))
+        # NOTE, the below appears to declare the object but not create it
+
+        # # create exchange objects from name list
+        # for name in class_names:
+        #     exchanges.append(eval(name))
+
+        exchanges.append(Bitfinex())
 
         return exchanges
 
-    def load_required_timeframes():
+    def load_required_timeframes(self):
         """ Returns a list of timeframes required for analysis
             Includes native and non-native timeframes
         """
@@ -146,7 +154,9 @@ class Server():
         timeframes = []
 
         # load timeframes from file
-        with open("./exchanges/required_timeframes.txt", "r") as f:
+        with open("required_timeframes.txt", "r") as f:
             for line in f:
                 # list of strings by line
                 timeframes.append(line.strip())
+
+        return timeframes
