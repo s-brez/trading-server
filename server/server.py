@@ -28,8 +28,10 @@ class Server:
             Caution - takes many hours.
         """
 
+        timeframes = tuple()
+
         # iterate through all exchanges, native timeframes and pairs
-        for exchange in exchanges:
+        for exchange in self.exchanges:
             timeframes = exchange.get_native_timeframes()
             for timeframe in timeframes:
                 pairs = exchange.get_all_pairs()
@@ -37,7 +39,7 @@ class Server:
 
                     # poll exchange APIs for all historical data
                     # save polled data as CSV
-                    data.create_new_datastore(
+                    self.data.create_new_datastore(
                         pair,
                         exchange.get_name(),
                         timeframe,
@@ -49,7 +51,7 @@ class Server:
         """
 
         # iterate through all exchanges, non-native timeframes and pairs
-        for exchange in exchanges:
+        for exchange in self.exchanges:
             timeframes = exchange.get_non_native_timeframes()
             for target_tf in timeframes:
                 pairs = exchange.get_all_pairs()
@@ -57,11 +59,11 @@ class Server:
 
                     # resample existing data to target timeframe and
                     # create new datastores from existing saved data
-                    data.create_new_datastore(
+                    self.data.create_new_datastore(
                         pair,
                         exchange.get_name(),
                         target_tf,
-                        data.resample_data(
+                        self.data.resample_data(
                             pair,
                             exchange.get_name(),
                             target_tf))
@@ -73,27 +75,27 @@ class Server:
         """
 
         # update native timeframes
-        for exchange in exchanges:  # iterate through all exchanges
+        for exchange in self.exchanges:  # iterate through all exchanges
             native_timeframes = exchange.get_native_timeframes()
             for timeframe in native_timeframes:  # & all local timeframes
                 pairs = exchange.get_all_pairs()
                 for pair in pairs:  # & all pairs
-                    data.update_existing_datastore(
+                    self.data.update_existing_datastore(
                         pair,
                         exchange.get_name(),
                         timeframe,
                         exchange.get_new_candles(
                             pair,
                             timeframe,
-                            int(data.get_last_stored_timestamp(
+                            int(self.data.get_last_stored_timestamp(
                                 pair, timeframe))))
-                    data.remove_duplicate_entries(
+                    self.data.remove_duplicate_entries(
                         pair,
                         exchange.get_name(),
                         timeframe)
 
         # update non-native timeframes
-        for exchange in exchanges:
+        for exchange in self.exchanges:
             non_native_timeframes = exchange.get_non_native_timeframes()
             print(non_native_timeframes)
             for timeframe in non_native_timeframes:
@@ -103,7 +105,7 @@ class Server:
 
                     # resample from the native data just updated
                     print("origin data for " + timeframe)
-                    df = data.resample_data(
+                    df = self.data.resample_data(
                         pair,
                         exchange.get_name(),
                         timeframe)
@@ -113,7 +115,7 @@ class Server:
                         './data/' + exchange.get_name() + '/' + pair +
                         '_' + exchange.get_name() + '_' + timeframe + '.csv')
 
-                    data.remove_duplicate_entries(
+                    self.data.remove_duplicate_entries(
                         pair,
                         exchange.get_name(),
                         timeframe)
@@ -123,7 +125,7 @@ class Server:
         """
 
         # TODO
-        # find a way to dynamically create exchange obejcts from
+        # implement a way to dynamically create exchange objects from
         # text file of name strings
 
         # class_names = []

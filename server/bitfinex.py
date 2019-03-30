@@ -32,8 +32,7 @@ class Bitfinex(CryptoExchange):
     name = "Bitfinex"
 
     native_timeframes = (  # Bitfinex native OHLCV timeframes.
-        # "1m",
-        "5m", "15m", "30m", "1h", "3h",
+        "1m", "5m", "15m", "30m", "1h", "3h",
         "6h", "12h", "1D", "7D", "1M")
 
     non_native_timeframes = (  # timeframes to be transformed from source data
@@ -65,18 +64,18 @@ class Bitfinex(CryptoExchange):
         "7D": 604800,
         "1M": 2629746}
 
-    usd_pairs = (
+    usd_pairs = [
         "BTCUSD", "ETHUSD", "LTCUSD", "EOSUSD", "XRPUSD", "NEOUSD",
         "USTUSD", "BABUSD", "IOTUSD", "ETCUSD", "DSHUSD", "OMGUSD",
-        "XMRUSD", "ZECUSD", "BABUSD", "BSVUSD", "BTGUSD", "ZRXUSD")
+        "XMRUSD", "ZECUSD", "BABUSD", "BSVUSD", "BTGUSD", "ZRXUSD"]
 
-    btc_pairs = (
+    btc_pairs = [
         "ETHBTC", "EOSBTC", "XRPBTC", "LTCBTC", "BABBTC", "NEOBTC",
         "ETCBTC", "OMGBTC", "XMRBTC", "IOTBTC", "DSHBTC", "ZECUSD",
-        "BSVBTC")
+        "BSVBTC"]
 
-    eth_pairs = (
-        "EOSETH")
+    eth_pairs = [
+        "EOSETH"]
 
     def __init__(self):
         pass
@@ -135,7 +134,8 @@ class Bitfinex(CryptoExchange):
                     df.columns = [
                         "Time", "Open", "Close", "High", "Low", "Volume"]
                     df.set_index(['Time'], inplace=True)
-                    print(df)
+                    print(df.tail())
+                    print(frames)
                     return df
 
                 # wait between blocks to avoid API rate limit
@@ -341,47 +341,37 @@ class Bitfinex(CryptoExchange):
 
         return limit
 
-    @property
-    def native_timeframes(self):
-        """ Returns tuple of local-to-exchange timeframes
+    def get_native_timeframes(self):
+        """ Returns list of local-to-exchange timeframes
         """
         return self.native_timeframes
 
-    @property
-    def non_native_timeframes(self):
-        """ Returns tuple of non-native timeframes
+    def get_non_native_timeframes(self):
+        """ Returns list of non-native timeframes
         """
         return self.non_native_timeframes
 
-    @property
     def get_usd_pairs(self):
-        """ Returns tuple of usd margin pairs
+        """ Returns list of usd margin pairs
         """
         return self.usd_pairs
 
-    @property
     def get_btc_pairs(self):
-        """ Returns tuple of btc margin pairs
+        """ Returns list of btc margin pairs
         """
         return self.btc_pairs
 
-    @property
     def get_eth_pairs(self):
-        """ Returns tuple of eth margin pairs
+        """ Returns list of eth margin pairs
         """
         return self.eth_pairs
 
-    @property
     def get_all_pairs(self):
-        """ Returns all pairs.
+        """ Returns all pairs as a list.
         """
-        all_pairs = ()
 
-        all_pairs = self.usd_pairs + self.btc_pairs + self.eth_pairs
+        return self.usd_pairs + self.btc_pairs + self.eth_pairs
 
-        return all_pairs
-
-    @property
     def get_name(self):
         """ Return name
         """

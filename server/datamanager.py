@@ -74,8 +74,6 @@ class Datamanager:
             df.to_csv(
                 './data/' + source + '/' + symbol + '_' + source +
                 '_' + timeframe + '.csv')
-            self.remove_duplicate_entries(
-                symbol, source, timeframe)
             print(
                 "Created new datastore for " + symbol + "_" + source +
                 '_' + timeframe + ".")
