@@ -87,8 +87,9 @@ class Server:
                         exchange.get_new_candles(
                             pair,
                             timeframe,
-                            int(self.data.get_last_stored_timestamp(
-                                pair, timeframe))))
+                            int(
+                                self.data.get_last_stored_timestamp(
+                                    pair, exchange, timeframe))))
                     self.data.remove_duplicate_entries(
                         pair,
                         exchange.get_name(),
@@ -103,7 +104,7 @@ class Server:
                 print(pairs)
                 for pair in pairs:
 
-                    # resample from the native data just updated
+                    # resample from native data
                     print("origin data for " + timeframe)
                     df = self.data.resample_data(
                         pair,

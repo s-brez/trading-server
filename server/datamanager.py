@@ -21,7 +21,7 @@ class Datamanager:
         'Low': 'min',
         'Vol': 'sum'}
 
-    # dictionary for timeframe transforms. 'target': 'source'
+    # dictionary for timeframe transforms. 'target': 'source.get_name()'
     transform_dict = {
         '2h': '1h',
         '4h': '1h',
@@ -38,30 +38,39 @@ class Datamanager:
         """
 
         # if a datastore exists, get the last stored timestamp
-        if self.check_datastore_exists(symbol, source, timeframe):
+        if self.check_datastore_exists(symbol, source.get_name(), timeframe):
             with open(
-                './data/' + source + '/' + symbol +
-                    '_' + source + '_' + timeframe + '.csv') as f:
+                './data/' + source.get_name() + '/' + symbol +
+                    '_' + source.get_name() + '_' + timeframe + '.csv') as f:
 
-                        # parse CSV datastore as list
-                        datastore = csv.reader(f)
-                        datastore = list(datastore)
+                        try:
+                            # parse CSV datastore as list
+                            datastore = csv.reader(f)
+                            datastore = list(datastore)
 
-                        # get the first element of last entry
-                        text = datastore[-1][0]
+                            # get the first element of last entry
+                            text = datastore[-1][0]
 
-                        # format date to UTC human readable
-                        date = datetime.datetime.utcfromtimestamp(
-                            int(text) / 1000.0).strftime(
-                                '%H:%M:%S %d-%m-%Y')
+                            # TODO: add error handling here for
+                            # if the source datastore is empty/corrupted
+                            # (ie text returns None)
 
-                        print(
-                            source + "_" + symbol + "_" + timeframe +
-                            " last update: UTC " + str(date))
+                            # format date to UTC human readable
+                            date = datetime.datetime.utcfromtimestamp(
+                                int(text) / 1000.0).strftime(
+                                    '%H:%M:%S %d-%m-%Y')
 
-                        return text
+                            print(
+                                source.get_name() + "_" + symbol + "_" +
+                                timeframe + " last update: UTC " + str(date))
+                        except Exception as e:
+                            print(e)
+                            print(text)
+                            print(datastore)
         else:
-            print("No datastore exists for " + symbol + '_' + source + ".")
+            print(
+                "No datastore exists for " + symbol + '_' +
+                source.get_name() + ".")
 
     def create_new_datastore(self, symbol, source, timeframe, df):
         """ Save given dataframe to new CSV.
@@ -69,13 +78,17 @@ class Datamanager:
         """
 
         if self.check_datastore_exists(symbol, source, timeframe):
-            print("Datastore already exists for " + symbol + "_" + source)
+            print(
+                "Datastore already exists for " + symbol +
+                "_" + source)
         else:
             df.to_csv(
-                './data/' + source + '/' + symbol + '_' + source +
+                './data/' + source + '/' + symbol +
+                '_' + source +
                 '_' + timeframe + '.csv')
             print(
-                "Created new datastore for " + symbol + "_" + source +
+                "Created new datastore for " + symbol + "_" +
+                source +
                 '_' + timeframe + ".")
 
     def update_existing_datastore(self, symbol, source, timeframe, df):
@@ -87,18 +100,21 @@ class Datamanager:
         if self.check_datastore_exists(symbol, source, timeframe):
             if isinstance(df, pd.DataFrame):
                 with open(
-                    './data/' + source + '/' + symbol + '_' + source +
-                        '_' + timeframe + '.csv', 'a', newline='') as f:
-                        print("Storing new data.")
+                    './data/' + source + '/' + symbol +
+                    '_' + source + '_' + timeframe +
+                        '.csv', 'a', newline='') as f:
+                            print("Storing new data.")
 
-                        # append the data to the existing CSV
-                        df.to_csv(f, header=False)
+                            # append the data to the existing CSV
+                            df.to_csv(f, header=False)
 
-                        print(
-                            symbol + "_" + source + "_" +
-                            timeframe + " update complete.")
+                            print(
+                                symbol + "_" + source + "_" +
+                                timeframe + " update complete.")
         else:
-            print("Update failed for " + symbol + '_' + source + ".")
+            print(
+                "Update failed for " + symbol + '_' +
+                source + ".")
 
     def check_datastore_exists(self, symbol, source, timeframe):
         """ Checks if local datastore exists for given market.
@@ -106,8 +122,8 @@ class Datamanager:
         """
 
         if os.path.isfile(
-            './data/' + source + '/' + symbol + '_' + source +
-                '_' + timeframe + '.csv'):
+            './data/' + source + '/' + symbol + '_' +
+                source + '_' + timeframe + '.csv'):
             return True
         else:
             return False
@@ -132,14 +148,12 @@ class Datamanager:
         duplicates = set()
 
         for row in fileinput.FileInput(
-            './data/' + source + '/' + symbol + '_' + source +
-                '_' + timeframe + '.csv', inplace=1):
+            './data/' + source + '/' + symbol + '_' +
+                source + '_' + timeframe + '.csv', inplace=1):
                     if row in duplicates:
-
                         # skip duplicate
                         continue
                         duplicates.add(row)
-
                         # output rows back to file, less duplicates
                         # stdout redirected to the file
                         print(row, end='')
@@ -152,14 +166,14 @@ class Datamanager:
         origin_data = self.transform_dict.get(target_tf)
 
         df = pd.read_csv(
-            './data/' + source + '/' + symbol +
-            '_' + source + '_' + origin_data + '.csv')
+            './data/' + source.get_name() + '/' + symbol +
+            '_' + source.get_name() + '_' + origin_data + '.csv')
 
         # reformat time column, it gets read as a string otherwise
         df["Time"] = pd.to_datetime(df["Time"], unit='ms')
 
         # adjust for irregular OCHLV format if required
-        if source == "Bitfinex":
+        if source.get_name() == "Bitfinex":
             df.columns = ["Time", "Open", "Close", "High", "Low", "Vol"]
         # otherwise use standard OHLCV format
         else:

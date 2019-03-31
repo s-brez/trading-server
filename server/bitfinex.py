@@ -169,13 +169,14 @@ class Bitfinex(CryptoExchange):
         # set requested candle block size according to timeframe
         limit = 0
 
+        #  set requested candle block size according to timeframe
         limit = self.calculate_block_limit(timeframe)
 
-        count = 1
-
+        # temporary storage to aggregate API responses
         frames = []
 
         error_count = 0
+        count = 1
 
         print('Start update ' + symbol + '_' + timeframe + ".")
         time.sleep(3)
