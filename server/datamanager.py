@@ -1,11 +1,8 @@
-"""
-"""
-
 import datetime
-import fileinput
 import os
 import csv
 import pandas as pd
+import numpy
 
 
 class Datamanager:
@@ -63,6 +60,9 @@ class Datamanager:
                             print(
                                 source.get_name() + "_" + symbol + "_" +
                                 timeframe + " last update: UTC " + str(date))
+
+                            return text
+
                         except Exception as e:
                             print(e)
                             print(text)
@@ -80,21 +80,29 @@ class Datamanager:
         if self.check_datastore_exists(symbol, source, timeframe):
             print(
                 "Datastore already exists for " + symbol +
-                "_" + source)
-        else:
-            df.to_csv(
-                './data/' + source + '/' + symbol +
-                '_' + source +
-                '_' + timeframe + '.csv')
-            print(
-                "Created new datastore for " + symbol + "_" +
-                source +
-                '_' + timeframe + ".")
+                "_" + source + ". Overwriting old data.")
+
+        # drop any duplicate timestamps
+        df.drop_duplicates()
+
+        # save to CSV
+        df.to_csv(
+            './data/' + source + '/' + symbol +
+            '_' + source +
+            '_' + timeframe + '.csv')
+
+        print(
+            "Created new datastore for " + symbol + "_" +
+            source +
+            '_' + timeframe + ".")
 
     def update_existing_datastore(self, symbol, source, timeframe, df):
         """ Append new dataframe to existing CSV.
             Param 'df': dataframe of new candles from last stored timestamp
         """
+
+        # drop any duplicate timestamps
+        df.drop_duplicates()
 
         # if the datastore exists, open it in append mode
         if self.check_datastore_exists(symbol, source, timeframe):
@@ -103,7 +111,6 @@ class Datamanager:
                     './data/' + source + '/' + symbol +
                     '_' + source + '_' + timeframe +
                         '.csv', 'a', newline='') as f:
-                            print("Storing new data.")
 
                             # append the data to the existing CSV
                             df.to_csv(f, header=False)
@@ -115,6 +122,54 @@ class Datamanager:
             print(
                 "Update failed for " + symbol + '_' +
                 source + ".")
+
+    def standardise(self):
+        """ Reformat all existing datastores for consistent
+            index typing and remove any duplicate entries.
+            this works when executed one level up from "data" directory
+        """
+
+        # get list of subdirectories within "data" subdirectory
+        subdirectories = [f.path for f in os.scandir("data") if f.is_dir()]
+        for directory in subdirectories:
+
+            # get list of files within each subdirectory of "data"
+            files = os.listdir(directory)
+            for file in files:
+
+                try:
+                    # open .csv files only, case-agnostic
+                    if file.lower().endswith('.csv'):
+                        print(directory + "\\" + file)
+                        with open(directory + "\\" + file) as f:
+
+                            # print file name
+                            print(file)
+
+                            # load csv into dataframe
+                            df = pd.read_csv(f)
+                            df.set_index("Time", inplace=True)
+
+                            # unix ms timestamps    = float or int
+                            # datetime timestamp    = string
+                            # if unix timestamp, convert ms to datetime
+                            if (
+                                type(df.index[0]) is numpy.float64 or
+                                    numpy.int64):
+                                df.index = pd.to_datetime(df.index, unit='ms')
+
+                            # remove duplicates
+                            df.drop_duplicates(keep='first', inplace=True)
+
+                            # overwrite existing files
+                            df.to_csv(directory + "\\" + file)
+
+                except Exception as e:
+                    print(e)
+                    return False
+
+        print("Data standardisation complete.")
+        return True
 
     def check_datastore_exists(self, symbol, source, timeframe):
         """ Checks if local datastore exists for given market.
@@ -139,24 +194,6 @@ class Datamanager:
         print('Local system time: ' + time + ' ' + str(timezone))
 
         return time
-
-    def remove_duplicate_entries(self, symbol, source, timeframe):
-        """ Remove duplicate data and blank rows from CSV datastore
-        """
-
-        # use a set for speed (faster than pandas)
-        duplicates = set()
-
-        for row in fileinput.FileInput(
-            './data/' + source + '/' + symbol + '_' +
-                source + '_' + timeframe + '.csv', inplace=1):
-                    if row in duplicates:
-                        # skip duplicate
-                        continue
-                        duplicates.add(row)
-                        # output rows back to file, less duplicates
-                        # stdout redirected to the file
-                        print(row, end='')
 
     def resample_data(self, symbol, source, target_tf):
         """ Resample existing candles to target timeframe candles.
