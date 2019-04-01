@@ -1,6 +1,8 @@
 import time
+import sys
 import requests
 import traceback
+import logging
 import pandas as pd
 
 from exchange_types import CryptoExchange
@@ -27,63 +29,83 @@ class Bitfinex(CryptoExchange):
             JSON: [[MTS, OPEN, CLOSE, HIGH, LOW, VOLUME],]
     """
 
-    url = 'https://api-pub.bitfinex.com/v2/'
-
-    name = "Bitfinex"
-
-    native_timeframes = (  # Bitfinex native OHLCV timeframes.
-        "1m", "5m", "15m", "30m", "1h", "3h",
-        "6h", "12h", "1D", "7D", "1M")
-
-    non_native_timeframes = (  # timeframes to be transformed from source data
-        "2h", "4h", "8h", "2D", "3D")
-
-    ohlcv_dict = {  # for resampling of data, show
-        'Open': 'first',
-        'Close': 'last',
-        'High': 'max',
-        'Low': 'min',
-        'Vol': 'sum'}
-
-    timeframe_targettime = {  # timeframe : seconds per timeframe unit
-        "1m": 60,
-        "5m": 300,
-        "15m": 900,
-        "30m": 1800,
-        "1h": 3600,
-        "2h": 7200,
-        "3h": 10800,
-        "4h": 14400,
-        "6h": 21600,
-        "8h": 28800,
-        "12h": 43200,
-        "1D": 86400,
-        "2D": 172800,
-        "3D": 259200,
-        "1W": 604800,
-        "7D": 604800,
-        "1M": 2629746}
-
-    usd_pairs = [
-        "BTCUSD", "ETHUSD", "LTCUSD", "EOSUSD", "XRPUSD", "NEOUSD",
-        "USTUSD", "BABUSD", "IOTUSD", "ETCUSD", "DSHUSD", "OMGUSD",
-        "XMRUSD", "ZECUSD", "BABUSD", "BSVUSD", "BTGUSD", "ZRXUSD"]
-
-    btc_pairs = [
-        "ETHBTC", "EOSBTC", "XRPBTC", "LTCBTC", "BABBTC", "NEOBTC",
-        "ETCBTC", "OMGBTC", "XMRBTC", "IOTBTC", "DSHBTC", "ZECUSD",
-        "BSVBTC"]
-
-    eth_pairs = [
-        "EOSETH"]
+    log = None
+    url = ""
+    name = ""
+    native_timeframes = ()
+    non_native_timeframes = ()
+    ohlcv_dict = {}
+    timeframe_targettime = {}
+    usd_pairs = []
+    btc_pairs = []
+    eth_pairs = []
 
     def __init__(self):
-        pass
+
+        self.log = logging.getLogger("server.exchange.Bitfinex")
+
+        logging.info("Instantiate Bitfinex class")
+
+        self.url = 'https://api-pub.bitfinex.com/v2/'
+
+        self.name = "Bitfinex"
+
+        # Bitfinex native OHLCV timeframes
+        self.native_timeframes = (
+            "1m", "5m", "15m", "30m", "1h", "3h",
+            "6h", "12h", "1D", "7D", "1M")
+
+        # timeframes to be transformed from source data
+        self.non_native_timeframes = (
+            "2h", "4h", "8h", "2D", "3D")
+
+        # resampling dict
+        self.ohlcv_dict = {
+            'Open': 'first',
+            'Close': 'last',
+            'High': 'max',
+            'Low': 'min',
+            'Vol': 'sum'}
+
+        # timeframe : seconds per timeframe unit
+        self.timeframe_targettime = {
+            "1m": 60,
+            "5m": 300,
+            "15m": 900,
+            "30m": 1800,
+            "1h": 3600,
+            "2h": 7200,
+            "3h": 10800,
+            "4h": 14400,
+            "6h": 21600,
+            "8h": 28800,
+            "12h": 43200,
+            "1D": 86400,
+            "2D": 172800,
+            "3D": 259200,
+            "1W": 604800,
+            "7D": 604800,
+            "1M": 2629746}
+
+        self.usd_pairs = [
+            "BTCUSD", "ETHUSD", "LTCUSD", "EOSUSD", "XRPUSD", "NEOUSD",
+            "USTUSD", "BABUSD", "IOTUSD", "ETCUSD", "DSHUSD", "OMGUSD",
+            "XMRUSD", "ZECUSD", "BABUSD", "BSVUSD", "BTGUSD", "ZRXUSD"]
+
+        self.btc_pairs = [
+            "ETHBTC", "EOSBTC", "XRPBTC", "LTCBTC", "BABBTC", "NEOBTC",
+            "ETCBTC", "OMGBTC", "XMRBTC", "IOTBTC", "DSHBTC", "ZECUSD",
+            "BSVBTC"]
+
+        self.eth_pairs = [
+            "EOSETH"]
 
     def get_all_candles(self, symbol, timeframe):
         """ Returns dataframe of all candle data of a given asset.
             Use this when creating new datastore.
         """
+
+        logging.info("Call get_all_candles()")
 
         # first candle timestamp of given asset
         start = self.get_genesis_timestamp(symbol, timeframe)
@@ -97,7 +119,7 @@ class Bitfinex(CryptoExchange):
         # temporary storage to aggregate API responses
         frames = []
 
-        time.sleep(3)
+        time.sleep(7)
         count = 1
 
         print(
@@ -107,6 +129,7 @@ class Bitfinex(CryptoExchange):
         while start < targettime:
             try:
                 # poll API
+                logging.info("Poll API")
                 response = requests.get(
                     self.url + "candles/trade:" +
                     timeframe + ':t' + symbol + '/hist?limit=' +
@@ -119,49 +142,53 @@ class Bitfinex(CryptoExchange):
                     str(start) + '&sort=1')
 
                 # append new batches of candles to frames
+                logging.info("Append new data to temp storage")
                 frames.extend(response)
 
                 # get the last stored timestamp, the
                 # first item of last list in frames[]
                 start = frames[-1][0]
                 check = frames[-2][0]
-                print(str(count) + ": " + (str(start)))
+
+                print(
+                    "Fetching block " + str(count) + " starting: " +
+                    (str(start)) + " (" + str(limit) + " candles per block)")
+
                 count += 1
 
-                # write to file and return if poll fetches same data
+                # error handling if the new start timestamp is the
+                # same as the last stored timestamp
                 if start == check:
-                    df = pd.DataFrame(frames)
-                    df.columns = [
-                        "Time", "Open", "Close", "High", "Low", "Volume"]
-                    df.set_index(['Time'], inplace=True)
-                    print(df.tail())
-                    print(frames)
-                    return df
+                    logging.info("Duplicate response received")
 
                 # wait between blocks to avoid API rate limit
-                time.sleep(4)
+                time.sleep(7)
 
             # debugging stuff
             except Exception as e:
-                print(e)
-                traceback.print_exc(limit=None, file=None, chain=True)
-                print(API_url)
-                print(response)
-                print(start)
-                print(frames)
-                # exit to prevent rate limit
-                exit()
+                logging.exception(e)
+                logging.debug(
+                    traceback.print_exc(
+                        limit=None, file=None, chain=True))
+                logging.debug("Last timestamp requested: " + start)
+                print("Failed to fetch data.")
+                sys.exit()
 
         # finished fetching all candles, now return a formatted dataframe
+        logging.info("Format dataframe from temp data storage.")
         df = pd.DataFrame(frames)
         df.columns = ["Time", "Open", "Close", "High", "Low", "Volume"]
         df.set_index(['Time'], inplace=True)
+        logging.info(df.head(2))
+        logging.info(df.tail(2))
         return df
 
     def get_new_candles(self, symbol, timeframe, start):
         """ Returns dataframe of candle data from start timestamp to
             current time. Use to update existing datastore.
         """
+
+        logging.info("Call get_new_candles()")
 
         # one timeframe unit prior to current time.
         targettime = self.timeframe_to_targettime(timeframe)
@@ -175,17 +202,21 @@ class Bitfinex(CryptoExchange):
         # temporary storage to aggregate API responses
         frames = []
 
-        error_count = 0
-        count = 1
+        count = 0
+        check = 0
+
+        time.sleep(5)
 
         print('Start update ' + symbol + '_' + timeframe + ".")
-        time.sleep(3)
+
         while start < targettime:
             try:
-                # TODO: Add capability to resume from rate limit/error
-                time.sleep(3)
+                print(
+                    "Update " + str((count)) + " starting: " +
+                    (str(start)))
 
                 # poll API
+                logging.info("Poll API")
                 response = requests.get(
                     self.url + "candles/trade:" + timeframe +
                     ':t' + symbol + '/hist?limit=' + str(limit) + '&start=' +
@@ -196,32 +227,58 @@ class Bitfinex(CryptoExchange):
                     self.url + "candles/trade:" + timeframe +
                     ':t' + symbol + '/hist?limit=' + str(limit) + '&start=' +
                     str(start) + '&sort=1')
-                frames.extend(response)
 
-                # first element of last list
+                # only append candle blocks to frames if a new
+                # block has been fetched, dont append duplicates
+                if start != check:
+                    logging.info("Append new data to temp storage")
+                    frames.extend(response)
+
+                # reset start timestamp to the first element of
+                # the last stored list in frames[]
                 start = frames[-1][0]
+                check = frames[-2][0]
+
+                # error loggin if the new start timestamp is the
+                # same as the second last stored timestamp
+                if start == check:
+                    logging.info("Duplicate response received")
+                    logging.info(
+                        "start: " + str(start) + " check: " + str(check))
+                    logging.debug(response)
+                    logging.debug(API_url)
+                    logging.debug(
+                        "Update failure during " + self.name + " " + symbol +
+                        " " + timeframe)
+                    sys.exit()
+
+                # wait between blocks to avoid API rate limit
+                time.sleep(10)
+
                 count += 1
+
             except Exception as e:
-                print(e)
-                print(API_url)
-                print("Last timestamp: " + str(start))
-                error_count += 1
-                if error_count > 3:
-                    break
-                # TODO: Add capability to save "start" and e to file
+                logging.exception(e)
+                sys.exit()
+
         try:
             df = pd.DataFrame(frames)
             df.columns = ["Time", "Open", "Close", "High", "Low", "Volume"]
             df.set_index(['Time'], inplace=True)
+            logging.info("Format dataframe from temp data storage.")
+            logging.info(df.head(2))
+            logging.info(df.tail(2))
             return df
+
         except ValueError as e:
-            # print(e)
-            print(symbol + ' data is up to date')
+            logging.info(e)
 
     def get_ticker_values(self, symbol):
         """ Returns dataframe of ticker values of given asset.
             TODO: create variant that takes a list of all ticker codes.
         """
+
+        logging.info("Call get_ticker_values()")
 
         response = requests.get(self.url + "tickers?symbols=t" + symbol).json()
         df = pd.DataFrame(response)
@@ -257,6 +314,8 @@ class Bitfinex(CryptoExchange):
             1 min candle of given asset.
         """
 
+        logging.info("Call get_genesis_candle()")
+
         # poll the API
         response = requests.get(
             self.url + "candles/trade:1m:t" + symbol +
@@ -276,6 +335,7 @@ class Bitfinex(CryptoExchange):
             1 min candle of a given asset
         """
 
+        logging.info("Call get_genesis_timestamp()")
         timestamp = int()
 
         try:
@@ -295,17 +355,17 @@ class Bitfinex(CryptoExchange):
             return timestamp
 
         except Exception as e:
-            print("API response: " + response)
-            print("Timestamp: " + timestamp)
-            print("API url string: " + API_url)
-            print(e)
-            traceback.print_exc(limit=None, file=None, chain=True)
+            if(response != ""):
+                logging.info("API response: " + response)
+                logging.info("Timestamp: " + timestamp)
+                logging.info(API_url)
+                logging.info(e)
 
     def timeframe_to_targettime(self, timeframe):
         """ Returns unix timestamp one unit before current
             time based on given timeframe
         """
-
+        logging.info("Call timeframe_to_targettime()")
         targettime = int()
 
         try:
@@ -316,12 +376,12 @@ class Bitfinex(CryptoExchange):
             return targettime
 
         except Exception as e:
-            print(targettime)
-            print(e)
-            exit()
+            logging.info(e)
+            sys.exit()
 
     def calculate_block_limit(self, timeframe):
 
+        logging.info("Call calculate_block_limit()")
         limit = 0
 
         # intradaily candle block size

@@ -9,12 +9,13 @@ class Server:
         and conduct order management (wip)
     """
 
-    data = Datamanager()
-
-    exchanges = list()
-    required_timeframes = list()
+    data = None
+    exchanges = []
+    required_timeframes = []
 
     def __init__(self):
+
+        self.data = Datamanager()
 
         # populate list of all exchange objects
         self.exchanges = self.load_exchanges()
@@ -28,7 +29,7 @@ class Server:
             Caution - takes many hours.
         """
 
-        timeframes = tuple()
+        timeframes = ()
 
         # iterate through all exchanges, native timeframes and pairs
         for exchange in self.exchanges:
@@ -75,11 +76,13 @@ class Server:
         """
 
         # update native timeframes
-        for exchange in self.exchanges:  # iterate through all exchanges
+        for exchange in self.exchanges:
             native_timeframes = exchange.get_native_timeframes()
-            for timeframe in native_timeframes:  # & all local timeframes
+            for timeframe in native_timeframes:
                 pairs = exchange.get_all_pairs()
-                for pair in pairs:  # & all pairs
+                for pair in pairs:
+
+                    # append new data to existing datastores
                     self.data.update_existing_datastore(
                         pair,
                         exchange.get_name(),
@@ -87,13 +90,8 @@ class Server:
                         exchange.get_new_candles(
                             pair,
                             timeframe,
-                            int(
-                                self.data.get_last_stored_timestamp(
-                                    pair, exchange, timeframe))))
-                    self.data.remove_duplicate_entries(
-                        pair,
-                        exchange.get_name(),
-                        timeframe)
+                            int(self.data.get_last_stored_timestamp(
+                                pair, exchange, timeframe))))
 
         # update non-native timeframes
         for exchange in self.exchanges:
@@ -104,7 +102,7 @@ class Server:
                 print(pairs)
                 for pair in pairs:
 
-                    # resample from native data
+                    # resample native data to non-native
                     print("origin data for " + timeframe)
                     df = self.data.resample_data(
                         pair,
@@ -116,10 +114,8 @@ class Server:
                         './data/' + exchange.get_name() + '/' + pair +
                         '_' + exchange.get_name() + '_' + timeframe + '.csv')
 
-                    self.data.remove_duplicate_entries(
-                        pair,
-                        exchange.get_name(),
-                        timeframe)
+        # homogenise index formatting & remove duplicates
+        self.data.standardise()
 
     def load_exchanges(self):
         """ Returns a list of all exchange objects
