@@ -2,6 +2,8 @@ data/
 to_implement/
 versions/
 debug/
+__pycache__/
 misc.txt
 testing/
+app.log
 create_classes_from_string.py
