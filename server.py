@@ -1,4 +1,4 @@
-from datahandler import Datahandler
+from data import Datahandler
 from portfolio import Portfolio
 from strategy import Strategy
 from broker import Broker
@@ -26,10 +26,6 @@ class Server:
        10. Repeat.
     """
 
-    def __init__(self):
-        self.logger = self.setup_logger()
-        self.exchanges = self.load_exchanges()
-
     logger = object
     exchanges = []
     events = queue.Queue(0)
@@ -38,6 +34,10 @@ class Server:
     broker = Broker(exchanges, events, logger)
     portfolio = Portfolio(events, logger)
     strategy = Strategy(events, logger)
+
+    def __init__(self):
+        self.logger = self.setup_logger()
+        self.exchanges = self.load_exchanges()
 
     # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! #
 
@@ -51,6 +51,7 @@ class Server:
 
     # event-handling loop
     while True:
+        data.update_bars()
         while True:
             if not events.empty():
                 event = events.get_nowait()
