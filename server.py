@@ -1,3 +1,4 @@
+
 from data import Datahandler
 from portfolio import Portfolio
 from strategy import Strategy
@@ -9,8 +10,7 @@ import time
 
 
 class Server:
-    """
-    Server routes system events amongst various components via a queue in
+    """Server routes system events amongst various components via a queue in
     an event handling loop. The queue is cleared once per minute.
 
     Event loop lifecycle:
@@ -23,8 +23,7 @@ class Server:
         7. Portfolio consumes Fill event, updates values.
         8. Repeat 1-7 until queue empty.
         9. Sleep until next 1 minute bar close,
-       10. Repeat.
-    """
+       10. Repeat. """
 
     logger = object
     exchanges = []
@@ -72,9 +71,7 @@ class Server:
         time.sleep(timestep)
 
     def setup_logger(self):
-        """
-        Create and configure logger to output to terminal
-        """
+        """Create and configure logger to output to terminal"""
 
         logger = logging.getLogger()
         logger.setLevel(logging.INFO)
@@ -86,9 +83,7 @@ class Server:
         return logger
 
     def load_exchanges(self):
-        """
-        Create and return a list of all exchange objects
-        """
+        """Create and return a list of all exchange objects"""
 
         exchanges = []
         exchanges.append(Bitmex(self.logger))

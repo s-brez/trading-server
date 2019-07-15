@@ -68,20 +68,18 @@ class Datahandler:
         return historic_bars
 
     def set_live_trading(self, live_trading):
-        """
-        Set true or false live execution flag
-        """
+        """Set true or false live execution flag"""
+
         self.set_live_trading = live_trading
 
     def get_timeframes(self):
-        """
-        Return A list of timeframes relevant to the just-elapsed time period.
-        E.g if time has just struck UTC 10:30am the list will contain "m1",
-        "m5", "m15" and "30m" strings. The first minute of a new day or week
-        will add the daily/weekly/monthly timeframe. Timeframes in
+        """Return a list of timeframes relevant to the just-elapsed time period.
+        E.g if time has just struck UTC 10:30am the list will contain "1m",
+        "3m", "5m", "m15" and "30m" strings. The first minute of a new day or
+        week will add daily/weekly/monthly timeframe string. Timeframes in
         use are 1, 3, 5, 15 and 30 mins, 1, 2, 3, 4, 6, 8 and 12 hours, 1, 2
-        and 3 days, weekly and monthly.
-        """
+        and 3 days, weekly and monthly."""
+
         timestamp = datetime.datetime.utcnow()
         timeframes = ["1m"]
 
