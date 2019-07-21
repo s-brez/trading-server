@@ -15,6 +15,7 @@ class MarketEvent(Event):
         """
 
         self.type = 'MARKET'
+        self.exchange
 
 
 class SignalEvent(Event):

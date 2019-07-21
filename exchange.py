@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import datetime
 
 
 class Exchange(ABC):
@@ -18,14 +19,6 @@ class Exchange(ABC):
         pass
 
     @abstractmethod
-    def get_last_bar(self, instrument: str, timeframe: str):
-        """
-        Return OHLCV bar for specified symbol and timeframe for the
-        just-elapsed period.
-        """
-        pass
-
-    @abstractmethod
     def get_first_timestamp(self, instrument: str):
         """
         Return millisecond timestamp of first available
@@ -41,7 +34,7 @@ class Exchange(ABC):
         pass
 
     @abstractmethod
-    def subscribe_ws(self, instruments: list):
+    def listen_ws(self, instruments: list):
         """
         Subscribes to websocket tick data streams for specified list of
         instruments
@@ -53,3 +46,8 @@ class Exchange(ABC):
         Return name string.
         """
         pass
+
+    def previous_minute():
+        timestamp = datetime.datetime.utcnow() - datetime.timedelta(minutes=1)
+        timestamp.replace(second=0, microsecond=0)
+        return timestamp

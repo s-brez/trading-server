@@ -145,3 +145,11 @@ for i in timestamps:
         index = i.minute
         b2.append(i)
 
+
+print("bin 1")
+print(b1)
+print("bin 2")
+print(b2)
+print("bin 3")
+print(b3)
+

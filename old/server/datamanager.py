@@ -195,7 +195,7 @@ class Datamanager:
         else:
             df.columns = ["Time", "Open", "High", "Low", "Close", "Vol"]
 
-        # set the index to timestamp column
+        # set the index to timestamp column``````````````````````
         df.set_index("Time", inplace=True)
 
         # round all values to 2 decimal places

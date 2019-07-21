@@ -5,26 +5,22 @@ import calendar
 
 
 class Datahandler:
-    """
-    Datahandler wraps exchange data and locally stored data with Market
+    """Datahandler wraps exchange data and locally stored data with Market
     events and adds it to the event queue as each timeframe period elapses.
-
     Market events are created from either live or stored data (depending on
     if in backtesting or in live trading modes) and pushed to the event queue
-    for the Strategy object to consume.
-    """
+    for the Strategy object to consume."""
 
     def __init__(self, exchanges, events, logger):
         self.exchanges = exchanges
         self.events = events
         self.logger = logger
+        self.exchanges = []
+        self.events = object
+        self.logger = object
+        self.live_trading = False
 
-    exchanges = []
-    events = object
-    logger = object
-    live_trading = False
-
-    def update_bars(self):
+    def update_market_data(self):
         """
         Pushes all new market events into the event queue
 
@@ -45,18 +41,9 @@ class Datahandler:
         Return a list of market events containing new bars for all watched
         symbols from all exchanges for the just-elapsed time period.
         """
-        new_bars = []
+        new_market_events = []
 
-        for exchange in self.exchanges:
-            for instrument in exchange.get_instruments():
-                for timeframe in self.get_timeframes():
-                    new_bars.append(
-                        MarketEvent(
-                            instrument,
-                            exchange.get_last_bar(
-                                timeframe, instrument),
-                            exchange.get_name()))
-        return new_bars
+        return new_market_events
 
     def get_historic_bars(self):
         """

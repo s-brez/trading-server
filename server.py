@@ -4,9 +4,10 @@ from portfolio import Portfolio
 from strategy import Strategy
 from broker import Broker
 from bitmex import Bitmex
+from time import sleep
 import logging
 import queue
-import time
+import datetime
 
 
 class Server:
@@ -25,50 +26,46 @@ class Server:
         9. Sleep until next 1 minute bar close,
        10. Repeat. """
 
-    logger = object
-    exchanges = []
-    events = queue.Queue(0)
-    timestep = 60
-    data = Datahandler(exchanges, events, logger)
-    broker = Broker(exchanges, events, logger)
-    portfolio = Portfolio(events, logger)
-    strategy = Strategy(events, logger)
-
     def __init__(self):
         self.logger = self.setup_logger()
         self.exchanges = self.load_exchanges()
+        self.events = queue.Queue(0)
+        self.timestep = 60
+        self.data = Datahandler(self.exchanges, self.events, self.logger)
+        self.broker = Broker(self.exchanges, self.events, self.logger)
+        self.portfolio = Portfolio(self.events, self.logger)
+        self.strategy = Strategy(self.events, self.logger)
+        self.live_trading = False   # set True for live execution
+        self.run()
 
-    # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! #
-
-    live_trading = False                       # set True for live execution
-
-    # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! #
-
-    if live_trading:
-        data.set_live_trading(True)
-        broker.set_live_trading(True)
-
-    # event-handling loop
-    while True:
-        data.update_bars()
+    def run(self):
+        # set component flags for live or historic data feeds
+        if self.live_trading:
+            self.data.set_live_trading(self.live_trading)
+            self.broker.set_live_trading(self.live_trading)
+        # event-handling loop
         while True:
-            if not events.empty():
-                event = events.get_nowait()
-            elif events.empty():
-                break
-            else:
-                if event is not None:
-                    if event.type == "MARKET":
-                        strategy.parse_signal(event)
-                    elif event.type == "SIGNAL":
-                        portfolio.update_signal(event)
-                    elif event.type == "ORDER":
-                        broker.place_order(event)
-                    elif event.type == "FILL":
-                        portfolio.update_fill(event)
+            self.data.update_market_data()
+            while True:
+                if not self.events.empty():
+                    event = self.events.get_nowait()
+                elif self.events.empty():
+                    break
+                else:
+                    if event is not None:
+                        if event.type == "MARKET":
+                            self.strategy.parse_data(event)
+                        elif event.type == "SIGNAL":
+                            self.portfolio.update_signal(event)
+                        elif event.type == "ORDER":
+                            self.broker.place_order(event)
+                        elif event.type == "FILL":
+                            self.portfolio.update_fill(event)
 
-        # TODO: sleep for exact time between queue cleared and next minute
-        time.sleep(timestep)
+            # sleep until 1 second before the next minute starts
+            now = datetime.datetime.utcnow().second
+            delay = 60 - now - 1
+            sleep(delay)
 
     def setup_logger(self):
         """Create and configure logger to output to terminal"""
