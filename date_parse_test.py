@@ -1,155 +1,121 @@
-from dateutil import parser
-
-source_timestamps = [
-    "2019-07-15 02:58:01.886000+00:00",
-    "2019-07-15 02:58:09.138000+00:00",
-    "2019-07-15 02:58:14.064000+00:00",
-    "2019-07-15 02:58:18.908000+00:00",
-    "2019-07-15 02:58:19.685000+00:00",
-    "2019-07-15 02:58:22.424000+00:00",
-    "2019-07-15 02:58:28.313000+00:00",
-    "2019-07-15 02:58:32.399000+00:00",
-    "2019-07-15 02:58:38.173000+00:00",
-    "2019-07-15 02:58:40.921000+00:00",
-    "2019-07-15 02:58:42.309000+00:00",
-    "2019-07-15 02:58:45.064000+00:00",
-    "2019-07-15 02:58:53.020000+00:00",
-    "2019-07-15 02:58:53.549000+00:00",
-    "2019-07-15 02:58:55.692000+00:00",
-    "2019-07-15 02:58:58.507000+00:00",
-    "2019-07-15 02:59:00.758000+00:00",
-    "2019-07-15 02:59:03.126000+00:00",
-    "2019-07-15 02:59:05.876000+00:00",
-    "2019-07-15 02:59:10.981000+00:00",
-    "2019-07-15 02:59:13.494000+00:00",
-    "2019-07-15 02:59:15.846000+00:00",
-    "2019-07-15 02:59:21.809000+00:00",
-    "2019-07-15 02:59:21.831000+00:00",
-    "2019-07-15 02:59:24.178000+00:00",
-    "2019-07-15 02:59:26.845000+00:00",
-    "2019-07-15 02:59:27.797000+00:00",
-    "2019-07-15 02:59:29.018000+00:00",
-    "2019-07-15 02:59:31.203000+00:00",
-    "2019-07-15 02:59:33.683000+00:00",
-    "2019-07-15 02:59:35.995000+00:00",
-    "2019-07-15 02:59:35.995000+00:00",
-    "2019-07-15 02:59:35.995000+00:00",
-    "2019-07-15 02:59:35.995000+00:00",
-    "2019-07-15 02:59:35.995000+00:00",
-    "2019-07-15 02:59:38.155000+00:00",
-    "2019-07-15 02:59:42.461000+00:00",
-    "2019-07-15 02:59:43.005000+00:00",
-    "2019-07-15 02:59:44.851000+00:00",
-    "2019-07-15 02:59:46.656000+00:00",
-    "2019-07-15 02:59:48.237000+00:00",
-    "2019-07-15 02:59:49.863000+00:00",
-    "2019-07-15 02:59:51.502000+00:00",
-    "2019-07-15 02:59:54.305000+00:00",
-    "2019-07-15 03:00:00.732000+00:00",
-    "2019-07-15 03:00:02.732000+00:00",
-    "2019-07-15 03:00:03.809000+00:00",
-    "2019-07-15 03:00:04.715000+00:00",
-    "2019-07-15 03:00:05.360000+00:00",
-    "2019-07-15 03:00:06.510000+00:00",
-    "2019-07-15 03:00:09.012000+00:00",
-    "2019-07-15 03:00:12.217000+00:00",
-    "2019-07-15 03:00:16.198000+00:00",
-    "2019-07-15 03:00:16.790000+00:00",
-    "2019-07-15 03:00:16.790000+00:00",
-    "2019-07-15 03:00:16.790000+00:00",
-    "2019-07-15 03:00:16.790000+00:00",
-    "2019-07-15 03:00:16.790000+00:00",
-    "2019-07-15 03:00:16.790000+00:00",
-    "2019-07-15 03:00:16.790000+00:00",
-    "2019-07-15 03:00:16.790000+00:00",
-    "2019-07-15 03:00:16.790000+00:00",
-    "2019-07-15 03:00:16.790000+00:00",
-    "2019-07-15 03:00:16.790000+00:00",
-    "2019-07-15 03:00:16.790000+00:00",
-    "2019-07-15 03:00:16.790000+00:00",
-    "2019-07-15 03:00:16.790000+00:00",
-    "2019-07-15 03:00:16.790000+00:00",
-    "2019-07-15 03:00:16.790000+00:00",
-    "2019-07-15 03:00:16.790000+00:00",
-    "2019-07-15 03:00:16.790000+00:00",
-    "2019-07-15 03:00:16.790000+00:00",
-    "2019-07-15 03:00:16.790000+00:00",
-    "2019-07-15 03:00:16.790000+00:00",
-    "2019-07-15 03:00:16.790000+00:00",
-    "2019-07-15 03:00:18.067000+00:00",
-    "2019-07-15 03:00:18.711000+00:00",
-    "2019-07-15 03:00:18.711000+00:00",
-    "2019-07-15 03:00:19.728000+00:00",
-    "2019-07-15 03:00:20.055000+00:00",
-    "2019-07-15 03:00:20.591000+00:00",
-    "2019-07-15 03:00:20.591000+00:00",
-    "2019-07-15 03:00:22.297000+00:00",
-    "2019-07-15 03:00:23.803000+00:00",
-    "2019-07-15 03:00:23.803000+00:00",
-    "2019-07-15 03:00:23.803000+00:00",
-    "2019-07-15 03:00:23.803000+00:00",
-    "2019-07-15 03:00:23.803000+00:00",
-    "2019-07-15 03:00:23.803000+00:00",
-    "2019-07-15 03:00:23.803000+00:00",
-    "2019-07-15 03:00:24.511000+00:00",
-    "2019-07-15 03:00:26.462000+00:00",
-    "2019-07-15 03:00:29.553000+00:00",
-    "2019-07-15 03:00:35.847000+00:00",
-    "2019-07-15 03:00:40.751000+00:00",
-    "2019-07-15 03:00:44.364000+00:00",
-    "2019-07-15 03:00:45.452000+00:00",
-    "2019-07-15 03:01:00.291000+00:00",
-    "2019-07-15 03:01:10.777000+00:00",
-    "2019-07-15 03:01:19.714000+00:00",
-    "2019-07-15 03:01:19.739000+00:00",
-    "2019-07-15 03:01:20.919000+00:00",
-    "2019-07-15 03:01:25.177000+00:00",
-    "2019-07-15 03:01:35.070000+00:00",
-    "2019-07-15 03:01:36.198000+00:00",
-    "2019-07-15 03:01:40.017000+00:00",
-    "2019-07-15 03:01:41.199000+00:00",
-    "2019-07-15 03:01:48.027000+00:00",
-    "2019-07-15 03:01:55.989000+00:00",
-    "2019-07-15 03:02:00.903000+00:00",
-    "2019-07-15 03:02:13.662000+00:00",
-    "2019-07-15 03:02:18.048000+00:00",
-    "2019-07-15 03:02:24.604000+00:00",
-    "2019-07-15 03:02:29.750000+00:00",
-    "2019-07-15 03:02:39.620000+00:00",
-    "2019-07-15 03:02:46.193000+00:00",
-    "2019-07-15 03:02:46.193000+00:00",
-    "2019-07-15 03:02:46.193000+00:00",
-    "2019-07-15 03:02:46.193000+00:00",
-    "2019-07-15 03:02:46.196000+00:00",
-    "2019-07-15 03:02:46.199000+00:00",
-    "2019-07-15 03:02:51.196000+00:00",
-    "2019-07-15 03:02:59.005000+00:00"]
-
-timestamps = []
-b1 = []
-b2 = []
-b3 = []
-
-# parse source strings to datetime objects
-for i in source_timestamps:
-    dt = parser.parse(i)
-    timestamps.append(dt)
+import websocket
+import threading
+import json
+import traceback
 
 
-index = timestamps[0].minute
-for i in timestamps:
-    if i.minute == index:
-        b1.append(i)
+class Threadtest:
 
-    if i.minute == index + 1:
-        index = i.minute
-        b2.append(i)
+    MAX_SIZE = 200
+
+    def __init__(self):
+        self.data = {}
+        self.keys = {}
+        self.symbols = ("XBTUSD", "ETHUSD")
+        self.channels = ("trade", "orderBookL2")
+        self.URL = 'wss://testnet.bitmex.com/realtime'
+        self.ws = websocket.WebSocketApp(
+            self.URL,
+            on_message=lambda ws, msg: self.on_message(ws, msg),
+            on_error=lambda ws, msg: self.on_error(ws, msg),
+            on_close=lambda ws: self.on_close(ws),
+            on_open=lambda ws: self.on_open(ws))
+
+        # self.ws.on_open = lambda self: self.send(
+        #     '{"op": "subscribe", "args": ["trade:XBTUSD", "trade:ETHUSD"]}')
+
+        # websocket.enableTrace(True)
+        thread = threading.Thread(target=self.ws.run_forever())
+        thread.daemon = True
+        thread.start()
+
+    def on_error(self, ws, msg):
+        raise websocket.WebSocketException(msg)
+
+    def on_close(self, ws):
+        pass
+
+    def on_open(self, ws):
+        ws.send(self.get_channel_subscription_string())
+
+    def on_message(self, ws, msg):
+        msg = json.loads(msg)
+
+        table = msg['table'] if 'table' in msg else None
+        action = msg['action'] if 'action' in msg else None
+        try:
+            if 'subscribe' in msg:
+                print("Subscribed to: " + msg['subscribe'])
+            elif action:
+                if table not in self.data:
+                    self.data[table] = []
+
+            if action == 'partial':
+                self.data[table] += msg['data']
+                self.keys[table] = msg['keys']
+            elif action == 'insert':
+                self.data[table] += msg['data']
+                # trim data table size when it exceeds MAX_SIZE
+                if(table not in ['order', 'orderBookL2'] and
+                        len(self.data[table]) > self.MAX_SIZE):
+                    self.data[table] = self.data[table][int(self.MAX_SIZE) / 2:] # noqa
+            elif action == 'update':
+                # Locate the item in the collection and update it.
+                for updateData in msg['data']:
+                    item = self.findItemByKeys(
+                        self.keys[table],
+                        self.data[table],
+                        updateData)
+                    if not item:
+                        return  # No item found to update.
+                    item.update(updateData)
+                    # Remove cancelled / filled orders
+                    if table == 'order' and not self.order_leaves_quantity(item): # noqa
+                        self.data[table].remove(item)
+            elif action == 'delete':
+                # Locate the item in the collection and remove it.
+                for deleteData in msg['data']:
+                    item = self.findItemByKeys(
+                        self.keys[table],
+                        self.data[table],
+                        deleteData)
+                    self.data[table].remove(item)
+            else:
+                if action is not None:
+                    raise Exception("Unknown action: %s" % action)
+
+        except Exception:
+            print(traceback.format_exc())
+
+        # self.ws.on_open = lambda self: self.send(
+        #     '{"op": "subscribe", "args": ["trade:XBTUSD", "trade:ETHUSD"]}')
+
+    def get_channel_subscription_string(self):
+        prefix = '{"op": "subscribe", "args": ['
+        suffix = ']}'
+        string = ""
+        count = 0
+        for symbol in self.symbols:
+            for channel in self.channels:
+                string += '"' + channel + ':' + str(symbol) + '"'
+                count += 1
+                if count < len(self.channels) + len(self.symbols):
+                    string += ", "
+        return prefix + string + suffix
+
+    def findItemByKeys(self, keys, table, matchData):
+        for item in table:
+            matched = True
+            for key in keys:
+                if item[key] != matchData[key]:
+                    matched = False
+            if matched:
+                return item
+
+    def order_leaves_quantity(self, o):
+        if o['leavesQty'] is None:
+            return True
+        return o['leavesQty'] > 0
 
 
-print("bin 1")
-print(b1)
-print("bin 2")
-print(b2)
-print("bin 3")
-print(b3)
-
+tt = Threadtest()
