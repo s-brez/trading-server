@@ -62,26 +62,26 @@ class Server:
                         elif event.type == "FILL":
                             self.portfolio.update_fill(event)
 
-            # sleep until 1 second before the next minute starts
+            # sleep until the next minute starts
             now = datetime.datetime.utcnow().second
-            delay = 60 - now - 1
+            delay = 60 - now
             sleep(delay)
 
     def setup_logger(self):
-        """Create and configure logger to output to terminal"""
+        """Create and configure logger"""
 
         logger = logging.getLogger()
         logger.setLevel(logging.INFO)
         ch = logging.StreamHandler()
         formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+            "%(asctime)s:%(levelname)s:%(module)s - %(message)s")
         ch.setFormatter(formatter)
         logger.addHandler(ch)
         return logger
 
-    def load_exchanges(self):
+    def load_exchanges(self, logger):
         """Create and return a list of all exchange objects"""
 
         exchanges = []
-        exchanges.append(Bitmex(self.logger))
+        exchanges.append(Bitmex(logger))
         return exchanges

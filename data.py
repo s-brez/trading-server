@@ -21,16 +21,11 @@ class Datahandler:
         self.live_trading = False
 
     def update_market_data(self):
-        """
-        Pushes all new market events into the event queue
-
-        """
+        """Pushes all new market events to the event queue"""
         bars = []
-
         if self.live_trading:
             bars = self.get_new_bars()
-
-        elif not self.live_trading:
+        else:
             bars = self.get_historic_bars()
 
         for bar in bars:
@@ -42,6 +37,7 @@ class Datahandler:
         symbols from all exchanges for the just-elapsed time period.
         """
         new_market_events = []
+        # check exchanges have 
 
         return new_market_events
 
@@ -63,7 +59,7 @@ class Datahandler:
         """Return a list of timeframes relevant to the just-elapsed time period.
         E.g if time has just struck UTC 10:30am the list will contain "1m",
         "3m", "5m", "m15" and "30m" strings. The first minute of a new day or
-        week will add daily/weekly/monthly timeframe string. Timeframes in
+        week will add daily/weekly/monthly timeframe strings. Timeframes in
         use are 1, 3, 5, 15 and 30 mins, 1, 2, 3, 4, 6, 8 and 12 hours, 1, 2
         and 3 days, weekly and monthly."""
 
@@ -94,7 +90,7 @@ class Datahandler:
             if timestamp.minute == val:
                 timeframes.append("30m")
 
-        # 1h hour bars
+        # 1 hour bars
         if timestamp.minute == 0:
             timeframes.append("1h")
 

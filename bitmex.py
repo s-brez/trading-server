@@ -1,8 +1,9 @@
-from bitmex_websocket import BitMEXWebsocket
+from bitmex_ws import Bitmex_WS
 from exchange import Exchange
+from time import sleep
 import datetime
 from dateutil import parser
-from time import sleep
+import traceback
 
 
 class Bitmex(Exchange):
@@ -11,75 +12,82 @@ class Bitmex(Exchange):
     MAX_BARS_PER_REQUEST = 750
     BASE_URL = "https://www.bitmex.com/api/v1"
     BARS_URL = "/trade/bucketed?binSize="
+    # WS_URL = "wss://testnet.bitmex.com/realtime"
+    WS_URL = "wss://www.bitmex.com/realtime"
+
     TIMESTAMP_FORMAT = '%Y-%m-%d%H:%M:%S.%f'
 
     def __init__(self, logger):
         super()
         self.logger = logger
         self.name = "BitMEX"
-        self.ws = BitMEXWebsocket(
-            endpoint="https://testnet.bitmex.com/api/v1",
-            symbol="XBTUSD", api_key=None, api_secret=None)
+        self.symbols = ["XBTUSD", "ETHUSD"]
+        self.channels = ["trade"]  # , "orderBookL2"
+        self.api_key = None
+        self.api_secret = None
+        self.bars = {i: [] for i in self.symbols}
 
-        self.one_minute_bars = []
-        self.ticks_minute_elapsed = []
-        self.count = 0
+        # connect to websocket
+        self.ws = Bitmex_WS(
+            self.logger, self.symbols, self.channels, self.WS_URL,
+            self.api_key, self.api_secret)
+        if self.ws.ws.sock.connected:
+            self.logger.debug("Connected to BitMEX websocket")
+        else:
+            self.logger.debug("Failed to to connect to BitMEX websocket")
 
+        # parse new ticks in first second of each minute
+        self.parse_ticks()
+
+    def parse_ticks(self):
+        sleep(self.seconds_til_next_minute())
+        count = 0
         while self.ws.ws.sock.connected:
-            # get tick data at first second of every minute
+            all_ticks = []
+            target_minute = datetime.datetime.utcnow().minute - 1
             if datetime.datetime.utcnow().second <= 1:
-                # only get ticks after one minute passed
-                if self.count >= 1:
-                    ticks = self.ws.recent_trades()
-                    # grab only the just-elapsed minute's ticks
-                    # TODO start iteration from end of list
-                    for tick in ticks:
-                        ts = parser.parse(tick['timestamp'])
-                        if ts.minute == datetime.datetime.utcnow().minute - 1:
-                            self.ticks_minute_elapsed.append(tick)
-                    # get open, high, low and close prices
-                    prices = [i['price'] for i in self.ticks_minute_elapsed]
-                    open_price = self.ticks_minute_elapsed[0]['price']
-                    high_price = max(prices)
-                    low_price = min(prices)
-                    close_price = self.ticks_minute_elapsed[-1]['price']
-                    bar = {'symbol': 'XBTUSD',
-                           'timestamp': self.previous_minute(),
-                           'open': open_price,
-                           'high': high_price,
-                           'low': low_price,
-                           'close': close_price}
-                    self.one_minute_bars.append(bar)
-
-                self.count += 1
-
-                # sleep until 1 second before the next minute starts
-                now = datetime.datetime.utcnow().second
-                delay = 60 - now - 1
-                sleep(delay)
+                if count >= 1:
+                    all_ticks = self.ws.get_ticks()
+                    # search from end of tick list to find newest ticks first
+                    ticks_target_minute = []
+                    tcount = 0
+                    for i in reversed(all_ticks):
+                        try:
+                            ts = i['timestamp']
+                            if type(ts) is not datetime.datetime:
+                                ts = parser.parse(ts)
+                        except Exception:
+                            self.logger.debug(traceback.format_exc())
+                        # scrape prev minutes ticks
+                        if ts.minute == target_minute:
+                            ticks_target_minute.append(i)
+                            ticks_target_minute[tcount]['timestamp'] = ts
+                            tcount += 1
+                        # store the previous-to-target bar's last
+                        # traded price to use as the open price for target bar
+                        if ts.minute == target_minute - 1:
+                            ticks_target_minute.append(i)
+                            ticks_target_minute[tcount]['timestamp'] = ts
+                            break
+                    ticks_target_minute.reverse()
+                    # build bars for each symbol
+                    for symbol in self.symbols:
+                        ticks = []
+                        for i in ticks_target_minute:
+                            if i['symbol'] == symbol:
+                                ticks.append(i)
+                        bar = self.build_OHLCV(ticks, symbol)
+                        self.bars[symbol].append(bar)
+                        self.logger.debug(bar)
+                count += 1
+                sleep(self.seconds_til_next_minute())
             sleep(0.05)
 
-    def get_bars(self, instrument: str, start: int, finish: int):
-        """ Returns list of all bars, containing all symbols
-        """
-        return self.one_minute_bars
+    def get_bars(self):
+        return self.bars
+
+    def get_bars_in_period(self):
+        pass
 
     def get_first_timestamp(self, instrument: str):
-        """
-        """
         pass
-
-    def get_instruments(self):
-        """
-        """
-        pass
-
-    def listen_ws(self, instruments: list):
-        """
-        """
-
-    def get_name(self):
-        """
-        """
-        pass
-
