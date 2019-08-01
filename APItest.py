@@ -3,6 +3,7 @@ from bitmex import Bitmex
 import logging
 from data import Datahandler
 import queue
+from time import sleep
 
 
 logger = logging.getLogger()
@@ -19,6 +20,8 @@ events = queue.Queue(0)
 exchanges = [Bitmex(logger)]
 data = Datahandler(exchanges, events, logger)
 print(data.get_timeframes())
+while True:
+    sleep(100)
 
 # MAX_BARS_PER_REQUEST = 750
 # BASE_URL = "https://www.bitmex.com/api/v1"

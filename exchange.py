@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
 import datetime
+import ping
+import socket
 
 
 class Exchange(ABC):
@@ -15,17 +17,24 @@ class Exchange(ABC):
     @abstractmethod
     def get_bars_in_period(self, ):
         """Return list of historic 1min OHLCV bars for specified period."""
-        pass
 
     @abstractmethod
     def get_first_timestamp(self, instrument: str):
         """Return millisecond timestamp of first available 1 min bar."""
-        pass
 
     @abstractmethod
     def parse_ticks(self):
         """Scrape the correct ticks from a given list of all ticks, ready to be
         passed to build_OHLCV"""
+
+    def ping(self):
+        """Ping the destination exchange"""
+        try:
+            ping.verbose_ping(self.BASE_URL, count=3)
+            delay = ping.Ping(self.WS_URL, timeout=2000).do()
+        except socket.error as e:
+            self.logger.debug("Ping error: ", e)
+
 
     def get_instruments(self):
         """Return list of all instrument symbols strings."""

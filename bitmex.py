@@ -4,6 +4,9 @@ from time import sleep
 import datetime
 from dateutil import parser
 import traceback
+import threading
+import ping
+import socket
 
 
 class Bitmex(Exchange):
@@ -31,26 +34,27 @@ class Bitmex(Exchange):
         self.ws = Bitmex_WS(
             self.logger, self.symbols, self.channels, self.WS_URL,
             self.api_key, self.api_secret)
-        if self.ws.ws.sock.connected:
-            self.logger.debug("Connected to BitMEX websocket")
-        else:
-            self.logger.debug("Failed to to connect to BitMEX websocket")
+        if not self.ws.ws.sock.connected:
+            self.logger.debug("Failed to to connect to BitMEX websocket.")
 
         # parse new ticks in first second of each minute
-        self.parse_ticks()
+        if self.ws.ws.sock.connected:
+            thread = threading.Thread(target=lambda: self.parse_ticks())
+            thread.daemon = True
+            thread.start()
+            self.logger.debug("Started BitMEX tick parser daemon.")
 
     def parse_ticks(self):
         sleep(self.seconds_til_next_minute())
         count = 0
-        while self.ws.ws.sock.connected:
-            all_ticks = []
-            target_minute = datetime.datetime.utcnow().minute - 1
+        while True:
             if datetime.datetime.utcnow().second <= 1:
                 if count >= 1:
                     all_ticks = self.ws.get_ticks()
-                    # search from end of tick list to find newest ticks first
+                    target_minute = datetime.datetime.utcnow().minute - 1
                     ticks_target_minute = []
                     tcount = 0
+                    # search from end of tick list to find newest ticks first
                     for i in reversed(all_ticks):
                         try:
                             ts = i['timestamp']

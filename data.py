@@ -31,24 +31,25 @@ class Datahandler:
         for bar in bars:
             self.events.put(bar)
 
-    def get_new_bars(self):
+    def get_new_data(self):
         """
         Return a list of market events containing new bars for all watched
         symbols from all exchanges for the just-elapsed time period.
         """
         new_market_events = []
+
         # check exchanges have 
 
         return new_market_events
 
-    def get_historic_bars(self):
+    def get_historic_data(self):
         """
         Create market events containing "new" historic 1 min bars for all
         watched symbols
         """
-        historic_bars = []
+        historic_market_events = []
 
-        return historic_bars
+        return historic_market_events
 
     def set_live_trading(self, live_trading):
         """Set true or false live execution flag"""

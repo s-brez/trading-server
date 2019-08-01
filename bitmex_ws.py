@@ -35,16 +35,18 @@ class Bitmex_WS:
         thread = threading.Thread(target=lambda: self.ws.run_forever())
         thread.daemon = True
         thread.start()
-        self.logger.debug("Started BitMEX websocket thread")
-
+        self.logger.debug("Started BitMEX websocket daemon.")
         timeout = 5
         while not self.ws.sock or not self.ws.sock.connected and timeout:
             sleep(1)
             timeout -= 1
         if not timeout:
-            self.exit()
             raise websocket.WebSocketTimeoutException(
                 'WS Connection timed out.')
+        # attempt to reconnect if  ws is not connected
+        if not self.ws.sock.connected:
+            sleep(3)
+            self.connect()
 
     def on_open(self, ws):
         ws.send(self.get_channel_subscription_string())
@@ -98,7 +100,12 @@ class Bitmex_WS:
             print(traceback.format_exc())
 
     def on_error(self, ws, msg):
+        self.logger.debug("BitMEX websocket error: " + str(msg))
         raise websocket.WebSocketException(msg)
+        # attempt to reconnect if  ws is not connected
+        if not self.ws.sock.connected:
+            sleep(2)
+            self.connect()
 
     def on_close(self, ws):
         pass
