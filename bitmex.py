@@ -1,10 +1,8 @@
 from bitmex_ws import Bitmex_WS
 from exchange import Exchange
-from time import sleep
 import datetime
 from dateutil import parser
 import traceback
-import threading
 
 
 class Bitmex(Exchange):
@@ -43,6 +41,7 @@ class Bitmex(Exchange):
         #     self.logger.debug("Started BitMEX tick parser daemon.")
 
     def parse_ticks(self):
+        self.logger.debug("Parsing ticks.")
         all_ticks = self.ws.get_ticks()
         target_minute = datetime.datetime.utcnow().minute - 1
         ticks_target_minute = []

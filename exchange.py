@@ -7,7 +7,6 @@ class Exchange(ABC):
 
     def __init__(self):
         super.__init__()
-        self.finished_passing_ticks = False
 
     def get_new_bars(self):
         """Return dict of new 1min OHLCV bars."""

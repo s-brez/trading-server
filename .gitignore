@@ -10,3 +10,4 @@ substring_test.py
 timetest.py
 timertest.py
 substring_test.py
+*.pyc

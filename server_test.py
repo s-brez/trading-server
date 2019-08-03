@@ -3,5 +3,3 @@ from time import sleep
 
 
 server = Server()
-# while True:
-#     sleep(10)

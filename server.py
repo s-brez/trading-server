@@ -4,7 +4,8 @@ from portfolio import Portfolio
 from strategy import Strategy
 from broker import Broker
 from bitmex import Bitmex
-from concurrent.futures import ThreadPoolExecutor
+from exchange import Exchange # noqa
+from concurrent.futures import ThreadPoolExecutor # noqa
 from time import sleep
 import logging
 import queue
@@ -31,48 +32,55 @@ class Server:
     def __init__(self):
 
         # ********************************************************************
+
         self.live_trading = True   # set False for backtesting
+
         # ********************************************************************
 
+        self.log_level = logging.DEBUG
         self.logger = self.setup_logger()
-        if self.live_trading:
-            self.exchanges = self.load_exchanges(self.logger)
+
+        self.exchanges = self.load_exchanges(self.logger)
         self.events = queue.Queue(0)
+
+        # worker classes
         self.data = Datahandler(self.exchanges, self.events, self.logger)
         self.broker = Broker(self.exchanges, self.events, self.logger)
         self.portfolio = Portfolio(self.events, self.logger)
         self.strategy = Strategy(self.events, self.logger)
+
         self.run()
 
     def run(self):
-        """Main event handling loop"""
+        """Core event handling loop."""
+
+        self.logger.debug("Started event processing.")
 
         # set subclass flags for live or backtesting
-        if self.live_trading:
-            self.data.set_live_trading(self.live_trading)
-            self.broker.set_live_trading(self.live_trading)
+        self.data.set_live_trading(self.live_trading)
+        self.broker.set_live_trading(self.live_trading)
 
         count = 0
         sleep(self.seconds_til_next_minute())
-
         while True:
             # when live trading, update data in first second of each minute
             if self.live_trading:
-                if datetime.datetime.utcnow().second <= 1:
-                    # only update data after at least one minute of
-                    # data has been collected
-                    if count >= 1:
-                        self.data.update_market_data()
-                        self.clear_event_queue()
+                # only update data after at least one minute of
+                # data has been collected
+                if count >= 1:
+                    self.data.update_market_data()
+                    self.clear_event_queue()
                 # wait until the next minute begins
-                self.seconds_til_next_minute()
-
+                sleep(self.seconds_til_next_minute())
+                count += 1
             # if backtesting, update date and process events immediately
             elif not self.live_trading:
                 self.data.update_market_data()
                 self.clear_event_queue()
 
     def clear_event_queue(self):
+        """Route all new events to workers for processing."""
+
         while True:
             if not self.events.empty():
                 event = self.events.get_nowait()
@@ -93,7 +101,7 @@ class Server:
         """Create and configure logger"""
 
         logger = logging.getLogger()
-        logger.setLevel(logging.DEBUG)
+        logger.setLevel(self.log_level)
         ch = logging.StreamHandler()
         formatter = logging.Formatter(
             "%(asctime)s:%(levelname)s:%(module)s - %(message)s")
@@ -106,6 +114,7 @@ class Server:
 
         exchanges = []
         exchanges.append(Bitmex(logger))
+        self.logger.debug("Initialised exchanges.")
         return exchanges
 
     def seconds_til_next_minute(self):

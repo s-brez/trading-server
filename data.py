@@ -1,6 +1,7 @@
 from event import MarketEvent
 from datetime import date
 from datetime import timedelta
+from exchange import Exchange # noqa
 import datetime
 import calendar
 from time import sleep
@@ -21,15 +22,15 @@ class Datahandler:
         self.exchanges = exchanges
         self.events = events
         self.logger = logger
-        self.exchanges = []
-        self.events = object
-        self.logger = object
         self.live_trading = False
 
     def update_market_data(self):
-        """Pushes new market events to the event queue"""
+        """Parse all tick data and push new market events to event queue"""
+
+        self.logger.debug("Updating market data...")
 
         bars = []
+
         if self.live_trading:
             bars = self.get_new_data()
         else:
@@ -38,9 +39,14 @@ class Datahandler:
             self.events.put(bar)
 
     def get_new_data(self):
-        """Return a list of market events (new bars) for all watched
-        symbols from all exchanges for the just-elapsed time period."""
-        # new_market_events = []
+        """Parse all new tick data, then return a list of market events
+        (new bars) for all symbols from all exchanges for the just-elapsed
+        time period."""
+
+        for exchange in self.exchanges:
+            exchange.parse_ticks()
+
+        new_market_events = []
         # for exchange in self.exchanges:
         #     for symbol in exchange.get_symbols:
         #         data = {}
@@ -50,11 +56,12 @@ class Datahandler:
         #             if exchange.finished_parsing_ticks():
         #                 data = exchange.get_new_bars()
         #                 break
-        return
+        return new_market_events
 
     def get_historic_data(self):
         """Return a list of market events (historic bars) from
         locally stored data."""
+
         historic_market_events = []
 
         return historic_market_events
@@ -69,7 +76,8 @@ class Datahandler:
 
     def set_live_trading(self, live_trading):
         """Set true or false live execution flag"""
-        self.set_live_trading = live_trading
+
+        self.live_trading = live_trading
 
     def get_timeframes(self):
         """Return a list of timeframes relevant to the just-elapsed time period.

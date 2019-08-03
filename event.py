@@ -1,33 +1,22 @@
 class Event(object):
-    """
-    Base class for various system events.
-    """
+    """Base class for various system events."""
 
 
 class MarketEvent(Event):
-    """
-    Models receival of new market data.
-    Consumed by Strategy object to produce Signal events.
-    """
+    """Models receival of new market data. Consumed by Strategy
+    object to produce Signal events."""
 
-    def __init__(self):
-        """
-        """
-
+    def __init__(self, exchange, bar):
         self.type = 'MARKET'
-        self.exchange
+        self.exchange = exchange
+        self.bar = bar
 
 
 class SignalEvent(Event):
-    """
-    Models the Strategy object sending a trade signal.
-    Consumed by Portfolio to produce Order events.
-    """
+    """Models the Strategy object sending a trade signal. Consumed
+    by Portfolio to produce Order events."""
 
     def __init__(self, symbol, datetime, signal_type):
-        """
-        """
-
         self.type = 'SIGNAL'
         self.symbol = symbol            # ticker
         self.datetime = datetime
@@ -35,14 +24,9 @@ class SignalEvent(Event):
 
 
 class OrderEvent(Event):
-    """
-    Models a complete order to be sent to a broker/exchange.
-    """
+    """Models a complete order to be sent to a broker/exchange."""
 
     def __init__(self, symbol, exchange, order_type, quantity, direction):
-        """
-        """
-
         self.type = 'ORDER'
         self.symbol = symbol            # instrument ticker
         self.exchange = exchange        # source exchange
@@ -57,18 +41,14 @@ class OrderEvent(Event):
 
 
 class FillEvent(Event):
-    """
-    Stores all transaction data, as returned from the exchange, including fees
-    comissions, slippage, brokerage, actual fill price, timestamp, etc
+    """Holds transaction data including fees/comissions, slippage, brokerage,
+    actual fill price, timestamp, etc.
     """
 
-    def __init__(self, timeindex, symbol, exchange, quantity,
+    def __init__(self, timestamp, symbol, exchange, quantity,
                  direction, fill_cost, commission=None):
-        """
-        """
-
         self.type = 'FILL'
-        self.timeindex = timeindex     # fill timestamp
+        self.timestamp = timestamp     # fill timestamp
         self.symbol = symbol           # instrument ticker
         self.exchange = exchange       # source exchange
         self.quantity = quantity       # position size in asset quantity

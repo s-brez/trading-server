@@ -35,7 +35,7 @@ class Bitmex_WS:
         thread = threading.Thread(target=lambda: self.ws.run_forever())
         thread.daemon = True
         thread.start()
-        self.logger.debug("Started BitMEX websocket daemon.")
+        self.logger.debug("Started websocket daemon.")
         timeout = 5
         while not self.ws.sock or not self.ws.sock.connected and timeout:
             sleep(1)
@@ -58,7 +58,8 @@ class Bitmex_WS:
         action = msg['action'] if 'action' in msg else None
         try:
             if 'subscribe' in msg:
-                self.logger.debug("Subscribed to BitMEX " + msg['subscribe'])
+                self.logger.debug(
+                    "Subscribed to " + msg['subscribe'] + ".")
             elif action:
                 if table not in self.data:
                     self.data[table] = []
