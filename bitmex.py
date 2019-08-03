@@ -5,8 +5,6 @@ import datetime
 from dateutil import parser
 import traceback
 import threading
-import ping
-import socket
 
 
 class Bitmex(Exchange):
@@ -38,56 +36,48 @@ class Bitmex(Exchange):
             self.logger.debug("Failed to to connect to BitMEX websocket.")
 
         # parse new ticks in first second of each minute
-        if self.ws.ws.sock.connected:
-            thread = threading.Thread(target=lambda: self.parse_ticks())
-            thread.daemon = True
-            thread.start()
-            self.logger.debug("Started BitMEX tick parser daemon.")
+        # if self.ws.ws.sock.connected:
+        #     thread = threading.Thread(target=lambda: self.parse_ticks())
+        #     thread.daemon = True
+        #     thread.start()
+        #     self.logger.debug("Started BitMEX tick parser daemon.")
 
     def parse_ticks(self):
-        sleep(self.seconds_til_next_minute())
-        count = 0
-        while True:
-            if datetime.datetime.utcnow().second <= 1:
-                if count >= 1:
-                    all_ticks = self.ws.get_ticks()
-                    target_minute = datetime.datetime.utcnow().minute - 1
-                    ticks_target_minute = []
-                    tcount = 0
-                    # search from end of tick list to find newest ticks first
-                    for i in reversed(all_ticks):
-                        try:
-                            ts = i['timestamp']
-                            if type(ts) is not datetime.datetime:
-                                ts = parser.parse(ts)
-                        except Exception:
-                            self.logger.debug(traceback.format_exc())
-                        # scrape prev minutes ticks
-                        if ts.minute == target_minute:
-                            ticks_target_minute.append(i)
-                            ticks_target_minute[tcount]['timestamp'] = ts
-                            tcount += 1
-                        # store the previous-to-target bar's last
-                        # traded price to use as the open price for target bar
-                        if ts.minute == target_minute - 1:
-                            ticks_target_minute.append(i)
-                            ticks_target_minute[tcount]['timestamp'] = ts
-                            break
-                    ticks_target_minute.reverse()
-                    # build bars for each symbol
-                    for symbol in self.symbols:
-                        ticks = []
-                        for i in ticks_target_minute:
-                            if i['symbol'] == symbol:
-                                ticks.append(i)
-                        bar = self.build_OHLCV(ticks, symbol)
-                        self.bars[symbol].append(bar)
-                        self.logger.debug(bar)
-                count += 1
-                sleep(self.seconds_til_next_minute())
-            sleep(0.05)
+        all_ticks = self.ws.get_ticks()
+        target_minute = datetime.datetime.utcnow().minute - 1
+        ticks_target_minute = []
+        tcount = 0
+        # search from end of tick list to find newest ticks first
+        for i in reversed(all_ticks):
+            try:
+                ts = i['timestamp']
+                if type(ts) is not datetime.datetime:
+                    ts = parser.parse(ts)
+            except Exception:
+                self.logger.debug(traceback.format_exc())
+            # scrape prev minutes ticks
+            if ts.minute == target_minute:
+                ticks_target_minute.append(i)
+                ticks_target_minute[tcount]['timestamp'] = ts
+                tcount += 1
+            # store the previous-to-target bar's last
+            # traded price to use as the open price for target bar
+            if ts.minute == target_minute - 1:
+                ticks_target_minute.append(i)
+                ticks_target_minute[tcount]['timestamp'] = ts
+                break
+        ticks_target_minute.reverse()
+        # build bars for each symbol
+        for symbol in self.symbols:
+            ticks = []
+            for i in ticks_target_minute:
+                if i['symbol'] == symbol:
+                    ticks.append(i)
+            bar = self.build_OHLCV(ticks, symbol)
+            self.bars[symbol].append(bar)
+            self.logger.debug(bar)
 
-    def get_bars(self):
+    def get_new_bars(self):
         return self.bars
 
     def get_bars_in_period(self):

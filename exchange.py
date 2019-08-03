@@ -1,7 +1,5 @@
 from abc import ABC, abstractmethod
 import datetime
-import ping
-import socket
 
 
 class Exchange(ABC):
@@ -9,8 +7,9 @@ class Exchange(ABC):
 
     def __init__(self):
         super.__init__()
+        self.finished_passing_ticks = False
 
-    def get_bars(self):
+    def get_new_bars(self):
         """Return dict of new 1min OHLCV bars."""
         return self.bars
 
@@ -27,16 +26,7 @@ class Exchange(ABC):
         """Scrape the correct ticks from a given list of all ticks, ready to be
         passed to build_OHLCV"""
 
-    def ping(self):
-        """Ping the destination exchange"""
-        try:
-            ping.verbose_ping(self.BASE_URL, count=3)
-            delay = ping.Ping(self.WS_URL, timeout=2000).do()
-        except socket.error as e:
-            self.logger.debug("Ping error: ", e)
-
-
-    def get_instruments(self):
+    def get_symbols(self):
         """Return list of all instrument symbols strings."""
         return self.symbols
 
@@ -57,10 +47,13 @@ class Exchange(ABC):
         return delay
 
     def build_OHLCV(self, ticks: list, symbol):
-        """Return a 1 min bar dict from a given list of ticks """
+        """Return a 1 min bar as dict from a passed list of ticks """
         if ticks is not None:
+            volume = sum(i['size'] for i in ticks) - ticks[0]['size']
+            # dont include the first tick for volume calc
+            # as first tick comes from the previous minute - used for
+            # bar open price only
             prices = [i['price'] for i in ticks]
-            volume = sum(i['size'] for i in ticks)
             high_price = max(prices) if len(prices) >= 1 else None
             low_price = min(prices) if len(prices) >= 1 else None
             open_price = ticks[0]['price'] if len(prices) >= 1 else None
@@ -84,3 +77,5 @@ class Exchange(ABC):
                    'volume': 0}
             return bar
 
+    def finished_parsing_ticks(self):
+        return self.finished_parsing_ticks
