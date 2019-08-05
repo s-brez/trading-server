@@ -8,7 +8,7 @@ class Exchange(ABC):
     def __init__(self):
         super.__init__()
 
-    def get_new_bars(self):
+    def get_bars(self):
         """Return dict of new 1min OHLCV bars."""
         return self.bars
 
@@ -47,7 +47,7 @@ class Exchange(ABC):
 
     def build_OHLCV(self, ticks: list, symbol):
         """Return a 1 min bar as dict from a passed list of ticks """
-        if ticks is not None:
+        if ticks:
             volume = sum(i['size'] for i in ticks) - ticks[0]['size']
             # dont include the first tick for volume calc
             # as first tick comes from the previous minute - used for
@@ -66,7 +66,7 @@ class Exchange(ABC):
                    'close': close_price,
                    'volume': volume}
             return bar
-        elif ticks is None:
+        elif ticks is None or not ticks:
             bar = {'symbol': symbol,
                    'timestamp': int(self.previous_minute().timestamp()), # noqa
                    'open': None,

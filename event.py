@@ -1,20 +1,27 @@
+
 class Event(object):
     """Base class for various system events."""
 
 
 class MarketEvent(Event):
-    """Models receival of new market data. Consumed by Strategy
-    object to produce Signal events."""
+    """Wrapper for new market data. Consumed by Strategy object to
+    produce Signal events."""
 
     def __init__(self, exchange, bar):
         self.type = 'MARKET'
         self.exchange = exchange
         self.bar = bar
 
+    def __str__(self):
+        return "Market event: Exchange=%s, Symbol=%s, Timestamp=%s" % (
+            self.exchange, self.bar['symbol'], self.bar['timestamp'])
+
+    def get_bar(self):
+        return self.bar
+
 
 class SignalEvent(Event):
-    """Models the Strategy object sending a trade signal. Consumed
-    by Portfolio to produce Order events."""
+    """A trade signal. Consumed by Portfolio to produce Order events."""
 
     def __init__(self, symbol, datetime, signal_type):
         self.type = 'SIGNAL'
@@ -24,7 +31,7 @@ class SignalEvent(Event):
 
 
 class OrderEvent(Event):
-    """Models a complete order to be sent to a broker/exchange."""
+    """Contains order details to be sent to a broker/exchange."""
 
     def __init__(self, symbol, exchange, order_type, quantity, direction):
         self.type = 'ORDER'
@@ -34,10 +41,9 @@ class OrderEvent(Event):
         self.quantity = quantity        # positive integer
         self.direction = direction      # BUY or SELL
 
-    def print_order(self):
-        print(
-            "Order: Symbol=%s, Type=%s, Quantity=%s, Direction=%s" %
-            (self.symbol, self.order_type, self.quantity, self.direction))
+    def __str__(self):
+        return "Order: Symbol=%s, Type=%s, Quantity=%s, Direction=%s" % (
+            self.symbol, self.order_type, self.quantity, self.direction)
 
 
 class FillEvent(Event):

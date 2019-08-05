@@ -1,4 +1,3 @@
-
 from data import Datahandler
 from portfolio import Portfolio
 from strategy import Strategy
@@ -32,19 +31,20 @@ class Server:
     def __init__(self):
 
         # ********************************************************************
-
         self.live_trading = True   # set False for backtesting
-
         # ********************************************************************
 
         self.log_level = logging.DEBUG
         self.logger = self.setup_logger()
 
-        self.exchanges = self.load_exchanges(self.logger)
+        # don't connect to live data feeds if backtesting
+        if self.live_trading:
+            self.exchanges = self.load_exchanges(self.logger)
         self.events = queue.Queue(0)
+        # self.logger.debug(self.events)
 
         # worker classes
-        self.data = Datahandler(self.exchanges, self.events, self.logger)
+        self.data = Datahandler(self.exchanges, self.logger)
         self.broker = Broker(self.exchanges, self.events, self.logger)
         self.portfolio = Portfolio(self.events, self.logger)
         self.strategy = Strategy(self.events, self.logger)
@@ -52,11 +52,10 @@ class Server:
         self.run()
 
     def run(self):
-        """Core event handling loop."""
+        """Core event handling routine."""
 
-        self.logger.debug("Started event processing.")
+        self.logger.debug("Started event processing loop.")
 
-        # set subclass flags for live or backtesting
         self.data.set_live_trading(self.live_trading)
         self.broker.set_live_trading(self.live_trading)
 
@@ -68,23 +67,25 @@ class Server:
                 # only update data after at least one minute of
                 # data has been collected
                 if count >= 1:
-                    self.data.update_market_data()
+                    self.events = self.data.update_market_data(self.events)
+                    # self.logger.debug(self.events)
                     self.clear_event_queue()
                 # wait until the next minute begins
                 sleep(self.seconds_til_next_minute())
                 count += 1
             # if backtesting, update date and process events immediately
             elif not self.live_trading:
-                self.data.update_market_data()
+                self.events = self.data.update_market_data(self.events)
                 self.clear_event_queue()
 
     def clear_event_queue(self):
         """Route all new events to workers for processing."""
 
         while True:
-            if not self.events.empty():
-                event = self.events.get_nowait()
-            elif self.events.empty():
+            try:
+                event = self.events.get(False)
+            except queue.Empty:
+                self.logger.debug("Event queue empty.")
                 break
             else:
                 if event is not None:
@@ -96,6 +97,7 @@ class Server:
                         self.broker.place_order(event)
                     elif event.type == "FILL":
                         self.portfolio.update_fill(event)
+                self.events.task_done()
 
     def setup_logger(self):
         """Create and configure logger"""

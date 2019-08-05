@@ -41,12 +41,12 @@ class Bitmex(Exchange):
         #     self.logger.debug("Started BitMEX tick parser daemon.")
 
     def parse_ticks(self):
-        self.logger.debug("Parsing ticks.")
         all_ticks = self.ws.get_ticks()
         target_minute = datetime.datetime.utcnow().minute - 1
         ticks_target_minute = []
         tcount = 0
-        # search from end of tick list to find newest ticks first
+
+        # search from end of tick list to grab newest ticks first
         for i in reversed(all_ticks):
             try:
                 ts = i['timestamp']
@@ -66,17 +66,15 @@ class Bitmex(Exchange):
                 ticks_target_minute[tcount]['timestamp'] = ts
                 break
         ticks_target_minute.reverse()
-        # build bars for each symbol
+
+        # build 1 min bars for each symbol
         for symbol in self.symbols:
-            ticks = []
-            for i in ticks_target_minute:
-                if i['symbol'] == symbol:
-                    ticks.append(i)
+            ticks = [i for i in ticks_target_minute if i['symbol'] == symbol]
             bar = self.build_OHLCV(ticks, symbol)
             self.bars[symbol].append(bar)
-            self.logger.debug(bar)
+            # self.logger.debug(bar)
 
-    def get_new_bars(self):
+    def get_bars(self):
         return self.bars
 
     def get_bars_in_period(self):

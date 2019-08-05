@@ -7,6 +7,7 @@ import traceback
 
 class Bitmex_WS:
 
+    # data table size - increase if ticks get cut off during high vol periods
     MAX_SIZE = 1000
 
     def __init__(self, logger, symbols, channels, URL, api_key, api_secret):
@@ -23,9 +24,12 @@ class Bitmex_WS:
         self.api_key = api_key
         self.api_secret = api_secret
         # websocket.enableTrace(True)
+
         self.connect()
 
     def connect(self):
+        """Start websocket daemon."""
+
         self.ws = websocket.WebSocketApp(
             self.URL,
             on_message=lambda ws, msg: self.on_message(ws, msg),
@@ -47,9 +51,6 @@ class Bitmex_WS:
         if not self.ws.sock.connected:
             sleep(3)
             self.connect()
-
-    def on_open(self, ws):
-        ws.send(self.get_channel_subscription_string())
 
     def on_message(self, ws, msg):
         msg = json.loads(msg)
@@ -76,7 +77,7 @@ class Bitmex_WS:
             elif action == 'update':
                 # Locate the item in the collection and update it.
                 for updateData in msg['data']:
-                    item = self.findItemByKeys(
+                    item = self.find_item_by_keys(
                         self.keys[table],
                         self.data[table],
                         updateData)
@@ -89,7 +90,7 @@ class Bitmex_WS:
             elif action == 'delete':
                 # Locate the item in the collection and remove it.
                 for deleteData in msg['data']:
-                    item = self.findItemByKeys(
+                    item = self.find_item_by_keys(
                         self.keys[table],
                         self.data[table],
                         deleteData)
@@ -99,6 +100,9 @@ class Bitmex_WS:
                     raise Exception("Unknown action: %s" % action)
         except Exception:
             print(traceback.format_exc())
+
+    def on_open(self, ws):
+        ws.send(self.get_channel_subscription_string())
 
     def on_error(self, ws, msg):
         self.logger.debug("BitMEX websocket error: " + str(msg))
@@ -117,7 +121,7 @@ class Bitmex_WS:
     def get_ticks(self):
         return self.data['trade']
 
-    def findItemByKeys(self, keys, table, matchData):
+    def find_item_by_keys(self, keys, table, matchData):
         for item in table:
             matched = True
             for key in keys:
@@ -127,10 +131,12 @@ class Bitmex_WS:
                 return item
 
     def get_channel_subscription_string(self):
-        """Return a s"""
+        """Return subscription payload for all symbols and channels."""
+
         prefix = '{"op": "subscribe", "args": ['
         suffix = ']}'
         string = ""
+
         count = 0
         for symbol in self.symbols:
             for channel in self.channels:

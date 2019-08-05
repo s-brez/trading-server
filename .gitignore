@@ -11,3 +11,6 @@ timetest.py
 timertest.py
 substring_test.py
 *.pyc
+__pycache__/bitmex_ws.cpython-37.pyc
+__pycache__/data.cpython-37.pyc
+__pycache__/exchange.cpython-37.pyc

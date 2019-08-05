@@ -1,10 +1,5 @@
 from event import MarketEvent
-from datetime import date
-from datetime import timedelta
-from exchange import Exchange # noqa
-import datetime
-import calendar
-from time import sleep
+import time
 
 
 class Datahandler:
@@ -14,48 +9,66 @@ class Datahandler:
     if backtesting or live trading) and pushed to the event queue for the
     Strategy object to consume."""
 
-    MINUTE_TIMEFRAMES = [3, 5, 15, 30]
-    HOUR_TIMEFRAMES = [1, 2, 3, 4, 6, 8]
-    DAY_TIMEFRAMES = [1, 2, 3]
-
-    def __init__(self, exchanges, events, logger):
+    def __init__(self, exchanges, logger):
         self.exchanges = exchanges
-        self.events = events
         self.logger = logger
         self.live_trading = False
+        self.total_instruments = self.get_total_instruments()
 
-    def update_market_data(self):
-        """Parse all tick data and push new market events to event queue"""
+        # performance stats
+        self.parse_count = 0
+        self.total_parse_time = 0
+        self.mean_parse_time = 0
+        self.std_dev_parse_time = 0
+        self.var_parse_time = 0
 
-        self.logger.debug("Updating market data...")
-
-        bars = []
+    def update_market_data(self, events):
+        """Push new market events to the event queue"""
 
         if self.live_trading:
-            bars = self.get_new_data()
+            market_data = self.get_new_data()
         else:
-            bars = self.get_historic_data()
-        for bar in bars:
-            self.events.put(bar)
+            market_data = self.get_historic_data()
+
+        for event in market_data:
+            events.put(event)
+        self.logger.debug(events)
+        return events
 
     def get_new_data(self):
         """Parse all new tick data, then return a list of market events
         (new bars) for all symbols from all exchanges for the just-elapsed
         time period."""
 
+        # get timestamp to match for new bars
+        timestamp = int(self.exchanges[0].previous_minute().timestamp())
+
+        # record parse times
+        self.logger.debug("Started parsing ticks.")
+        start_parse = time.time()
+
+        # parse new ticks
         for exchange in self.exchanges:
             exchange.parse_ticks()
+        end_parse = time.time()
+        duration = round(end_parse - start_parse, 5)
+        self.logger.debug(
+            "Parsed " + str(self.total_instruments) + " instruments in " +
+            str(duration) + " seconds.")
 
+        # record & update data parsing stats
+        self.track_performance(duration)
+
+        # wrap new data in market events
         new_market_events = []
-        # for exchange in self.exchanges:
-        #     for symbol in exchange.get_symbols:
-        #         data = {}
-        #         # wait for exchange classes to finish parsing ticks
-        #         while not exchange.finished_parsing_ticks():
-        #             sleep(0.005)
-        #             if exchange.finished_parsing_ticks():
-        #                 data = exchange.get_new_bars()
-        #                 break
+        for exchange in self.exchanges:
+            bars = exchange.get_bars()
+            for symbol in exchange.get_symbols():
+                for bar in bars[symbol]:
+                    if bar['timestamp'] == timestamp:
+                        event = MarketEvent(exchange.get_name(), bar)
+                        new_market_events.append(event)
+                        break
         return new_market_events
 
     def get_historic_data(self):
@@ -79,43 +92,17 @@ class Datahandler:
 
         self.live_trading = live_trading
 
-    def get_timeframes(self):
-        """Return a list of timeframes relevant to the just-elapsed time period.
-        E.g if time has just struck UTC 10:30am the list will contain "1m",
-        "3m", "5m", "m15" and "30m" strings. The first minute of a new day or
-        week will add daily/weekly/monthly timeframe strings. Timeframes in
-        use are 1, 3, 5, 15 and 30 mins, 1, 2, 3, 4, 6, 8 and 12 hours, 1, 2
-        and 3 days, weekly and monthly."""
+    def get_total_instruments(self):
+        """Return total number of monitored instruments."""
 
-        # check agains the previous minute, as that is the just-elapsed period.
-        timestamp = datetime.datetime.utcnow() - timedelta(hours=0, minutes=1)
-        timeframes = ["1m"]
+        total = 0
+        for exchange in self.exchanges:
+            total += len(exchange.get_symbols())
+        return total
 
-        for i in self.MINUTE_TIMEFRAMES:
-            self.minute_timeframe(i, timestamp, timeframes)
+    def track_performance(self, duration):
+        """Track tick processing times and other performance statistics."""
 
-        for i in self.HOUR_TIMEFRAMES:
-            self.hour_timeframe(i, timestamp, timeframes)
-
-        for i in self.DAY_TIMEFRAMES:
-            self.day_timeframe(i, timestamp, timeframes)
-
-        if (timestamp.minute == 0 and timestamp.hour == 0 and
-                calendar.day_name[date.today().weekday()] == "Monday"):
-            timeframes.append("1w")
-
-        return timeframes
-
-    def minute_timeframe(self, minutes, timestamp, timeframes):
-        for i in range(0, 60, minutes):
-            if timestamp.minute == i:
-                timeframes.append(f"{minutes}m")
-
-    def hour_timeframe(self, hours, timestamp, timeframes):
-        if timestamp.minute == 0 and timestamp.hour % hours == 0:
-            timeframes.append(f"{hours}h")
-
-    def day_timeframe(self, days, timestamp, timeframes):
-        if (timestamp.minute == 0 and timestamp.hour == 0 and
-                timestamp.day % days == 0):
-                    timeframes.append(f"{days}d")
+        self.parse_count += 1
+        self.total_parse_time += duration
+        self.mean_parse_time = self.total_parse_time / self.parse_count
