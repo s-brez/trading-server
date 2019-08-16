@@ -3,9 +3,8 @@ from portfolio import Portfolio
 from strategy import Strategy
 from broker import Broker
 from bitmex import Bitmex
-from exchange import Exchange # noqa
-from concurrent.futures import ThreadPoolExecutor # noqa
 from time import sleep
+import time
 import logging
 import queue
 import datetime
@@ -40,33 +39,39 @@ class Server:
         # don't connect to live data feeds if backtesting
         if self.live_trading:
             self.exchanges = self.load_exchanges(self.logger)
-        self.events = queue.Queue(0)
-        # self.logger.debug(self.events)
 
-        # worker classes
+        # main event queue
+        self.events = queue.Queue(0)
+
+        # producer/consumer worker classes
         self.data = Datahandler(self.exchanges, self.logger)
-        self.broker = Broker(self.exchanges, self.events, self.logger)
-        self.portfolio = Portfolio(self.events, self.logger)
-        self.strategy = Strategy(self.events, self.logger)
+        self.strategy = Strategy(self.exchanges, self.logger)
+        self.portfolio = Portfolio(self.logger)
+        self.broker = Broker(self.exchanges, self.logger)
+
+        # processing performance variables
+        self.start_processing = None
+        self.end_processing = None
 
         self.run()
 
     def run(self):
-        """Core event handling routine."""
-
-        self.logger.debug("Started event processing loop.")
+        """Core event handling loop."""
 
         self.data.set_live_trading(self.live_trading)
         self.broker.set_live_trading(self.live_trading)
 
         count = 0
         sleep(self.seconds_til_next_minute())
+
         while True:
             # when live trading, update data in first second of each minute
             if self.live_trading:
                 # only update data after at least one minute of
                 # data has been collected
                 if count >= 1:
+                    self.start_processing = time.time()
+                    self.logger.debug("Started processing events.")
                     self.events = self.data.update_market_data(self.events)
                     # self.logger.debug(self.events)
                     self.clear_event_queue()
@@ -81,14 +86,26 @@ class Server:
     def clear_event_queue(self):
         """Route all new events to workers for processing."""
 
+        count = 0
         while True:
             try:
                 event = self.events.get(False)
             except queue.Empty:
-                self.logger.debug("Event queue empty.")
+                # log processing performance stats
+                self.end_processing = time.time()
+                duration = round(
+                    self.end_processing - self.start_processing, 5)
+                self.logger.debug(
+                    "Processed " + str(count) + " events in " +
+                    str(duration) + " seconds.")
+                # store new data now that time-critical work is complete
+                self.logger.debug("Started saving new bars to db.")
+                self.data.save_new_bars_to_db()
+                self.logger.debug("Finished saving new bars to db.")
                 break
             else:
                 if event is not None:
+                    count += 1
                     if event.type == "MARKET":
                         self.strategy.parse_data(event)
                     elif event.type == "SIGNAL":
@@ -97,6 +114,7 @@ class Server:
                         self.broker.place_order(event)
                     elif event.type == "FILL":
                         self.portfolio.update_fill(event)
+                # finished all jobs in queue
                 self.events.task_done()
 
     def setup_logger(self):

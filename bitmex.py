@@ -24,7 +24,9 @@ class Bitmex(Exchange):
         self.channels = ["trade"]  # , "orderBookL2"
         self.api_key = None
         self.api_secret = None
-        self.bars = {i: [] for i in self.symbols}
+
+        # only ever stores the most recent minutes bars, not persistent
+        self.bars = {}
 
         # connect to websocket
         self.ws = Bitmex_WS(
@@ -33,14 +35,9 @@ class Bitmex(Exchange):
         if not self.ws.ws.sock.connected:
             self.logger.debug("Failed to to connect to BitMEX websocket.")
 
-        # parse new ticks in first second of each minute
-        # if self.ws.ws.sock.connected:
-        #     thread = threading.Thread(target=lambda: self.parse_ticks())
-        #     thread.daemon = True
-        #     thread.start()
-        #     self.logger.debug("Started BitMEX tick parser daemon.")
-
     def parse_ticks(self):
+        if not self.ws.ws.sock.connected:
+            self.logger.debug("BitMEX websocket disconnected.")
         all_ticks = self.ws.get_ticks()
         target_minute = datetime.datetime.utcnow().minute - 1
         ticks_target_minute = []
@@ -67,6 +64,9 @@ class Bitmex(Exchange):
                 break
         ticks_target_minute.reverse()
 
+        # reset bar dict ready for new bars
+        self.bars = {i: [] for i in self.symbols}
+
         # build 1 min bars for each symbol
         for symbol in self.symbols:
             ticks = [i for i in ticks_target_minute if i['symbol'] == symbol]
@@ -74,11 +74,37 @@ class Bitmex(Exchange):
             self.bars[symbol].append(bar)
             # self.logger.debug(bar)
 
-    def get_bars(self):
-        return self.bars
-
     def get_bars_in_period(self):
+        """
+        Fetch bar buckets via REST polling, then parse to dataframe
+        """
+
+        # timeframe = "1h"
+        # symbol = "XBT"
+        # bucket_size = 10
+
+        # payload = "{}{}{}&symbol={}&filter=&count={}&start=&reverse=true".format(
+        #     BASE_URL, BARS_URL, timeframe, symbol, bucket_size)
+
+        # response = requests.get(payload).json()
+
+        # df = pd.DataFrame(response)
+        # df = df[['timestamp', 'open', 'high', 'low', 'close']]
+
+        # modified_dates = []
+        # for i in df['timestamp']:
+        #     new_datestring = ""
+        #     for char in i:
+        #         if not(char.isalpha()):
+        #             new_datestring += char
+        #     modified_dates.append(new_datestring)
+
+        # df.timestamp = modified_dates
+        # print(df)
         pass
+
+    def get_new_bars(self):
+        return self.bars
 
     def get_first_timestamp(self, instrument: str):
         pass

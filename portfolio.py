@@ -3,9 +3,5 @@ class Portfolio:
 
     """
 
-    def __init__(self, events, logger):
-        self.events = events
+    def __init__(self, logger):
         self.logger = logger
-
-    events = object
-    logger = object

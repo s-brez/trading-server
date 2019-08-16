@@ -8,7 +8,7 @@ class Exchange(ABC):
     def __init__(self):
         super.__init__()
 
-    def get_bars(self):
+    def get_new_bars(self):
         """Return dict of new 1min OHLCV bars."""
         return self.bars
 
@@ -41,12 +41,14 @@ class Exchange(ABC):
 
     def seconds_til_next_minute(self):
         """ Return number of seconds until T-1 sec to next minute."""
+
         now = datetime.datetime.utcnow().second
         delay = 60 - now - 1
         return delay
 
     def build_OHLCV(self, ticks: list, symbol):
         """Return a 1 min bar as dict from a passed list of ticks """
+
         if ticks:
             volume = sum(i['size'] for i in ticks) - ticks[0]['size']
             # dont include the first tick for volume calc

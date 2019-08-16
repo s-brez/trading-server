@@ -4,6 +4,7 @@ __pycache__
 data
 mongo_test.py
 network_test.py
+multiprocessing_test.py
 bitmex_websocket_test.py
 list_comprehension_test.py
 substring_test.py

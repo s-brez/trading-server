@@ -1,5 +1,7 @@
 
 from datetime import date, datetime, timedelta
+from model import TrendFollowing
+import pandas as pd
 import calendar
 
 
@@ -13,14 +15,26 @@ class Strategy:
     def __init__(self, events, logger):
         self.events = events
         self.logger = logger
+        self.models = self.load_models(self.logger)
 
     def parse_data(self, event):
         """Process incoming market data, re-run all models with new data."""
-
-        self.logger.debug(event)
         self.logger.debug(event.get_bar())
 
-    def get_timeframes(self):
+    def load_models(self, logger):
+        """Create and return a list of all exchange objects"""
+
+        models = []
+        models.append(TrendFollowing())
+        self.logger.debug("Initialised models.")
+        return models
+
+    def load_dataframes(self):
+        """Unpickle saved dataframes if they exist, create new if not.
+        Each symbol and timeframe will have its own dataframe"""
+        pass
+
+    def get_timeframes(self, time):
         """Return a list of timeframes relevant to the just-elapsed time period.
         E.g if time has just struck UTC 10:30am the list will contain "1m",
         "3m", "5m", "m15" and "30m" strings. The first minute of a new day or
@@ -29,7 +43,7 @@ class Strategy:
         and 3 days, weekly and monthly."""
 
         # check agains the previous minute, as that is the just-elapsed period.
-        timestamp = datetime.datetime.utcnow() - timedelta(hours=0, minutes=1)
+        timestamp = time - timedelta(hours=0, minutes=1)
         timeframes = ["1m"]
 
         for i in self.MINUTE_TIMEFRAMES:

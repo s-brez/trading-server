@@ -40,17 +40,16 @@ class Bitmex_WS:
         thread.daemon = True
         thread.start()
         self.logger.debug("Started websocket daemon.")
-        timeout = 5
+        timeout = 10
         while not self.ws.sock or not self.ws.sock.connected and timeout:
             sleep(1)
             timeout -= 1
         if not timeout:
-            raise websocket.WebSocketTimeoutException(
-                'WS Connection timed out.')
-        # attempt to reconnect if  ws is not connected
-        if not self.ws.sock.connected:
-            sleep(3)
-            self.connect()
+            self.logger.debug("Websocket connection timed out.")
+            # attempt to reconnect
+            if not self.ws.sock.connected:
+                sleep(5)
+                self.connect()
 
     def on_message(self, ws, msg):
         msg = json.loads(msg)
@@ -99,7 +98,7 @@ class Bitmex_WS:
                 if action is not None:
                     raise Exception("Unknown action: %s" % action)
         except Exception:
-            print(traceback.format_exc())
+            self.logger.debug(traceback.format_exc())
 
     def on_open(self, ws):
         ws.send(self.get_channel_subscription_string())
@@ -108,11 +107,21 @@ class Bitmex_WS:
         self.logger.debug("BitMEX websocket error: " + str(msg))
         raise websocket.WebSocketException(msg)
         # attempt to reconnect if  ws is not connected
-        if not self.ws.sock.connected:
-            sleep(2)
-            self.connect()
+        self.connect()
+        timeout = 10
+        while not self.ws.sock or not self.ws.sock.connected and timeout:
+            sleep(1)
+            timeout -= 1
+        if not timeout:
+            self.logger.debug("Websocket connection timed out.")
+            # attempt to reconnect
+            if not self.ws.sock.connected:
+                sleep(5)
+                self.connect()
 
     def on_close(self, ws):
+        ws.close()
+        self.logger.debug("Websocket connection closed.")
         pass
 
     def get_orderbook(self):
