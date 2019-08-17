@@ -79,9 +79,13 @@ class Bitmex(Exchange):
         """Returns specified amount of 1 min bars starting from start_time.
         E.g      get_bars_in_period("XBTUSD", 1562971900, 100)"""
 
+        if total >= self.MAX_BARS_PER_REQUEST:
+            total = self.MAX_BARS_PER_REQUEST
+
         # convert epoch timestamp to ISO 8601
         start = datetime.datetime.utcfromtimestamp(start_time).isoformat()
         timeframe = "1m"
+
         # request url string
         payload = (
             f"{self.BASE_URL}{self.BARS_URL}{timeframe}&"

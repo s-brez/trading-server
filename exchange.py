@@ -34,9 +34,16 @@ class Exchange(ABC):
         return self.name
 
     def previous_minute(self):
-        """ Return the previous minutes UTC timestamp."""
+        """ Return the previous minutes UTC ms epoch timestamp."""
+
         timestamp = datetime.datetime.utcnow() - datetime.timedelta(minutes=1)
         timestamp.replace(second=0, microsecond=0)
+        # convert to epoch
+        timestamp = int(timestamp.timestamp())
+        # replace final digit with zero, can be 1 or more during a slow cycle
+        timestamp_str = list(str(timestamp))
+        timestamp_str[len(timestamp_str) - 1] = "0"
+        timestamp = int(''.join(timestamp_str))
         return timestamp
 
     def seconds_til_next_minute(self):
@@ -61,7 +68,7 @@ class Exchange(ABC):
             close_price = ticks[-1]['price'] if len(prices) >= 1 else None
             # format OHLCV as 1 min bar
             bar = {'symbol': symbol,
-                   'timestamp': int(self.previous_minute().timestamp()), # noqa
+                   'timestamp': self.previous_minute(),
                    'open': open_price,
                    'high': high_price,
                    'low': low_price,
@@ -70,7 +77,7 @@ class Exchange(ABC):
             return bar
         elif ticks is None or not ticks:
             bar = {'symbol': symbol,
-                   'timestamp': int(self.previous_minute().timestamp()), # noqa
+                   'timestamp': self.previous_minute(),
                    'open': None,
                    'high': None,
                    'low': None,

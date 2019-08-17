@@ -22,7 +22,7 @@ class Strategy:
         self.logger.debug(event.get_bar())
 
     def load_models(self, logger):
-        """Create and return a list of all exchange objects"""
+        """Create and return a list of all model objects"""
 
         models = []
         models.append(TrendFollowing())

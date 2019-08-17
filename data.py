@@ -103,16 +103,16 @@ class Datahandler:
             else:
                 if bar is not None:
                     count += 1
-                    # self.logger.debug()
                     # store bar in relevant db collection
                     self.db_collections[bar.exchange].insert_one(bar.get_bar())
                 # finished all jobs in queue
                 self.bars_save_to_db.task_done()
 
     def backfill_missing_data(self):
-        """Check for missing data between the last locally-stored timestamp
-        and initial timestamp time of currently streaming live data. If
-        discrepencies exist, get and store the missing data."""
+        """Fetch and store missing bars for the period betwwen the last
+        locally-stored timestamp in db, and the current timestampo of live
+        streaming data."""
+        
 
     def set_live_trading(self, live_trading):
         """Set true or false live execution flag"""
@@ -142,7 +142,7 @@ class Datahandler:
         return {i.get_name(): db[i.get_name()] for i in self.exchanges}
 
     def check_db_connection(self):
-        """Raise exception if DB failed to connect for any reason."""
+        """Raise exception if DB failed to connect."""
         if self.db:
             self.logger.debug(
                 "Connected to " + self.DB_NAME + " at " +
