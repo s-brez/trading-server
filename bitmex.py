@@ -1,8 +1,9 @@
 from bitmex_ws import Bitmex_WS
 from exchange import Exchange
-import datetime
 from dateutil import parser
 import traceback
+import datetime
+import requests
 
 
 class Bitmex(Exchange):
@@ -74,37 +75,33 @@ class Bitmex(Exchange):
             self.bars[symbol].append(bar)
             # self.logger.debug(bar)
 
-    def get_bars_in_period(self):
-        """
-        Fetch bar buckets via REST polling, then parse to dataframe
-        """
+    def get_bars_in_period(self, symbol, start_time, total):
+        """Returns specified amount of 1 min bars starting from start_time.
+        E.g      get_bars_in_period("XBTUSD", 1562971900, 100)"""
 
-        # timeframe = "1h"
-        # symbol = "XBT"
-        # bucket_size = 10
+        # convert epoch timestamp to ISO 8601
+        start = datetime.datetime.utcfromtimestamp(start_time).isoformat()
+        timeframe = "1m"
+        # request url string
+        payload = (
+            f"{self.BASE_URL}{self.BARS_URL}{timeframe}&"
+            f"symbol={symbol}&filter=&count={total}&"
+            f"startTime={start}&reverse=false")
+        bars_to_parse = requests.get(payload).json()
 
-        # payload = "{}{}{}&symbol={}&filter=&count={}&start=&reverse=true".format(
-        #     BASE_URL, BARS_URL, timeframe, symbol, bucket_size)
+        # store only required values (OHLCV) and convert timestamp to epoch
+        new_bars = []
+        for bar in bars_to_parse:
+            new_bars.append({
+                'symbol': symbol,
+                'timestamp': int(parser.parse(bar['timestamp']).timestamp()),
+                'open': bar['open'],
+                'high': bar['high'],
+                'low': bar['low'],
+                'close': bar['close'],
+                'volume': bar['volume']})
 
-        # response = requests.get(payload).json()
-
-        # df = pd.DataFrame(response)
-        # df = df[['timestamp', 'open', 'high', 'low', 'close']]
-
-        # modified_dates = []
-        # for i in df['timestamp']:
-        #     new_datestring = ""
-        #     for char in i:
-        #         if not(char.isalpha()):
-        #             new_datestring += char
-        #     modified_dates.append(new_datestring)
-
-        # df.timestamp = modified_dates
-        # print(df)
-        pass
-
-    def get_new_bars(self):
-        return self.bars
+        return new_bars
 
     def get_first_timestamp(self, instrument: str):
         pass
