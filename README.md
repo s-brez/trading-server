@@ -14,11 +14,12 @@ Binance | WIP
 Bitfinex | WIP
 SimpleFX | WIP
 
-trading-server does not include stretegy models, it is purely an execution and testing framework. 
+trading-server is not intended to include strategy model implementations, it is available only as an execution and testing framework. A template (empty) model class is included as a guide.
 
-A template (empty) model class is included as a guide.
+To dicuss model implementations, or for any other business enquiries, contact @s_brez on telegram. 
 
-*Born from the designs described at QuantStart.com, and the writings of E. Chan and M. Lopez de Prado. Thanks to all!*
+## Acknowledgements
+Born from the designs described at QuantStart.com, and the writings of E. Chan and M. Lopez de Prado. Thank you to all.
 
 ## License
 This project is licensed under the MIT License.
