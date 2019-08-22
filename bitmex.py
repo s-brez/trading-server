@@ -40,6 +40,9 @@ class Bitmex(Exchange):
         if not self.ws.ws.sock.connected:
             self.logger.debug("BitMEX websocket disconnected.")
         all_ticks = self.ws.get_ticks()
+        if not all_ticks:
+            self.logger.debug("No ticks received.")
+            self.ws.connect()
         target_minute = datetime.datetime.utcnow().minute - 1
         ticks_target_minute = []
         tcount = 0
@@ -107,5 +110,13 @@ class Bitmex(Exchange):
 
         return new_bars
 
-    def get_first_timestamp(self, instrument: str):
-        pass
+    def get_origin_timestamp(self, symbol: str):
+        """Return millisecond timestamp of first available 1 min bar."""
+
+        payload = (
+            f"{self.BASE_URL}{self.BARS_URL}1m&symbol={symbol}&filter=&"
+            f"count=1&startTime=&reverse=false")
+
+        response = requests.get(payload).json()[0]['timestamp']
+
+        return int(parser.parse(response).timestamp())

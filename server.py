@@ -11,21 +11,22 @@ import datetime
 
 
 class Server:
-    """Server routes system events amongst various components via a queue in
-    an event handling loop. The queue is processed each minute.
+    """Server routes system events amongst worker components via a queue in
+    an event handling loop. The queue is processed at the start of each minute.
 
     Event loop lifecycle:
-        1. A new minute begins - Exchanges parse tick data into 1 min bars.
-        2. Datahander wraps new 1 min bars and other data in Market Events.
+        1. A new minute begins - Tick data is parsed into 1 min bars.
+        2. Datahander wraps new bars and other data in Market Events.
         3. Datahandler pushes Market Events into event queue.
-        4. Market Events consumed by Strategy object.
+        4. Market Events are consumed by Strategy object.
         5. Strategy creates a Signal event and places it in event queque.
         6. Signal events consumed by Portfolio.
         7. Portfolio creates Order event from Signal, places it in queue.
         8. Broker executes Order events, creates Fill event post-transaction.
         9. Portfolio consumes Fill event, updates values.
        10. Repeat 1-9 until queue empty.
-       11. Sleep until current minute elapses."""
+       11. Strategy prepares data for the next minutes calculuations.
+       12. Sleep until current minute elapses."""
 
     def __init__(self):
 
@@ -40,10 +41,8 @@ class Server:
         if self.live_trading:
             self.exchanges = self.load_exchanges(self.logger)
 
-        # main event queue
+        # Event queue and producer/consumer worker classes
         self.events = queue.Queue(0)
-
-        # producer/consumer worker classes
         self.data = Datahandler(self.exchanges, self.logger)
         self.strategy = Strategy(self.exchanges, self.logger)
         self.portfolio = Portfolio(self.logger)
@@ -61,6 +60,7 @@ class Server:
         self.data.set_live_trading(self.live_trading)
         self.broker.set_live_trading(self.live_trading)
 
+        # sleep til the next minute begins
         count = 0
         sleep(self.seconds_til_next_minute())
 
@@ -73,22 +73,22 @@ class Server:
                     self.start_processing = time.time()
                     self.logger.debug("Started processing events.")
                     self.events = self.data.update_market_data(self.events)
-                    # self.logger.debug(self.events)
                     self.clear_event_queue()
-                # wait until the next minute begins
+                # sleep til the next minute begins
                 sleep(self.seconds_til_next_minute())
                 count += 1
-            # if backtesting, update date and process events immediately
+            # if backtesting, update data without delay
             elif not self.live_trading:
                 self.events = self.data.update_market_data(self.events)
                 self.clear_event_queue()
 
     def clear_event_queue(self):
-        """Route all new events to workers for processing."""
+        """Route new events to workers for processing."""
 
         count = 0
         while True:
             try:
+                # get events from queue
                 event = self.events.get(False)
             except queue.Empty:
                 # log processing performance stats

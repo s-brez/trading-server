@@ -12,18 +12,9 @@ class Exchange(ABC):
         """Return dict of new 1min OHLCV bars."""
         return self.bars
 
-    @abstractmethod
-    def get_bars_in_period(self, ):
-        """Return list of historic 1min OHLCV bars for specified period."""
-
-    @abstractmethod
-    def get_first_timestamp(self, instrument: str):
-        """Return millisecond timestamp of first available 1 min bar."""
-
-    @abstractmethod
-    def parse_ticks(self):
-        """Scrape the correct ticks from a given list of all ticks, ready to be
-        passed to build_OHLCV"""
+    def get_max_bin_size(self):
+        """"Return max number of bars allowed per REST API request"""
+        return self.MAX_BARS_PER_REQUEST
 
     def get_symbols(self):
         """Return list of all instrument symbols strings."""
@@ -34,7 +25,7 @@ class Exchange(ABC):
         return self.name
 
     def previous_minute(self):
-        """ Return the previous minutes UTC ms epoch timestamp."""
+        """ Return the previous minute UTC ms epoch timestamp."""
 
         timestamp = datetime.datetime.utcnow() - datetime.timedelta(minutes=1)
         timestamp.replace(second=0, microsecond=0)
@@ -87,3 +78,15 @@ class Exchange(ABC):
 
     def finished_parsing_ticks(self):
         return self.finished_parsing_ticks
+
+    @abstractmethod
+    def get_bars_in_period(self, ):
+        """Return list of historic 1min OHLCV bars for specified period."""
+
+    @abstractmethod
+    def get_origin_timestamp(self, symbol: str):
+        """Return millisecond timestamp of first available 1 min bar."""
+
+    @abstractmethod
+    def parse_ticks(self):
+        """Scrape previous minutes ticks."""
