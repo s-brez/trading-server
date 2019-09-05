@@ -37,46 +37,44 @@ class Bitmex(Exchange):
             self.logger.debug("Failed to to connect to BitMEX websocket.")
 
     def parse_ticks(self):
-        if not self.ws.ws.sock.connected:
+        if not self.ws.ws.sock or not self.ws.ws.sock.connected:
             self.logger.debug("BitMEX websocket disconnected.")
-        all_ticks = self.ws.get_ticks()
-        if not all_ticks:
-            self.logger.debug("No ticks received.")
-            self.ws.connect()
-        target_minute = datetime.datetime.utcnow().minute - 1
-        ticks_target_minute = []
-        tcount = 0
+        else:
+            all_ticks = self.ws.get_ticks()
+            target_minute = datetime.datetime.utcnow().minute - 1
+            ticks_target_minute = []
+            tcount = 0
 
-        # search from end of tick list to grab newest ticks first
-        for i in reversed(all_ticks):
-            try:
-                ts = i['timestamp']
-                if type(ts) is not datetime.datetime:
-                    ts = parser.parse(ts)
-            except Exception:
-                self.logger.debug(traceback.format_exc())
-            # scrape prev minutes ticks
-            if ts.minute == target_minute:
-                ticks_target_minute.append(i)
-                ticks_target_minute[tcount]['timestamp'] = ts
-                tcount += 1
-            # store the previous-to-target bar's last
-            # traded price to use as the open price for target bar
-            if ts.minute == target_minute - 1:
-                ticks_target_minute.append(i)
-                ticks_target_minute[tcount]['timestamp'] = ts
-                break
-        ticks_target_minute.reverse()
+            # search from end of tick list to grab newest ticks first
+            for i in reversed(all_ticks):
+                try:
+                    ts = i['timestamp']
+                    if type(ts) is not datetime.datetime:
+                        ts = parser.parse(ts)
+                except Exception:
+                    self.logger.debug(traceback.format_exc())
+                # scrape prev minutes ticks
+                if ts.minute == target_minute:
+                    ticks_target_minute.append(i)
+                    ticks_target_minute[tcount]['timestamp'] = ts
+                    tcount += 1
+                # store the previous-to-target bar's last
+                # traded price to use as the open price for target bar
+                if ts.minute == target_minute - 1:
+                    ticks_target_minute.append(i)
+                    ticks_target_minute[tcount]['timestamp'] = ts
+                    break
+            ticks_target_minute.reverse()
 
-        # reset bar dict ready for new bars
-        self.bars = {i: [] for i in self.symbols}
+            # reset bar dict ready for new bars
+            self.bars = {i: [] for i in self.symbols}
 
-        # build 1 min bars for each symbol
-        for symbol in self.symbols:
-            ticks = [i for i in ticks_target_minute if i['symbol'] == symbol]
-            bar = self.build_OHLCV(ticks, symbol)
-            self.bars[symbol].append(bar)
-            # self.logger.debug(bar)
+            # build 1 min bars for each symbol
+            for symbol in self.symbols:
+                ticks = [i for i in ticks_target_minute if i['symbol'] == symbol]
+                bar = self.build_OHLCV(ticks, symbol)
+                self.bars[symbol].append(bar)
+                # self.logger.debug(bar)
 
     def get_bars_in_period(self, symbol, start_time, total):
         """Returns specified amount of 1 min bars starting from start_time.

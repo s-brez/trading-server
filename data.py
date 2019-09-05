@@ -1,5 +1,5 @@
 from event import MarketEvent
-from pymongo import MongoClient
+from pymongo import MongoClient, errors
 import queue
 import time
 
@@ -14,6 +14,7 @@ class Datahandler:
 
     DB_URL = 'mongodb://127.0.0.1:27017/'
     DB_NAME = 'asset_price_master'
+    DB_TIMEOUT_MS = 10
 
     def __init__(self, exchanges, logger):
         self.exchanges = exchanges
@@ -23,10 +24,12 @@ class Datahandler:
         self.bars_save_to_db = queue.Queue(0)
 
         # db connection
-        self.db_client = MongoClient(self.DB_URL)
+        self.db_client = MongoClient(
+            self.DB_URL,
+            serverSelectionTimeoutMS=self.DB_TIMEOUT_MS)
+        self.check_db_connection()
         self.db = self.db_client[self.DB_NAME]
         self.db_collections = self.get_db_colls(self.db)
-        self.check_db_connection()
 
         # processing performance variables
         self.parse_count = 0
@@ -88,31 +91,10 @@ class Datahandler:
 
         return historic_market_events
 
-    def save_new_bars_to_db(self):
-        """Save bars in queue to database. """
-
-        count = 0
-        while True:
-            try:
-                bar = self.bars_save_to_db.get(False)
-            except queue.Empty:
-                self.logger.debug(
-                    "Saved " + str(count) + " new bars to " +
-                    self.DB_NAME + ".")
-                break
-            else:
-                if bar is not None:
-                    count += 1
-                    # store bar in relevant db collection
-                    self.db_collections[bar.exchange].insert_one(bar.get_bar())
-                # finished all jobs in queue
-                self.bars_save_to_db.task_done()
-
     def backfill_missing_data(self):
         """Fetch and store missing bars for the period betwwen the last
         locally-stored timestamp in db, and the current timestampo of live
         streaming data."""
-        
 
     def set_live_trading(self, live_trading):
         """Set true or false live execution flag"""
@@ -136,19 +118,66 @@ class Datahandler:
 
     def get_db_colls(self, db):
         """Return dict containing MongoClient collection objects for
-        each exchange. Collections store all rpice data for all instruments
-        on that exchange. E.g {"BitMEX" : bitmex_coll_object }"""
+        each exchange. Collections store all price data for all instruments
+        on that exchange. E.g {"BitMEX" : bitmex_collection_object }"""
 
         return {i.get_name(): db[i.get_name()] for i in self.exchanges}
 
     def check_db_connection(self):
-        """Raise exception if DB failed to connect."""
-        if self.db:
+        """Raise exception if DB connection not active."""
+
+        try:
+            time.sleep(self.DB_TIMEOUT_MS)
+            self.db_client.server_info()
             self.logger.debug(
                 "Connected to " + self.DB_NAME + " at " +
                 self.DB_URL + ".")
-        if not self.db:
+        except errors.ServerSelectionTimeoutError as e:
             self.logger.debug(
                 "Failed to connect to " + self.DB_NAME + " at " +
                 self.DB_URL + ".")
             raise Exception()
+
+    def save_new_bars_to_db(self):
+        """Save bars in queue to database."""
+
+        count = 0
+        while True:
+            try:
+                bar = self.bars_save_to_db.get(False)
+            except queue.Empty:
+                self.logger.debug(
+                    "Saved " + str(count) + " new bars to " +
+                    self.DB_NAME + ".")
+                break
+            else:
+                if bar is not None:
+                    count += 1
+                    # store bar in relevant db collection
+                    self.db_collections[bar.exchange].insert_one(bar.get_bar())
+                # finished all jobs in queue
+                self.bars_save_to_db.task_done()
+
+    def get_backfill_timestamps(self, exchange, symbol):
+        """Return origin, oldest and newest locally stored 1 min bar
+        timestamps for a given symbol."""
+
+        # count number of entries for symbol and save last cursor index
+        coll = self.db_collections[exchange.get_name()]
+        cursor = coll.find({"symbol": symbol})
+        cursor_count = coll.count_documents({"symbol": symbol})
+        last_index = cursor_count - 1
+
+        # get relevant timestamps from the results
+        origin_ts = exchange.get_origin_timestamp(symbol)
+        oldest_stored_ts = cursor[0]['timestamp']
+        newest_stored_ts = cursor[last_index]['timestamp']
+
+        # make timestamps sort-agnostic, in case of query sorting mixups
+        if oldest_stored_ts > newest_stored_ts:
+            t1 = oldest_stored_ts
+            t2 = newest_stored_ts
+            newest_stored_ts = t1
+            oldest_stored_ts = t2
+
+        return origin_ts, oldest_stored_ts, newest_stored_ts

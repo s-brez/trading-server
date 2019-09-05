@@ -27,7 +27,8 @@ class Exchange(ABC):
     def previous_minute(self):
         """ Return the previous minute UTC ms epoch timestamp."""
 
-        timestamp = datetime.datetime.utcnow() - datetime.timedelta(minutes=1)
+        delay = datetime.datetime.utcnow().second
+        timestamp = datetime.datetime.utcnow() - datetime.timedelta(seconds=delay)
         timestamp.replace(second=0, microsecond=0)
         # convert to epoch
         timestamp = int(timestamp.timestamp())
@@ -45,7 +46,9 @@ class Exchange(ABC):
         return delay
 
     def build_OHLCV(self, ticks: list, symbol):
-        """Return a 1 min bar as dict from a passed list of ticks """
+        """Return a 1 min bar as dict from a list of ticks. Assumes the given
+        list's first tick is from the previous minute, uses this tick for
+        bar open price."""
 
         if ticks:
             volume = sum(i['size'] for i in ticks) - ticks[0]['size']
@@ -80,7 +83,7 @@ class Exchange(ABC):
         return self.finished_parsing_ticks
 
     @abstractmethod
-    def get_bars_in_period(self, ):
+    def get_bars_in_period(self):
         """Return list of historic 1min OHLCV bars for specified period."""
 
     @abstractmethod

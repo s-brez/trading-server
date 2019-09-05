@@ -130,7 +130,7 @@ class Server:
         return logger
 
     def load_exchanges(self, logger):
-        """Create and return a list of all exchange objects"""
+        """Return list of all exchange objects"""
 
         exchanges = []
         exchanges.append(Bitmex(logger))
@@ -139,6 +139,7 @@ class Server:
 
     def seconds_til_next_minute(self):
         """ Return number of seconds to next minute."""
+
         now = datetime.datetime.utcnow().second
         delay = 60 - now
         return delay

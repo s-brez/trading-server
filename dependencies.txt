@@ -1,0 +1,3 @@
+websocket-client
+pandas
+pymongo

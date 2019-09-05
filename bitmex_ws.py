@@ -9,6 +9,7 @@ class Bitmex_WS:
 
     # data table size - increase if ticks get cut off during high vol periods
     MAX_SIZE = 1000
+    RECONNECT_TIMEOUT = 10
 
     def __init__(self, logger, symbols, channels, URL, api_key, api_secret):
         self.logger = logger
@@ -40,7 +41,7 @@ class Bitmex_WS:
         thread.daemon = True
         thread.start()
         self.logger.debug("Started websocket daemon.")
-        timeout = 10
+        timeout = self.RECONNECT_TIMEOUT
         while not self.ws.sock or not self.ws.sock.connected and timeout:
             sleep(1)
             timeout -= 1
@@ -72,7 +73,7 @@ class Bitmex_WS:
                 # trim data table size when it exceeds MAX_SIZE
                 if(table not in ['order', 'orderBookL2'] and
                         len(self.data[table]) > self.MAX_SIZE):
-                    self.data[table] = self.data[table][int(self.MAX_SIZE / 2):] # noqa
+                    self.data[table] = self.data[table][int(self.MAX_SIZE / 2):]  # noqa
             elif action == 'update':
                 # Locate the item in the collection and update it.
                 for updateData in msg['data']:
@@ -84,7 +85,7 @@ class Bitmex_WS:
                         return  # No item found to update.
                     item.update(updateData)
                     # Remove cancelled / filled orders
-                    if table == 'order' and not self.order_leaves_quantity(item): # noqa
+                    if table == 'order' and not self.order_leaves_quantity(item):  # noqa
                         self.data[table].remove(item)
             elif action == 'delete':
                 # Locate the item in the collection and remove it.
@@ -105,23 +106,15 @@ class Bitmex_WS:
 
     def on_error(self, ws, msg):
         self.logger.debug("BitMEX websocket error: " + str(msg))
-        raise websocket.WebSocketException(msg)
+        
         # attempt to reconnect if  ws is not connected
+        self.ws = None
+        self.logger.debug("Attempting to reconnect.")
+        sleep(self.RECONNECT_TIMEOUT)
         self.connect()
-        timeout = 10
-        while not self.ws.sock or not self.ws.sock.connected and timeout:
-            sleep(1)
-            timeout -= 1
-        if not timeout:
-            self.logger.debug("Websocket connection timed out.")
-            # attempt to reconnect
-            if not self.ws.sock.connected:
-                sleep(5)
-                self.connect()
 
     def on_close(self, ws):
         ws.close()
-        self.logger.debug("Websocket connection closed.")
         pass
 
     def get_orderbook(self):
