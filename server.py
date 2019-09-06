@@ -60,30 +60,35 @@ class Server:
         self.data.set_live_trading(self.live_trading)
         self.broker.set_live_trading(self.live_trading)
 
-        # sleep til the next minute begins
+        # Check data is up to date and repair if necessary before live trading.
+        # No need if backtesting, just use existing data as is.
+        if self.live_trading:
+            self.data.run_diagnostics()
+
+        # Sleep til the next minute begins
         count = 0
         sleep(self.seconds_til_next_minute())
 
         while True:
-            # when live trading, update data in first second of each minute
+            # When live trading, update data in first second of each minute
             if self.live_trading:
-                # only update data after at least one minute of
-                # data has been collected
-                if count >= 1:
+                # Only update data after at least one minute of new data
+                # has been collected and datahandler ready flag = True
+                if count >= 1 and self.data.ready:
                     self.start_processing = time.time()
                     self.logger.debug("Started processing events.")
                     self.events = self.data.update_market_data(self.events)
                     self.clear_event_queue()
-                # sleep til the next minute begins
+                # Sleep til the next minute begins
                 sleep(self.seconds_til_next_minute())
                 count += 1
-            # if backtesting, update data without delay
+            # If backtesting, update data without delay
             elif not self.live_trading:
                 self.events = self.data.update_market_data(self.events)
                 self.clear_event_queue()
 
     def clear_event_queue(self):
-        """Route new events to workers for processing."""
+        """Route new events to worker classes for processing."""
 
         count = 0
         while True:
@@ -99,9 +104,7 @@ class Server:
                     "Processed " + str(count) + " events in " +
                     str(duration) + " seconds.")
                 # store new data now that time-critical work is complete
-                self.logger.debug("Started saving new bars to db.")
                 self.data.save_new_bars_to_db()
-                self.logger.debug("Finished saving new bars to db.")
                 break
             else:
                 if event is not None:
@@ -127,10 +130,18 @@ class Server:
             "%(asctime)s:%(levelname)s:%(module)s - %(message)s")
         ch.setFormatter(formatter)
         logger.addHandler(ch)
+
+        # supress requests/urlib3/connectionpool messages
+        # logging.DEBUG produces messages with each https request...
+        logging.getLogger("urllib3").propagate = False
+        requests_log = logging.getLogger("requests")
+        requests_log.addHandler(logging.NullHandler())
+        requests_log.propagate = False
+
         return logger
 
     def load_exchanges(self, logger):
-        """Return list of all exchange objects"""
+        """Create and return list of all exchange objects"""
 
         exchanges = []
         exchanges.append(Bitmex(logger))

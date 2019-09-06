@@ -14,6 +14,8 @@ coll = db['BitMEX']
 MAX_BARS_PER_REQUEST = 750
 BASE_URL = "https://www.bitmex.com/api/v1"
 BARS_URL = "/trade/bucketed?binSize="
+origin_timstamp_xbtusd = 1483228800
+origin_timstamp_ethusd = 1533200520
 
 
 def previous_minute():
@@ -80,7 +82,7 @@ def get_origin_timestamp(symbol):
     return int(parser.parse(response).timestamp())
 
 
-def data_status_report(exchange, symbol, MAX_BIN_SIZE_PER_REQUEST, output=False):
+def get_status(exchange, symbol, MAX_BIN_SIZE_PER_REQUEST, output=False):
     """ Return dict showing state and completeness of given symbols
     stored data. Contains pertinent timestamps, periods of missing bars and
     other relevant info."""
@@ -93,16 +95,28 @@ def data_status_report(exchange, symbol, MAX_BIN_SIZE_PER_REQUEST, output=False)
     origin_ts = get_origin_timestamp(symbol)
     oldest_ts = result[total_stored - 1]['timestamp']
     newest_ts = result[0]['timestamp']
+
     # make timestamps sort-agnostic, in case of sorting mixups
     if oldest_ts > newest_ts:
         oldest_ts, newest_ts = newest_ts, oldest_ts
 
     # find gaps in stored data
     actual = {doc['timestamp'] for doc in result}  # stored ts's
-    required = {i for i in range(origin_ts, newest_ts + 60, 60)}  # needed ts's
+    required = {i for i in range(origin_ts, current_ts + 60, 60)}  # needed tss
     gaps = required.difference(actual)  # find the difference
 
+    # find bars with all null values (happens sometimes when connection drops)
+    result = coll.find({"$and": [
+        {"symbol": symbol},
+        {"high": None},
+        {"low": None},
+        {"open": None},
+        {"close": None},
+        {"volume": 0}]})
+    null_bars = [doc['timestamp'] for doc in result]
+
     if output:
+        print("Exchange & instrument:..........", exchange, symbol)
         print("Origin (on-exchange) timestamp:.", origin_ts)
         print("Oldest locally stored timestamp:", oldest_ts)
         print("Newest locally stored timestamp:", newest_ts)
@@ -110,23 +124,25 @@ def data_status_report(exchange, symbol, MAX_BIN_SIZE_PER_REQUEST, output=False)
         print("Max bin size per REST poll:.....", max_bin_size)
         print("Total required bars:............", len(required))
         print("Total locally stored bars:......", total_stored)
+        print("Total null-value bars:..........", len(null_bars))
         print("Total missing bars:.............", len(gaps))
 
     return {
-        "exchange:": exchange,
+        "exchange": exchange,
         "symbol": symbol,
         "origin_ts": origin_ts,
         "oldest_ts": oldest_ts,
         "newest_ts": newest_ts,
         "current_ts": current_ts,
-        "max_bin_size": max_bin_size
+        "max_bin_size": max_bin_size,
         "total_stored": total_stored,
         "total_needed": len(required),
         "gaps": list(gaps),
+        "null_bars": null_bars
     }
 
 
-def backfill_data_bulk(report):
+def backfill_bulk(report):
     """ Get and store missing bars between origin and oldest timestamps.
     Use this only once to get bulk historic data, then fill small gaps with
     backfill_data_gaps() intermittently each day."""
@@ -156,7 +172,7 @@ def backfill_data_bulk(report):
                     bars_to_store.append(bar)
                 stagger = 2  # reset stagger to base after successful poll
                 start += step  # increment the starting poll timestamp
-                time.sleep(stagger)
+                time.sleep(stagger + 1)
             except Exception as e:
                 # retry poll with an exponential delay after each error
                 for i in range(timeout):
@@ -203,32 +219,35 @@ def backfill_data_bulk(report):
     return False
 
 
-def backfill_data_gaps(report):
-    """ Get and store small groups of missing bars. Intended to be called
+def backfill_gaps(report):
+    """ Get and store small bins of missing bars. Intended to be called
     multiple times daily as a QA measure for patching small amounts of
     bars missing from locally saved data."""
 
     if len(report['gaps']) != 0:
-        # sort timestamps into sequential bins (to reduce polling)
+        # sort timestamps into sequential bins (to reduce polls)
         bins = [
             list(g) for k, g in groupby(
-                sorted(report['gaps']), key=lambda n, c=count(0, 60): n - next(c))]
+                sorted(report['gaps']),
+                key=lambda n, c=count(0, 60): n - next(c))]
 
-        # poll exchange REST endpoint for missing bars
+        # poll exchange REST endpoint for replacement bars
         bars_to_store = []
+        timeout = 10
         for i in bins:
             try:
                 bars = get_bars_in_period(report['symbol'], i[0], len(i))
                 for bar in bars:
                     bars_to_store.append(bar)
                 stagger = 2  # reset stagger to base after successful poll
-                time.sleep(stagger)
+                time.sleep(stagger + 1)
             except Exception as e:
                 # retry poll with an exponential delay after each error
                 for i in range(timeout):
                     try:
-                        time.sleep(delay)
-                        bars = get_bars_in_period(report['symbol'], i[0], len(i))
+                        time.sleep(delay + 1)
+                        bars = get_bars_in_period(
+                            report['symbol'], i[0], len(i))
                         for bar in bars:
                             bars_to_store.append(bar)
                         stagger = 2
@@ -250,19 +269,82 @@ def backfill_data_gaps(report):
                     coll.insert_one(bar)
                 except pymongo.errors.DuplicateKeyError:
                     continue  # skip duplicates if they exist
-            print("Stored bars after merge", coll.count_documents(query))
             return True
         else:
             raise Exception("Fetched bars do not match missing timestamps.")
     else:
-        print("No gaps in data exist.")
+        print("Data up to date.")
         return False
 
 
-report = data_status_report(
-    "BitMEX", "XBTUSD", MAX_BARS_PER_REQUEST, output=True)
+def replace_null_bars(report):
+    """ Replace null bars in db with newly fetched ones."""
 
-backfill_data_gaps(report)
+    if len(report['null_bars']) != 0:
+        # sort timestamps into sequential bins (to reduce polls)
+        bins = [
+            list(g) for k, g in groupby(
+                sorted(report['null_bars']),
+                key=lambda n, c=count(0, 60): n - next(c))]
+
+        # poll exchange REST endpoint for missing bars
+        bars_to_store = []
+        timeout = 10
+        for i in bins:
+            try:
+                bars = get_bars_in_period(report['symbol'], i[0], len(i))
+                for bar in bars:
+                    bars_to_store.append(bar)
+                stagger = 2  # reset stagger to base after successful poll
+                time.sleep(stagger)
+            except Exception as e:
+                # retry poll with an exponential delay after each error
+                for i in range(timeout):
+                    try:
+                        time.sleep(delay)
+                        bars = get_bars_in_period(
+                            report['symbol'], i[0], len(i))
+                        for bar in bars:
+                            bars_to_store.append(bar)
+                        stagger = 2
+                        break
+                    except Exception as e:
+                        delay *= stagger
+                        if i == timeout - 1:
+                            raise Exception("Polling timeout.")
+
+        # sanity check, check that the retreived bars match gaps
+        timestamps = [i['timestamp'] for i in bars_to_store]
+        timestamps = sorted(timestamps)
+        bars = sorted(report['null_bars'])
+        if timestamps == bars:
+            for bar in bars_to_store:
+                try:
+                    query = {"$and": [
+                        {"symbol": bar['symbol']},
+                        {"timestamp": bar['timestamp']}]}
+                    new_values = {"$set": {
+                        "open": bar['open'],
+                        "high": bar['high'],
+                        "low": bar['low'],
+                        "close": bar['close'],
+                        "volume": bar['volume']}}
+                    coll.update_one(query, new_values)
+                except pymongo.errors.DuplicateKeyError:
+                    continue  # skip duplicates if they exist
+            print(
+                "Stored bars after merge", coll.count_documents(
+                    {"symbol": report['symbol']}))
+            return True
+        else:
+            raise Exception("Fetched bars do not match missing timestamps.")
+    else:
+        print("Data up to date.")
+        return False
 
 
-# check for time gaps between last stored bar and current bar
+report = get_status(
+    "BitMEX", "ETHUSD", MAX_BARS_PER_REQUEST, output=True)
+
+replace_null_bars(report)
+# backfill_gaps(report)

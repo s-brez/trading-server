@@ -14,7 +14,6 @@ class Bitmex(Exchange):
     BARS_URL = "/trade/bucketed?binSize="
     # WS_URL = "wss://testnet.bitmex.com/realtime"
     WS_URL = "wss://www.bitmex.com/realtime"
-
     TIMESTAMP_FORMAT = '%Y-%m-%d%H:%M:%S.%f'
 
     def __init__(self, logger):
@@ -23,6 +22,7 @@ class Bitmex(Exchange):
         self.name = "BitMEX"
         self.symbols = ["XBTUSD", "ETHUSD"]
         self.channels = ["trade"]  # , "orderBookL2"
+        self.origin_tss = {"XBTUSD": 1483228800, "ETHUSD": 1533200520}
         self.api_key = None
         self.api_secret = None
 
@@ -37,7 +37,7 @@ class Bitmex(Exchange):
             self.logger.debug("Failed to to connect to BitMEX websocket.")
 
     def parse_ticks(self):
-        if not self.ws.ws.sock or not self.ws.ws.sock.connected:
+        if not self.ws.ws:
             self.logger.debug("BitMEX websocket disconnected.")
         else:
             all_ticks = self.ws.get_ticks()
@@ -109,12 +109,16 @@ class Bitmex(Exchange):
         return new_bars
 
     def get_origin_timestamp(self, symbol: str):
-        """Return millisecond timestamp of first available 1 min bar."""
+        """Return millisecond timestamp of first available 1 min bar. If the
+        timestamp is stored, return that, otherwise poll the exchange."""
 
-        payload = (
-            f"{self.BASE_URL}{self.BARS_URL}1m&symbol={symbol}&filter=&"
-            f"count=1&startTime=&reverse=false")
+        if self.origin_tss[symbol] is not None:
+            return self.origin_tss[symbol]
+        else:
+            payload = (
+                f"{self.BASE_URL}{self.BARS_URL}1m&symbol={symbol}&filter=&"
+                f"count=1&startTime=&reverse=false")
 
-        response = requests.get(payload).json()[0]['timestamp']
+            response = requests.get(payload).json()[0]['timestamp']
 
-        return int(parser.parse(response).timestamp())
+            return int(parser.parse(response).timestamp())
