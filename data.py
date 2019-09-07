@@ -140,7 +140,11 @@ class Datahandler:
                 if bar is not None:
                     count += 1
                     # store bar in relevant db collection
-                    self.db_collections[bar.exchange].insert_one(bar.get_bar())
+                    try:
+                        self.db_collections[bar.exchange].insert_one(
+                            bar.get_bar())
+                    except pymongo.errors.DuplicateKeyError:
+                        continue  # skip duplicates if they exist
                 # finished all jobs in queue
                 self.bars_save_to_db.task_done()
 
