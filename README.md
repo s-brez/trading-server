@@ -5,7 +5,7 @@ Use this software at your own risk. No responsibility taken for losses incurred.
 
 ## Exchange/broker support
 
-Planned order of implementation:
+Planned order of implementation: (this might change as exchanges come and go)
 
 Exchange | Status
 -------|---------
@@ -14,12 +14,17 @@ IC Markets | WIP
 FTX | NA
 Binance | NA
 Bitfinex | NA
+OKEx | NA
+Huobi Global | NA
 Bithumb | NA
 Kraken | NA
 Bitstamp | NA
 Coinbase | NA
+Upbit | NA
+Kucoin | NA
+Bittrex | NA
 Poloniex| NA
-Huobi | NA
+Bitflyer | NA
 IG Markets | NA
 Interactive Brokers | NA
 Deribit | NA
