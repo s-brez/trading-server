@@ -7,27 +7,27 @@ Use this software at your own risk. No responsibility taken for losses incurred.
 
 Planned order of implementation: (this might change as exchanges come and go)
 
-Exchange | Status
--------|---------
-BitMEX | Complete
-IC Markets | WIP
-FTX | NA
-Binance | NA
-Bitfinex | NA
-OKEx | NA
-Huobi Global | NA
-Bithumb | NA
-Kraken | NA
-Bitstamp | NA
-Coinbase | NA
-Upbit | NA
-Kucoin | NA
-Bittrex | NA
-Poloniex| NA
-Bitflyer | NA
-IG Markets | NA
-Interactive Brokers | NA
-Deribit | NA
+Exchange |  Status   | Asset classes
+---------|-----------|------------
+BitMEX | Complete | Crypto derivatives
+IC Markets | WIP | FX, equity, commodity & index CFD's
+FTX | NA | Crypto spot, options & derivatives
+Binance | NA | Crypto spot
+Bitfinex | NA | Crypto spot
+OKEx | NA | Crypto spot
+Huobi Global | NA | Crypto spot
+Bithumb | NA | Crypto spot
+Kraken | NA | Crypto spot
+Bitstamp | NA | Crypto spot
+Coinbase | NA | Crypto spot
+Upbit | NA | Crypto spot
+Kucoin | NA | Crypto spot
+Bittrex | NA | Crypto spot
+Poloniex| NA | Crypto spot
+Bitflyer | NA | Crypto spot
+IG Markets | NA | FX, equity, commodity & index CFD's
+Interactive Brokers | NA | FX, equity, commodity & index CFD's
+Deribit | NA | Crypto derivatives & options
 
 ## Market data storage
 Server stores 1 minute resolution OHLCV bars for all watched instruments in a mongoDB instance. 
