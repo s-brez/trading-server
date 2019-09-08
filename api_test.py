@@ -344,7 +344,11 @@ def replace_null_bars(report):
 
 
 report = get_status(
+    "BitMEX", "XBTUSD", MAX_BARS_PER_REQUEST, output=True)
+
+report = get_status(
     "BitMEX", "ETHUSD", MAX_BARS_PER_REQUEST, output=True)
 
-replace_null_bars(report)
+
+# replace_null_bars(report)
 # backfill_gaps(report)

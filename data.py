@@ -14,25 +14,17 @@ class Datahandler:
     if backtesting or live trading) and pushed to the event queue for the
     Strategy object to consume."""
 
-    DB_URL = 'mongodb://127.0.0.1:27017/'
-    DB_NAME = 'asset_price_master'
-    DB_TIMEOUT_MS = 10
-
-    def __init__(self, exchanges, logger):
+    def __init__(self, exchanges, logger, db, db_client):
         self.exchanges = exchanges
         self.logger = logger
+        self.db = db
+        self.db_client = db_client
+        self.db_collections = {
+            i.get_name(): db[i.get_name()] for i in self.exchanges}
         self.live_trading = False
         self.ready = False
         self.total_instruments = self.get_total_instruments()
         self.bars_save_to_db = queue.Queue(0)
-
-        # db connection
-        self.db_client = MongoClient(
-            self.DB_URL,
-            serverSelectionTimeoutMS=self.DB_TIMEOUT_MS)
-        self.check_db_connection()
-        self.db = self.db_client[self.DB_NAME]
-        self.db_collections = self.get_db_colls(self.db)
 
         # processing performance variables
         self.parse_count = 0
@@ -42,7 +34,7 @@ class Datahandler:
         self.var_parse_time = 0
 
     def update_market_data(self, events):
-        """Push new market events to the event queue"""
+        """Push new market events to the event queue."""
 
         if self.live_trading:
             market_data = self.get_new_data()
@@ -55,10 +47,9 @@ class Datahandler:
         return events
 
     def get_new_data(self):
-        """Parse all new tick data, then return a list of market events
-        (new bars) for all symbols from all exchanges for the just-elapsed
-        time period. Add new bar data to queue for storage in DB, after
-        currenct processing cycle completes."""
+        """Return a list of market events (new bars) for all symbols from
+        all exchanges for the just-elapsed time period. Add new bar data
+        to queue for storage in DB, after current minutes cycle completes."""
 
         # record bar parse performance
         self.logger.debug("Started parsing new ticks.")
@@ -101,23 +92,24 @@ class Datahandler:
         self.total_parse_time += duration
         self.mean_parse_time = self.total_parse_time / self.parse_count
 
-    def run_diagnostics(self):
+    def run_data_diagnostics(self, output):
         """Check each symbol's stored data for completeness, repair/replace
-        missing data as needed. Once complete, set ready flag to True."""
+        missing data as needed. Once complete, set ready flag to True.
+        Output parameter set true to print report."""
 
         # get a status report for each symbols stored data
         reports = []
-        self.logger.debug("Start diagnostics:")
+        self.logger.debug("Started diagnostics.")
         for exchange in self.exchanges:
             for symbol in exchange.get_symbols():
-                time.sleep(5)
+                time.sleep(2)
                 reports.append(self.get_status(
-                    exchange, symbol, output=True))
+                    exchange, symbol, output))
 
         # resolve discrepancies
         self.logger.debug("Resolving missing data.")
         for report in reports:
-            time.sleep(5)
+            time.sleep(2)
             self.backfill_gaps(report)
             self.replace_null_bars(report)
 
@@ -133,8 +125,8 @@ class Datahandler:
                 bar = self.bars_save_to_db.get(False)
             except queue.Empty:
                 self.logger.debug(
-                    "Saved " + str(count) + " new bars to " +
-                    self.DB_NAME + ".")
+                    "Wrote " + str(count) + " new bars to " +
+                    str(self.db.name) + ".")
                 break
             else:
                 if bar is not None:
@@ -186,7 +178,7 @@ class Datahandler:
         if output:
             print(
                 "Exchange & instrument:..........",
-                exchange.get_name(), symbol)
+                exchange.get_name() + ":", symbol)
             # print("Origin (on-exchange) timestamp:.", origin_ts)
             # print("Oldest locally stored timestamp:", oldest_ts)
             # print("Newest locally stored timestamp:", newest_ts)
@@ -378,7 +370,7 @@ class Datahandler:
 
             # poll exchange REST endpoint for missing bars
             bars_to_store = []
-            delay = 1  # wait time before attmepting to re-poll after error
+            delay = 2  # wait time before attmepting to re-poll after error
             timeout = 10
             for i in bins:
                 try:
@@ -409,10 +401,7 @@ class Datahandler:
             timestamps = sorted(timestamps)
             bars = sorted(report['null_bars'])
             if timestamps == bars:
-                doc_count_before = (
-                    self.db_collections[report[
-                        'exchange'].get_name()].count_documents(
-                            {"symbol": report['symbol']}))
+                doc_count = 0
                 for bar in bars_to_store:
                     try:
                         query = {"$and": [
@@ -427,13 +416,13 @@ class Datahandler:
                         self.db_collections[
                             report['exchange'].get_name()].update_one(
                                 query, new_values)
+                        doc_count += 1
                     except pymongo.errors.DuplicateKeyError:
                         continue  # skip duplicates if they exist
                 doc_count_after = (
                     self.db_collections[report[
                         'exchange'].get_name()].count_documents(
                             {"symbol": report['symbol']}))
-                doc_count = doc_count_before - doc_count_after
                 self.logger.debug(
                     "Replaced " + str(doc_count) + " " + report['symbol'] +
                     " null bars.")
@@ -444,28 +433,6 @@ class Datahandler:
         else:
             self.logger.debug("Data up to date.")
             return False
-
-    def get_db_colls(self, db):
-        """Return dict containing MongoClient collection objects for
-        each exchange. Collections store all price data for all instruments
-        on that exchange. E.g {"BitMEX" : bitmex_collection_object }"""
-
-        return {i.get_name(): db[i.get_name()] for i in self.exchanges}
-
-    def check_db_connection(self):
-        """Raise exception if DB connection not active."""
-
-        try:
-            time.sleep(self.DB_TIMEOUT_MS)
-            self.db_client.server_info()
-            self.logger.debug(
-                "Connected to " + self.DB_NAME + " at " +
-                self.DB_URL + ".")
-        except errors.ServerSelectionTimeoutError as e:
-            self.logger.debug(
-                "Failed to connect to " + self.DB_NAME + " at " +
-                self.DB_URL + ".")
-            raise Exception()
 
     def set_live_trading(self, live_trading):
         """Set true or false live execution flag"""
