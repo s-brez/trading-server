@@ -1,5 +1,5 @@
 # trading-server
-Event-driven execution and backtesting platform for trading common markets.
+Trading server: an event-driven execution and backtesting platform for trading common markets.
 
 Use this software at your own risk. No responsibility taken for losses incurred.
 
