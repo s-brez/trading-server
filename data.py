@@ -200,8 +200,7 @@ class Datahandler:
             "total_stored": total_stored,
             "total_needed": len(required),
             "gaps": list(gaps),
-            "null_bars": null_bars
-        }
+            "null_bars": null_bars}
 
     def backfill_bulk(self, report):
         """Get and store missing bars between origin and oldest timestamps.
@@ -210,20 +209,22 @@ class Datahandler:
 
         if report['origin_ts'] < report['oldest_ts']:
 
-            # Determine poll sizing and amounts accounting for max_bin_size.
-            # Split polling into a large batch of polls and then a final poll.
+            # Determine poll sizing accounting for max_bin_size. Split
+            # polling into a large batch of polls and then a final poll.
             required = int((report['oldest_ts'] - report['origin_ts']) / 60)
             final_poll_size = required % report['max_bin_size']
             total_polls_batch = int((
                 (required - final_poll_size) / report['max_bin_size']))
 
-            # poll exchange REST endpoint for first bulk batch missing bars
             start = report['origin_ts']
             step = report['max_bin_size'] * 60
-            bars_to_store = []
+
             delay = 1  # wait time before attmepting to re-poll after error
-            stagger = 2  # error delay co-efficient
-            timeout = 10
+            stagger = 2  # delay co-efficient
+            timeout = 10  # number of times to repoll before exception raised.
+
+            # poll exchange REST endpoint for first bulk batch missing bars
+            bars_to_store = []
             for i in range(total_polls_batch):
                 try:
                     bars = report['exchange'].get_bars_in_period(
@@ -289,20 +290,26 @@ class Datahandler:
 
     def backfill_gaps(self, report):
         """ Get and store small bins of missing bars. Intended to be called
-        multiple times daily as a QA measure for patching small amounts of
-        bars missing from locally saved data."""
+        as a data QA measure for patching missing locally saved data incurred
+        from server downtime."""
 
+        # sort timestamps into sequential bins (to reduce # of polls)
         if len(report['gaps']) != 0:
-            # sort timestamps into sequential bins (to reduce polls)
             bins = [
                 list(g) for k, g in groupby(
                     sorted(report['gaps']),
                     key=lambda n, c=count(0, 60): n - next(c))]
 
+            # if any bins > max_bin_size, split them into smaller bins.
+            # takes the old list
+            bins = self.split_oversize_bins(bins, report['max_bin_size'])
+
+            delay = 1  # wait time before attmepting to re-poll after error
+            stagger = 2  # delay co-efficient
+            timeout = 10  # number of times to repoll before exception raised.
+
             # poll exchange REST endpoint for replacement bars
             bars_to_store = []
-            timeout = 10
-            delay = 1  # wait time before attmepting to re-poll after error
             for i in bins:
                 try:
                     bars = report['exchange'].get_bars_in_period(
@@ -312,7 +319,7 @@ class Datahandler:
                     stagger = 2  # reset stagger to base after successful poll
                     time.sleep(stagger + 1)
                 except Exception as e:
-                    # retry poll with an exponential delay after each error
+                    # retry polling with an exponential delay after each error
                     for i in range(timeout):
                         try:
                             time.sleep(delay + 1)
@@ -341,7 +348,8 @@ class Datahandler:
                         self.db_collections[
                             report['exchange'].get_name()].insert_one(bar)
                     except pymongo.errors.DuplicateKeyError:
-                        continue  # skip duplicates if they exist
+                        # Skip duplicates that exist in DB.
+                        continue
                 doc_count_after = (
                     self.db_collections[report[
                         'exchange'].get_name()].count_documents(query))
@@ -354,7 +362,7 @@ class Datahandler:
                 raise Exception(
                     "Fetched bars do not match missing timestamps.")
         else:
-            self.logger.debug("Data up to date.")
+            # Return false if there is no missing data.
             return False
 
     def replace_null_bars(self, report):
@@ -368,10 +376,12 @@ class Datahandler:
                     sorted(report['null_bars']),
                     key=lambda n, c=count(0, 60): n - next(c))]
 
+            delay = 1  # wait time before attmepting to re-poll after error
+            stagger = 2  # delay co-efficient
+            timeout = 10  # number of times to repoll before exception raised.
+
             # poll exchange REST endpoint for missing bars
             bars_to_store = []
-            delay = 2  # wait time before attmepting to re-poll after error
-            timeout = 10
             for i in bins:
                 try:
                     bars = report['exchange'].get_bars_in_period(
@@ -430,9 +440,50 @@ class Datahandler:
             else:
                 raise Exception(
                     "Fetched bars do not match missing timestamps.")
+                print(
+                    "Bars length:", len(bars),
+                    "Timestamps length:", len(timestamps))
         else:
-            self.logger.debug("Data up to date.")
             return False
+
+    def split_oversize_bins(self, original_bins, max_bin_size):
+        """Given a list of lists (timestamp bins), if any top-level
+        element length > max_bin_size, split that element into
+        lists of max_bin_size, remove original element, replace with
+        new smaller elements, then return the new modified list."""
+
+        bins = original_bins
+
+        # Identify oversize bins and their positions in original list.
+        to_split = []
+        indices_to_remove = []
+        for i in bins:
+            if len(i) > max_bin_size:
+                # Save the bins.
+                to_split.append(bins.index(i))
+                # Save the indices.
+                indices_to_remove.append(bins.index(i))
+
+        # split into smaller bins
+        split_bins = []
+        for i in to_split:
+            new_bins = [(bins[i])[x:x+max_bin_size] for x in range(
+                0, len((bins[i])), max_bin_size)]
+            split_bins.append(new_bins)
+
+        final_bins = []
+        for i in split_bins:
+            for j in i:
+                final_bins.append(j)
+
+        # Remove the oversize bins by their indices, add the smaller split bins
+        for i in indices_to_remove:
+            del bins[i]
+
+        for i in final_bins:
+            bins.append(i)
+
+        return bins
 
     def set_live_trading(self, live_trading):
         """Set true or false live execution flag"""
