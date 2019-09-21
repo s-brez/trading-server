@@ -17,7 +17,6 @@ import queue
 class Server:
     """Server routes system events amongst worker components via a queue in
     an event handling loop. The queue is processed at the start of each minute.
-
     Event loop lifecycle:
         1. A new minute begins - Tick data is parsed into 1 min bars.
         2. Datahander wraps new bars and other data in Market Events.
@@ -31,6 +30,8 @@ class Server:
        10. Repeat 1-9 until queue empty.
        11. Strategy prepares data for the next minutes calculuations.
        12. Sleep until current minute elapses."""
+
+    VERSION = "0.1"
 
     DB_URL = 'mongodb://127.0.0.1:27017/'
     DB_NAME = 'asset_price_master'
@@ -47,6 +48,7 @@ class Server:
             self.exchanges = self.load_exchanges(self.logger)
 
         # Connect to database.
+        print("Connecting to database...")
         self.db_client = MongoClient(
             self.DB_URL,
             serverSelectionTimeoutMS=self.DB_TIMEOUT_MS)
@@ -57,6 +59,7 @@ class Server:
         self.events = queue.Queue(0)
         self.data = Datahandler(
             self.exchanges, self.logger, self.db, self.db_client)
+        print("Building working data...")
         self.strategy = Strategy(
             self.exchanges, self.logger, self.db, self.db_client)
         self.portfolio = Portfolio(self.logger)
@@ -64,6 +67,7 @@ class Server:
 
         # UI.
         self.shell = Shell(
+            self.VERSION,
             self.logger,
             self.data,
             self.exchanges,
