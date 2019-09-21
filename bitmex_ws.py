@@ -1,6 +1,6 @@
 from time import sleep
+from threading import Thread
 import websocket
-import threading
 import json
 import traceback
 
@@ -37,10 +37,13 @@ class Bitmex_WS:
             on_error=lambda ws, msg: self.on_error(ws, msg),
             on_close=lambda ws: self.on_close(ws),
             on_open=lambda ws: self.on_open(ws))
-        thread = threading.Thread(target=lambda: self.ws.run_forever())
-        thread.daemon = True
+
+        thread = Thread(
+            target=lambda: self.ws.run_forever(),
+            daemon=True)
         thread.start()
         self.logger.debug("Started websocket daemon.")
+
         timeout = self.RECONNECT_TIMEOUT
         while not self.ws.sock or not self.ws.sock.connected and timeout:
             sleep(1)
