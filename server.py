@@ -1,16 +1,17 @@
-from data import Datahandler
+from pymongo import MongoClient, errors
 from portfolio import Portfolio
 from strategy import Strategy
+from threading import Thread
+from data import Datahandler
 from broker import Broker
 from bitmex import Bitmex
 from time import sleep
-from threading import Thread
-from pymongo import MongoClient, errors
-import pymongo
-import time
-import logging
-import queue
+from ui import Shell
 import datetime
+import pymongo
+import logging
+import time
+import queue
 
 
 class Server:
@@ -37,22 +38,22 @@ class Server:
     DIAG_DELAY = 30  # mins between diagnostics
 
     def __init__(self):
-        self.live_trading = True   # set False for backtesting
+        self.live_trading = True   # set False for backtesting.
         self.log_level = logging.DEBUG
         self.logger = self.setup_logger()
 
-        # Don't connect to live data feeds if backtesting
+        # Don't connect to live data feeds if backtesting.
         if self.live_trading:
             self.exchanges = self.load_exchanges(self.logger)
 
-        # Connect to database
+        # Connect to database.
         self.db_client = MongoClient(
             self.DB_URL,
             serverSelectionTimeoutMS=self.DB_TIMEOUT_MS)
         self.db = self.db_client[self.DB_NAME]
         self.check_db_connection()
 
-        # Event queue and producer/consumer worker classes
+        # Event queue and producer/consumer worker classes.
         self.events = queue.Queue(0)
         self.data = Datahandler(
             self.exchanges, self.logger, self.db, self.db_client)
@@ -61,7 +62,16 @@ class Server:
         self.portfolio = Portfolio(self.logger)
         self.broker = Broker(self.exchanges, self.logger)
 
-        # processing performance variables
+        # UI.
+        self.shell = Shell(
+            self.logger,
+            self.data,
+            self.exchanges,
+            self.strategy,
+            self.portfolio,
+            self.broker)
+
+        # Processing performance variables.
         self.start_processing = None
         self.end_processing = None
 
@@ -142,14 +152,14 @@ class Server:
 
         logger = logging.getLogger()
         logger.setLevel(self.log_level)
-        ch = logging.StreamHandler()
+        log_file = logging.FileHandler('log.log', 'w+')
         formatter = logging.Formatter(
             "%(asctime)s:%(levelname)s:%(module)s - %(message)s")
-        ch.setFormatter(formatter)
-        logger.addHandler(ch)
+        log_file.setFormatter(formatter)
+        logger.addHandler(log_file)
 
-        # supress requests/urlib3/connectionpool messages
-        # logging.DEBUG produces messages with each https request...
+        # supress requests/urlib3 messages as logging.DEBUG produces messages
+        # with every single http request.
         logging.getLogger("urllib3").propagate = False
         requests_log = logging.getLogger("requests")
         requests_log.addHandler(logging.NullHandler())
