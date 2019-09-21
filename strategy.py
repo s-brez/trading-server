@@ -6,14 +6,15 @@ import calendar
 
 
 class Strategy:
-    """Master control layer, or meta-model, of all individual strategy models.
-    Responsible for consuming Market events from the event queue, updating
-    strategy models with new data, then generating Signal events. Stores
-    working data as dataframes."""
+    """Master control layer for all individual strategy models. Consumes Market
+    events from the event queue, updates strategy models with new data and
+    generating Signal events. Stores working data as dataframes in data dict."""
 
     ALL_TIMEFRAMES = [
         "1Min", "3Min", "5Min", "15Min", "30Min", "1H", "2H", "3H", "4H",
         "6H", "8H", "12H", "1D", "2D", "3D", "7D", "14D", "28D"]
+
+    PREVIEW_TIMEFRAMES = ["15Min", "1H", "4H", "1D",]
 
     RESAMPLE_KEY = {
         'open': 'first', 'high': 'max', 'low': 'min',
@@ -41,6 +42,7 @@ class Strategy:
         # DataFrame container: data[exchange][symbol][timeframe]
         self.data = {
             i.get_name(): self.load_data(i) for i in self.exchanges}
+        self.logger.debug("Initialised working data.")
 
     def load_data(self, exchange):
         """Create and return a dictionary of dataframes for all symbols and
@@ -53,7 +55,7 @@ class Strategy:
                     exchange, symbol, tf) for tf in self.ALL_TIMEFRAMES}
         return dicts
 
-    def build_dataframe(self, exc, sym, tf, lookback=50):
+    def build_dataframe(self, exc, sym, tf, lookback=150):
         """Return a dataframe of size lookback for the given symbol (sym),
         exchange (exc) and timeframe (tf).
 
@@ -66,7 +68,7 @@ class Strategy:
         size = self.TF_MINS[tf] * lookback
 
         # Use a projection to remove mongo "_id" field and symbol.
-        result = self.coll.find(
+        result = self.db_collections[exc.get_name()].find(
             {"symbol": sym}, {
                 "_id": 0, "symbol": 0}).limit(
                     size).sort([("timestamp", -1)])
@@ -74,7 +76,7 @@ class Strategy:
         # Pass cursor to DataFrame, format time and set index
         df = pd.DataFrame(result)
         df['timestamp'] = df['timestamp'].apply(
-            lambda x: datetime.datetime.fromtimestamp(x))
+            lambda x: datetime.fromtimestamp(x))
         df.set_index("timestamp", inplace=True)
 
         # Downsample 1 min data to target timeframe
@@ -95,15 +97,16 @@ class Strategy:
         and 3 days, weekly and monthly."""
 
         # check against the previous minute - the just-elapsed period.
+        if type(time) is not datetime:
+            time = datetime.utcfromtimestamp(time)
+
         timestamp = time - timedelta(hours=0, minutes=1)
-        timeframes = ["1m"]
+        timeframes = []
 
         for i in self.MINUTE_TIMEFRAMES:
             self.minute_timeframe(i, timestamp, timeframes)
-
         for i in self.HOUR_TIMEFRAMES:
             self.hour_timeframe(i, timestamp, timeframes)
-
         for i in self.DAY_TIMEFRAMES:
             self.day_timeframe(i, timestamp, timeframes)
 
@@ -131,11 +134,8 @@ class Strategy:
         """Process incoming market data, update all models with new data."""
 
         self.logger.debug(event.get_bar())
-
-    def load_dataframes(self):
-        """Create and return a dictionary of dataframes for all symbols and
-        timeframes."""
-        pass
+        self.logger.debug(
+            self.get_relevant_timeframes(event.get_bar()['timestamp']))
 
     def load_models(self, logger):
         """Create and return a list of all model objects"""
@@ -144,4 +144,3 @@ class Strategy:
         models.append(TrendFollowing())
         self.logger.debug("Initialised models.")
         return models
-
