@@ -1,6 +1,6 @@
-from event import MarketEvent
-from itertools import groupby, count
 from pymongo import MongoClient, errors
+from itertools import groupby, count
+from event import MarketEvent
 import pymongo
 import queue
 import time
@@ -176,18 +176,17 @@ class Datahandler:
         null_bars = [doc['timestamp'] for doc in result]
 
         if output:
-            print(
-                "Exchange & instrument:..........",
-                exchange.get_name() + ":", symbol)
-            # print("Origin (on-exchange) timestamp:.", origin_ts)
-            # print("Oldest locally stored timestamp:", oldest_ts)
-            # print("Newest locally stored timestamp:", newest_ts)
-            # print("Current timestamp:..............", current_ts)
-            # print("Max bin size per REST poll:.....", max_bin_size)
-            print("Total required bars:............", len(required))
-            print("Total locally stored bars:......", total_stored)
-            print("Total null-value bars:..........", len(null_bars))
-            print("Total missing bars:.............", len(gaps))
+            self.logger.info(
+                "Exchange & instrument:.........." +
+                exchange.get_name() + ":" + str(symbol))
+            self.logger.info(
+                "Total required bars:............" + str(len(required)))
+            self.logger.info(
+                "Total locally stored bars:......" + str(total_stored))
+            self.logger.info(
+                    "Total null-value bars:.........." + str(len(null_bars)))            
+            self.logger.info(
+                "Total missing bars:............." + str(len(gaps)))
 
         return {
             "exchange": exchange,
@@ -440,9 +439,9 @@ class Datahandler:
             else:
                 raise Exception(
                     "Fetched bars do not match missing timestamps.")
-                print(
-                    "Bars length:", len(bars),
-                    "Timestamps length:", len(timestamps))
+                self.logger.debug(
+                    "Bars length: " + str(len(bars)) +
+                    " Timestamps length: " + str(len(timestamps)))
         else:
             return False
 
@@ -497,3 +496,13 @@ class Datahandler:
         for exchange in self.exchanges:
             total += len(exchange.symbols)
         return total
+
+    def get_instrument_symbols(self):
+        """Return a list containing all instrument symbols."""
+        
+        instruments = []
+        for exchange in self.exchanges:
+            for symbol in exchange.get_symbols():
+                instruments.append(
+                    exchange.get_name() + "-" + symbol)
+        return instruments
