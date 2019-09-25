@@ -3,18 +3,19 @@ from datetime import date, datetime, timedelta
 from model import TrendFollowing
 import pandas as pd
 import calendar
+import time
 
 
 class Strategy:
     """Master control layer for all individual strategy models. Consumes Market
     events from the event queue, updates strategy models with new data and
-    generating Signal events. Stores working data as dataframes in data dict."""
+    generating Signal events. Stores working data as dataframes in data{}."""
 
     ALL_TIMEFRAMES = [
         "1Min", "3Min", "5Min", "15Min", "30Min", "1H", "2H", "3H", "4H",
         "6H", "8H", "12H", "1D", "2D", "3D", "7D", "14D", "28D"]
 
-    PREVIEW_TIMEFRAMES = ["15Min", "1H", "4H", "1D",]
+    PREVIEW_TIMEFRAMES = ["1H", "1D"]
 
     RESAMPLE_KEY = {
         'open': 'first', 'high': 'max', 'low': 'min',
@@ -38,55 +39,20 @@ class Strategy:
         self.db_collections = {
             i.get_name(): db[i.get_name()] for i in self.exchanges}
         self.models = self.load_models(self.logger)
-
-        # DataFrame container: data[exchange][symbol][timeframe]
-        self.data = {
-            i.get_name(): self.load_data(i) for i in self.exchanges}
         self.logger.debug("Initialised working data.")
 
-    def load_data(self, exchange):
-        """Create and return a dictionary of dataframes for all symbols and
-        timeframes for the given exchange."""
+        # DataFrame container: data[exchange][symbol][timeframe]
+        self.data = {}
 
-        dicts = {}
-        for symbol in exchange.get_symbols():
-            dicts[symbol] = {
-                tf: self.build_dataframe(
-                    exchange, symbol, tf) for tf in self.ALL_TIMEFRAMES}
-        return dicts
+    def parse_new_data(self, event):
+        """Process incoming market data, update all models with new data."""
 
-    def build_dataframe(self, exc, sym, tf, lookback=150):
-        """Return a dataframe of size lookback for the given symbol (sym),
-        exchange (exc) and timeframe (tf).
+        self.logger.debug(event.get_bar())
+        self.logger.debug(
+            self.get_relevant_timeframes(event.get_bar()['timestamp']))
 
-        Lookback is the number of previous bars required by a model to perform
-        to perform its analysis. E.g for a dataframe with tf = 4h, lookback =
-        50, we will need to fetch and resample 4*60*50 1 min bars (12000 bars)
-        into 50 4h bars."""
-
-        # Find the total number of 1min bars needed using TFM dict.
-        size = self.TF_MINS[tf] * lookback
-
-        # Use a projection to remove mongo "_id" field and symbol.
-        result = self.db_collections[exc.get_name()].find(
-            {"symbol": sym}, {
-                "_id": 0, "symbol": 0}).limit(
-                    size).sort([("timestamp", -1)])
-
-        # Pass cursor to DataFrame, format time and set index
-        df = pd.DataFrame(result)
-        df['timestamp'] = df['timestamp'].apply(
-            lambda x: datetime.fromtimestamp(x))
-        df.set_index("timestamp", inplace=True)
-
-        # Downsample 1 min data to target timeframe
-        resampled_df = pd.DataFrame()
-        try:
-            resampled_df = (df.resample(tf).agg(self.RESAMPLE_KEY))
-        except Exception as e:
-            print(e)
-
-        return resampled_df.sort_values(by="timestamp", ascending=False)
+    def update_datasets(self):
+        pass
 
     def get_relevant_timeframes(self, time):
         """Return a list of timeframes relevant to the just-elapsed period.
@@ -130,17 +96,74 @@ class Strategy:
                 timestamp.day % days == 0):
             timeframes.append(f"{days}d")
 
-    def parse_data(self, event):
-        """Process incoming market data, update all models with new data."""
-
-        self.logger.debug(event.get_bar())
-        self.logger.debug(
-            self.get_relevant_timeframes(event.get_bar()['timestamp']))
-
     def load_models(self, logger):
-        """Create and return a list of all model objects"""
+        """Create and return a list of trade models."""
 
         models = []
         models.append(TrendFollowing())
         self.logger.debug("Initialised models.")
         return models
+
+    def init_dataframes(self):
+        """Create working datasets and log dataframe init time.
+         Should only be called after local data has been updated."""
+
+        self.logger.debug("Started building timeframes datasets.")
+
+        start = time.time()
+        self.data = {
+            i.get_name(): self.load_local_data(i) for i in self.exchanges}
+        end = time.time()
+        duration = round(end - start, 5)
+
+        symbolcount = 0
+        for i in self.exchanges:
+            symbolcount += len(i.get_symbols())
+
+        self.logger.debug(
+            "Initialised " + str(symbolcount * len(self.ALL_TIMEFRAMES)) +
+            " timeframe datasets in " + str(duration) + " seconds.")
+
+    def build_dataframe(self, exc, sym, tf, lookback=150):
+        """Return a dataframe of size lookback for the given symbol (sym),
+        exchange (exc) and timeframe (tf).
+
+        Lookback is the number of previous bars required by a model to perform
+        to perform its analysis. E.g for a dataframe with tf = 4h, lookback =
+        50, we will need to fetch and resample 4*60*50 1 min bars (12000 bars)
+        into 50 4h bars."""
+
+        # Find the total number of 1min bars needed using TFM dict.
+        size = self.TF_MINS[tf] * lookback
+
+        # Use a projection to remove mongo "_id" field and symbol.
+        result = self.db_collections[exc.get_name()].find(
+            {"symbol": sym}, {
+                "_id": 0, "symbol": 0}).limit(
+                    size).sort([("timestamp", -1)])
+
+        # Pass cursor to DataFrame, format time and set index
+        df = pd.DataFrame(result)
+        df['timestamp'] = df['timestamp'].apply(
+            lambda x: datetime.fromtimestamp(x))
+        df.set_index("timestamp", inplace=True)
+
+        # Downsample 1 min data to target timeframe
+        resampled_df = pd.DataFrame()
+        try:
+            resampled_df = (df.resample(tf).agg(self.RESAMPLE_KEY))
+        except Exception as e:
+            print(e)
+
+        return resampled_df.sort_values(by="timestamp", ascending=False)
+
+    def load_local_data(self, exchange):
+        """Create and return a dictionary of dataframes for all symbols and
+        timeframes for the given exchange."""
+
+        dicts = {}
+        for symbol in exchange.get_symbols():
+            dicts[symbol] = {
+                tf: self.build_dataframe(
+                    exchange, symbol, tf) for tf in self.ALL_TIMEFRAMES}
+        return dicts

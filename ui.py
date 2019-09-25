@@ -24,18 +24,18 @@ class Shell(Cmd):
         return True
 
     def do_show(self, inp):
-        
+
         params = inp.split()
 
         try:
             # Single parameter cases
             if len(params) == 1:
-                
-                # Instrument summary 
+
+                # Instrument summary
                 if params[0] == 'instruments' or params[0] == 'inst':
                     print(
                         self.data.get_total_instruments(),
-                            "monitored instruments.")
+                        "monitored instruments.")
                     for i in self.data.get_instrument_symbols():
                         print(i)
 
@@ -45,7 +45,7 @@ class Shell(Cmd):
                         for s in e.get_symbols():
                             for t in self.strategy.PREVIEW_TIMEFRAMES:
                                 print(e.get_name(), s, t + ":")
-                                print(self.strategy.data[e.get_name()][s][t].head(3), "\n")
+                                print(self.strategy.data[e.get_name()][s][t].head(5), "\n")
         except Exception:
             print("Invalid entry.")
             self.do_show(inp)

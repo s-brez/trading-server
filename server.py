@@ -59,21 +59,10 @@ class Server:
         self.events = queue.Queue(0)
         self.data = Datahandler(
             self.exchanges, self.logger, self.db, self.db_client)
-        print("Building working data...")
         self.strategy = Strategy(
             self.exchanges, self.logger, self.db, self.db_client)
         self.portfolio = Portfolio(self.logger)
         self.broker = Broker(self.exchanges, self.logger)
-
-        # UI.
-        self.shell = Shell(
-            self.VERSION,
-            self.logger,
-            self.data,
-            self.exchanges,
-            self.strategy,
-            self.portfolio,
-            self.broker)
 
         # Processing performance variables.
         self.start_processing = None
@@ -87,10 +76,24 @@ class Server:
         self.data.set_live_trading(self.live_trading)
         self.broker.set_live_trading(self.live_trading)
 
-        # Check data is current, repair if necessary before live trading.
-        # No need to do so if backtesting, just use existing stored data.
-        if self.live_trading:
-            self.data.run_data_diagnostics(1)
+        # Check data is current and complete
+        print("Updating price database...")
+        self.data.run_data_diagnostics(1)
+
+        # Build working datasets
+        print("Building working datasets...")
+        self.strategy.init_dataframes()
+        self.logger.debug("Initialised working datasets.")
+
+        # Start UI
+        self.shell = Shell(
+            self.VERSION,
+            self.logger,
+            self.data,
+            self.exchanges,
+            self.strategy,
+            self.portfolio,
+            self.broker)
 
         count = 0
         sleep(self.seconds_til_next_minute())
@@ -141,7 +144,7 @@ class Server:
                 if event is not None:
                     count += 1
                     if event.type == "MARKET":
-                        self.strategy.parse_data(event)
+                        self.strategy.parse_new_data(event)
                     elif event.type == "SIGNAL":
                         self.portfolio.update_signal(event)
                     elif event.type == "ORDER":
