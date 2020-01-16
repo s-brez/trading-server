@@ -13,14 +13,15 @@ class MarketEvent(Event):
         self.bar = bar
 
     def __str__(self):
-        return "Market event: Exchange=%s, Symbol=%s, Timestamp=%s" % (
-            self.exchange, self.bar['symbol'], self.bar['timestamp'])
+        return "MarketEvent - Exchange: %s, Symbol: %s, TS: %s, Close: %s" % (
+            self.exchange, self.bar['symbol'], self.bar['timestamp'],
+            self.bar['close'])
 
     def get_bar(self):
         return self.bar
 
-    def get_market(self):
-        return self.market
+    def get_exchange(self):
+        return self.exchange
 
 
 class SignalEvent(Event):
@@ -45,7 +46,7 @@ class OrderEvent(Event):
         self.direction = direction      # BUY or SELL
 
     def __str__(self):
-        return "Order: Symbol=%s, Type=%s, Quantity=%s, Direction=%s" % (
+        return "OrderEvent - Symbol: %s, Type: %s, Qty: %s, Direction: %s" % (
             self.symbol, self.order_type, self.quantity, self.direction)
 
 

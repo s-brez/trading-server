@@ -39,7 +39,6 @@ class Strategy:
         self.db_collections = {
             i.get_name(): db[i.get_name()] for i in self.exchanges}
         self.models = self.load_models(self.logger)
-        self.logger.debug("Initialised working data.")
 
         # DataFrame container: data[exchange][symbol][timeframe]
         self.data = {}
@@ -47,16 +46,31 @@ class Strategy:
     def parse_new_data(self, event):
         """Process incoming market data, update all models with new data."""
 
-        # update relevant datasets
-        self.update_datasets(
-            event,
-            self.get_relevant_timeframes(event.get_bar()['timestamp']))
+        timeframes = self.get_relevant_timeframes(event.get_bar()['timestamp'])
 
-    def update_datasets(self, bar, timeframes):
-        """Update datasets for the given asset and list of of timeframes."""
+        # update relevant dataframes
+        self.update_datasets(event, timeframes)
 
+        # run models with new data
+        self.run_models(event, timeframes)
+
+    def update_datasets(self, event, timeframes):
+        """Update dataframes for the given asset and list of timeframes."""
+
+        bar = event.get_bar()
+        exc = event.get_exchange()
+        sym = bar['symbol']
+
+        # log the event and timeframes
         self.logger.debug(event)
         self.logger.debug(timeframes)
+
+        # update pertinent dataframes
+        for tf in timeframes:
+            self.logger.debug(self.data[exc][sym][tf].head(3))
+
+    def run_models(self, event, timeframes):
+        pass
 
     def get_relevant_timeframes(self, time):
         """Return a list of timeframes relevant to the just-elapsed period.
@@ -89,16 +103,16 @@ class Strategy:
     def minute_timeframe(self, minutes, timestamp, timeframes):
         for i in range(0, 60, minutes):
             if timestamp.minute == i:
-                timeframes.append(f"{minutes}m")
+                timeframes.append(f"{minutes}Min")
 
     def hour_timeframe(self, hours, timestamp, timeframes):
         if timestamp.minute == 0 and timestamp.hour % hours == 0:
-            timeframes.append(f"{hours}h")
+            timeframes.append(f"{hours}H")
 
     def day_timeframe(self, days, timestamp, timeframes):
         if (timestamp.minute == 0 and timestamp.hour == 0 and
                 timestamp.day % days == 0):
-            timeframes.append(f"{days}d")
+            timeframes.append(f"{days}D")
 
     def load_models(self, logger):
         """Create and return a list of trade strategy models."""
@@ -109,10 +123,9 @@ class Strategy:
         return models
 
     def init_dataframes(self):
-        """Create working datasets and log dataframe init time.
-         Should only be called after local data has been updated."""
+        """Create working datasets (self.data dict)"""
 
-        self.logger.debug("Started building timeframes datasets.")
+        self.logger.debug("Started building DataFrames.")
 
         start = time.time()
         self.data = {
@@ -169,9 +182,17 @@ class Strategy:
         """Create and return a dictionary of dataframes for all symbols and
         timeframes for the given exchange."""
 
+        # return dataframes with data
+        # dicts = {}
+        # for symbol in exchange.get_symbols():
+        #     dicts[symbol] = {
+        #         tf: self.build_dataframe(
+        #             exchange, symbol, tf) for tf in self.ALL_TIMEFRAMES}
+        # return dicts
+
+        # return empty dataframes
         dicts = {}
         for symbol in exchange.get_symbols():
             dicts[symbol] = {
-                tf: self.build_dataframe(
-                    exchange, symbol, tf) for tf in self.ALL_TIMEFRAMES}
+                tf: pd.DataFrame() for tf in self.ALL_TIMEFRAMES}
         return dicts

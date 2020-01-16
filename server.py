@@ -83,7 +83,7 @@ class Server:
         # Build working datasets
         print("Building working datasets...")
         self.strategy.init_dataframes()
-        self.logger.debug("Initialised working datasets.")
+        self.logger.debug("Initialised datasets.")
 
         # Start UI
         self.shell = Shell(
