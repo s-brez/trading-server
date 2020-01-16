@@ -8,7 +8,7 @@ import traceback
 class Bitmex_WS:
 
     # data table size - increase if ticks get cut off during high vol periods
-    MAX_SIZE = 1000
+    MAX_SIZE = 10000
     RECONNECT_TIMEOUT = 10
 
     def __init__(self, logger, symbols, channels, URL, api_key, api_secret):
@@ -109,7 +109,7 @@ class Bitmex_WS:
 
     def on_error(self, ws, msg):
         self.logger.debug("BitMEX websocket error: " + str(msg))
-        
+
         # attempt to reconnect if  ws is not connected
         self.ws = None
         self.logger.debug("Attempting to reconnect.")
