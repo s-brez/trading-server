@@ -7,7 +7,7 @@ import time
 
 
 class Strategy:
-    """Master control layer for all individual strategy models. Consumes Market
+    """Master control layer for all individual strategy models. Consumes market
     events from the event queue, updates strategy models with new data and
     generating Signal events. Stores working data as dataframes in data{}."""
 
@@ -47,12 +47,16 @@ class Strategy:
     def parse_new_data(self, event):
         """Process incoming market data, update all models with new data."""
 
-        self.logger.debug(event.get_bar())
-        self.logger.debug(
+        # update relevant datasets
+        self.update_datasets(
+            event,
             self.get_relevant_timeframes(event.get_bar()['timestamp']))
 
-    def update_datasets(self):
-        pass
+    def update_datasets(self, bar, timeframes):
+        """Update datasets for the given asset and list of of timeframes."""
+
+        self.logger.debug(event)
+        self.logger.debug(timeframes)
 
     def get_relevant_timeframes(self, time):
         """Return a list of timeframes relevant to the just-elapsed period.
@@ -97,7 +101,7 @@ class Strategy:
             timeframes.append(f"{days}d")
 
     def load_models(self, logger):
-        """Create and return a list of trade models."""
+        """Create and return a list of trade strategy models."""
 
         models = []
         models.append(TrendFollowing())
@@ -142,10 +146,14 @@ class Strategy:
                 "_id": 0, "symbol": 0}).limit(
                     size).sort([("timestamp", -1)])
 
-        # Pass cursor to DataFrame, format time and set index
+        # Pass cursor to DataFrame constructor
         df = pd.DataFrame(result)
+
+        # Format time column
         df['timestamp'] = df['timestamp'].apply(
             lambda x: datetime.fromtimestamp(x))
+
+        # Set index
         df.set_index("timestamp", inplace=True)
 
         # Downsample 1 min data to target timeframe
