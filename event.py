@@ -19,6 +19,9 @@ class MarketEvent(Event):
     def get_bar(self):
         return self.bar
 
+    def get_market(self):
+        return self.market
+
 
 class SignalEvent(Event):
     """A trade signal. Consumed by Portfolio to produce Order events."""
