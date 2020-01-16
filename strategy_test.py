@@ -29,19 +29,10 @@ class strategy_test:
     db = db_client['asset_price_master']
     coll = db['BitMEX']
 
-    # All timeframes string values.
     ALL_TIMEFRAMES = [
         "1Min", "3Min", "5Min", "15Min", "30Min", "1H", "2H", "3H", "4H",
         "6H", "8H", "12H", "1D", "2D", "3D", "7D", "14D", "28D"]
 
-    # Timeframe strings: minute int values.
-    TF_MINS = {
-        "1Min": 1, "3Min": 3, "5Min": 5, "15Min": 15, "30Min": 30, "1H": 60,
-        "2H": 120,
-        "3H": 180, "4H": 240, "6H": 360, "8H": 480, "12H": 720, "1D": 1440,
-        "2D": 2880, "3D": 4320, "7D": 10080, "14D": 20160, "28D": 40320}
-
-    # Pandas resampling instructions.
     RESAMPLE_KEY = {
         'open': 'first', 'high': 'max', 'low': 'min',
         'close': 'last', 'volume': 'sum'}
@@ -50,11 +41,17 @@ class strategy_test:
     HOUR_TIMEFRAMES = [1, 2, 3, 4, 6, 8, 12]
     DAY_TIMEFRAMES = [1, 2, 3, 7, 14, 28]
 
+    # Timeframe strings: minute int values.
+    TF_MINS = {
+        "1Min": 1, "3Min": 3, "5Min": 5, "15Min": 15, "30Min": 30, "1H": 60,
+        "2H": 120,
+        "3H": 180, "4H": 240, "6H": 360, "8H": 480, "12H": 720, "1D": 1440,
+        "2D": 2880, "3D": 4320, "7D": 10080, "14D": 20160, "28D": 40320}
+
     def __init__(self):
         self.logger = self.setup_logger()
         self.exchanges = [Exchange()]
-        self.data = {
-            i.get_name(): self.load_data(i) for i in self.exchanges}
+
 
     def setup_logger(self):
         """Create and configure logger"""
@@ -152,32 +149,25 @@ class strategy_test:
                 "_id": 0, "symbol": 0}).limit(
                     size).sort([("timestamp", -1)])
 
-        # Pass cursor to DataFrame, format time, set index.
+        # Pass cursor to DataFrame, format time and set index
         df = pd.DataFrame(result)
-        if tf == "1Min":
-            print(df.iloc[1])
-        df['timestamp'] = pd.to_datetime(
-            df['timestamp'], utc=True, unit='s')
+        df['timestamp'] = df['timestamp'].apply(
+            lambda x: datetime.datetime.fromtimestamp(x))
         df.set_index("timestamp", inplace=True)
-
 
         # Downsample 1 min data to target timeframe
         resampled_df = pd.DataFrame()
         try:
-            if tf != "1Min":
-                resampled_df = (df.resample(tf).agg(self.RESAMPLE_KEY))
-            else:
-                resampled_df = df
+            resampled_df = (df.resample(tf).agg(self.RESAMPLE_KEY))
         except Exception as e:
             print(e)
-        if tf == "1Min":
-            print(resampled_df.head(3))
+        print(resampled_df.sort_values(by="timestamp", ascending=False))
         return resampled_df
 
 
 strategy = strategy_test()
-# print(strategy.data["BitMEX"]['XBTUSD'])
-# print(strategy.data["BitMEX"]['ETHUSD'])
+print(strategy.data["BitMEX"]['XBTUSD'])
+print(strategy.data["BitMEX"]['ETHUSD'])
 
 
 # print(strategy.get_relevant_timeframes(1567871460))

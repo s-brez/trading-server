@@ -39,14 +39,14 @@ class Exchange(ABC):
         return timestamp
 
     def seconds_til_next_minute(self):
-        """ Return number of seconds until T-1 sec to next minute."""
+        """Return number of seconds until T-1 sec to next minute."""
 
         now = datetime.datetime.utcnow().second
         delay = 60 - now - 1
         return delay
 
     def build_OHLCV(self, ticks: list, symbol):
-        """Return a 1 min bar as dict from a list of ticks. Assumes the given
+        """Return a 1 min bar dict from a list of ticks. Assumes the given
         list's first tick is from the previous minute, uses this tick for
         bar open price."""
 

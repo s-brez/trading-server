@@ -499,7 +499,7 @@ class Datahandler:
 
     def get_instrument_symbols(self):
         """Return a list containing all instrument symbols."""
-        
+
         instruments = []
         for exchange in self.exchanges:
             for symbol in exchange.get_symbols():

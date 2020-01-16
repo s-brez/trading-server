@@ -12,4 +12,4 @@ while 1:
         file.seek(where)
     else:
         print(line)
-    time.sleep(0.5)
+    time.sleep(0.01)
