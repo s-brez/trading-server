@@ -1,3 +1,6 @@
+from dateutil import parser
+import datetime
+
 
 class Event(object):
     """Base class for various system events."""
@@ -14,7 +17,8 @@ class MarketEvent(Event):
 
     def __str__(self):
         return "MarketEvent - Exchange: %s, Symbol: %s, TS: %s, Close: %s" % (
-            self.exchange, self.bar['symbol'], self.bar['timestamp'],
+            self.exchange, self.bar['symbol'],
+            datetime.datetime.fromtimestamp(self.bar['timestamp']),
             self.bar['close'])
 
     def get_bar(self):
