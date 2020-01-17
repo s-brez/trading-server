@@ -97,6 +97,7 @@ class Server:
 
         count = 0
         sleep(self.seconds_til_next_minute())
+
         while True:
             if self.live_trading:
                 # Only update data after at least one minute of new data
@@ -104,18 +105,29 @@ class Server:
                 if count >= 1 and self.data.ready:
                     self.start_processing = time.time()
                     self.logger.debug("Started processing events.")
+
                     # Parse and queue market data (new Market Events)
                     self.events = self.data.update_market_data(self.events)
+
                     # Data is ready, route events to worker classes
                     self.clear_event_queue()
-                    # Check data integrity every 30 mins
+
+                    # run diagnostics at 5 min mark to fix early null bars
+                    if (count == 5):
+                        thread = Thread(
+                            target=self.data.run_data_diagnostics(0))
+                        thread.start()
+
+                    # Check data integrity every 30 mins thereafter
                     if (count % self.DIAG_DELAY == 0):
                         thread = Thread(
                             target=self.data.run_data_diagnostics(0))
                         thread.start()
+
                 # Sleep til the next minute begins
                 sleep(self.seconds_til_next_minute())
                 count += 1
+
             elif not self.live_trading:
                 # Update data w/o delay when backtesting, don't run diagnostics
                 self.events = self.data.update_market_data(self.events)
