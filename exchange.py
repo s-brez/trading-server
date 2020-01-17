@@ -28,7 +28,8 @@ class Exchange(ABC):
         """ Return the previous minute UTC ms epoch timestamp."""
 
         delay = datetime.datetime.utcnow().second
-        timestamp = datetime.datetime.utcnow() - datetime.timedelta(seconds=delay)
+        timestamp = datetime.datetime.utcnow() - datetime.timedelta(
+            seconds=delay)
         timestamp.replace(second=0, microsecond=0)
         # convert to epoch
         timestamp = int(timestamp.timestamp())
