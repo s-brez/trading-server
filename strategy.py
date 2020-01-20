@@ -1,6 +1,7 @@
 
 from datetime import date, datetime, timedelta
 from model import TrendFollowing
+from dateutil import parser
 import pandas as pd
 import calendar
 import time
@@ -49,25 +50,39 @@ class Strategy:
         timeframes = self.get_relevant_timeframes(event.get_bar()['timestamp'])
 
         # update relevant dataframes
-        self.update_datasets(event, timeframes)
+        self.update_dataframes(event, timeframes)
 
         # run models with new data
         self.run_models(event, timeframes)
 
-    def update_datasets(self, event, timeframes):
+    def update_dataframes(self, event, timeframes):
         """Update dataframes for the given asset and list of timeframes."""
 
         bar = event.get_bar()
         exc = event.get_exchange()
         sym = bar['symbol']
 
-        # log the event and timeframes
-        self.logger.debug(event)
-        self.logger.debug(timeframes)
+        # 1. If df empty, create a new one from stored data + the new bar
+        # 2. If df not empty, check the second row timestamp. if it matches
+        #    the previous minute, simply insert the new bar in row one
+        # 3. If second row timestamp doesnt match, go to step 1.
 
-        # update pertinent dataframes
         for tf in timeframes:
+            # update each dataframe
+            self.data[exc][sym][tf] = self.build_dataframe(
+                exc, sym, tf)
+            # print for sanity check
+            self.logger.debug(tf)
             self.logger.debug(self.data[exc][sym][tf].head(3))
+
+            self.logger.debug("should be the first index timestamp value:")
+            index_2 = pd.Timestamp(self.data[exc][sym][tf].index.values[0])
+
+            self.logger.debug(index_2)
+            self.logger.debug(type(index_2))
+
+            # TODO log the timestamp as human-readable datetime
+            self.logger.debug(event)
 
     def run_models(self, event, timeframes):
         pass
@@ -154,7 +169,7 @@ class Strategy:
         size = self.TF_MINS[tf] * lookback
 
         # Use a projection to remove mongo "_id" field and symbol.
-        result = self.db_collections[exc.get_name()].find(
+        result = self.db_collections[exc].find(
             {"symbol": sym}, {
                 "_id": 0, "symbol": 0}).limit(
                     size).sort([("timestamp", -1)])
