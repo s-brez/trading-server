@@ -62,7 +62,7 @@ class Datahandler:
         self.logger.debug(
             "Parsed " + str(self.total_instruments) +
             " instruments' ticks in " + str(duration) + " seconds.")
-        self.track_performance(duration)
+        self.track_tick_processing_performance(duration)
 
         # wrap new 1 min bars in market events
         new_market_events = []
@@ -85,7 +85,7 @@ class Datahandler:
 
         return historic_market_events
 
-    def track_performance(self, duration):
+    def track_tick_processing_performance(self, duration):
         """Track tick processing times and other performance statistics."""
 
         self.parse_count += 1
@@ -103,11 +103,11 @@ class Datahandler:
         for exchange in self.exchanges:
             for symbol in exchange.get_symbols():
                 time.sleep(2)
-                reports.append(self.get_status(
+                reports.append(self.get_stored_data_status(
                     exchange, symbol, output))
 
-        # resolve discrepancies
-        self.logger.debug("Resolving missing data.")
+        # resolve discrepancies in stored data
+        self.logger.debug("Fetching missing data.")
         for report in reports:
             time.sleep(2)
             self.backfill_gaps(report)
@@ -140,7 +140,7 @@ class Datahandler:
                 # finished all jobs in queue
                 self.bars_save_to_db.task_done()
 
-    def get_status(self, exchange, symbol, output=False):
+    def get_stored_data_status(self, exchange, symbol, output=False):
         """ Return dict showing state and completeness of given symbols
         stored data. Contains pertinent timestamps, periods of missing bars and
         other relevant info."""
@@ -154,7 +154,7 @@ class Datahandler:
                 "symbol": symbol}))
         origin_ts = exchange.get_origin_timestamp(symbol)
         
-        # if there is no existing data, use curre
+        # handle case where there is no existing data (fresh DB)
         if total_stored == 0:
             oldest_ts = current_ts
             newest_ts = current_ts
