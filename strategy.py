@@ -1,4 +1,3 @@
-
 from datetime import date, datetime, timedelta
 from model import TrendFollowing
 from dateutil import parser
@@ -70,10 +69,11 @@ class Strategy:
         for tf in timeframes:
             # update each dataframe
             self.data[exc][sym][tf] = self.build_dataframe(
-                exc, sym, tf)
+                exc, sym, tf, bar)
             # print for sanity check
             self.logger.debug(tf)
             self.logger.debug(self.data[exc][sym][tf].head(3))
+            self.logger.debug(bar)
 
             self.logger.debug("should be the first index timestamp value:")
             index_2 = pd.Timestamp(self.data[exc][sym][tf].index.values[0])
@@ -156,40 +156,78 @@ class Strategy:
             "Initialised " + str(symbolcount * len(self.ALL_TIMEFRAMES)) +
             " timeframe datasets in " + str(duration) + " seconds.")
 
-    def build_dataframe(self, exc, sym, tf, lookback=150):
+    def build_dataframe(self, exc, sym, tf, current_bar=None, lookback=150):
         """Return a dataframe of size lookback for the given symbol (sym),
-        exchange (exc) and timeframe (tf).
+        exchange (exc) and timeframe (tf). If "curent_bar" param is passed in,
+        construct the dataframe using current_bar as first row of dataframe.
 
-        Lookback is the number of previous bars required by a model to perform
-        to perform its analysis. E.g for a dataframe with tf = 4h, lookback =
-        50, we will need to fetch and resample 4*60*50 1 min bars (12000 bars)
-        into 50 4h bars."""
+        E.g 1 (no current_bar) for a dataframe with tf = 4h, lookback = 50, we
+        need to fetch and resample 4*60*50 1 min bars (12000 bars) into 50 4h
+        bars.
+
+        E.g 2 (with current_bar) for dataframe with tf = 4h, lookback = 50, we
+        need to fetch and resample 4*60*50 - 1 1 min bars (11999 bars) into 50
+        4h bars, using current_bar as the first bar (total 12000 bars)."""
 
         # Find the total number of 1min bars needed using TFM dict.
         size = self.TF_MINS[tf] * lookback
 
-        # Use a projection to remove mongo "_id" field and symbol.
-        result = self.db_collections[exc].find(
-            {"symbol": sym}, {
-                "_id": 0, "symbol": 0}).limit(
-                    size).sort([("timestamp", -1)])
+        # Create Dataframe using only stored bars
+        if current_bar is None:
 
-        # Pass cursor to DataFrame constructor
-        df = pd.DataFrame(result)
+            # Use a projection to remove mongo "_id" field and symbol.
+            result = self.db_collections[exc].find(
+                {"symbol": sym}, {
+                    "_id": 0, "symbol": 0}).limit(
+                        size).sort([("timestamp", -1)])
 
-        # Format time column
-        df['timestamp'] = df['timestamp'].apply(
-            lambda x: datetime.fromtimestamp(x))
+            # Pass cursor to DataFrame constructor
+            df = pd.DataFrame(result)
 
-        # Set index
-        df.set_index("timestamp", inplace=True)
+            # Format time column
+            df['timestamp'] = df['timestamp'].apply(
+                lambda x: datetime.fromtimestamp(x))
+
+            # Set index
+            df.set_index("timestamp", inplace=True)
+
+        # Create Dataframe using current_bar and stored bars
+        if current_bar:
+
+            # reduce size to account for current_bar
+            size = size - 1
+
+            # Use a projection to remove mongo "_id" field and symbol.
+            result = self.db_collections[exc].find(
+                {"symbol": sym}, {
+                    "_id": 0, "symbol": 0}).limit(
+                        size).sort([("timestamp", -1)])
+
+            # add current_bar and DB results to a list
+            rows = [current_bar]
+            for doc in result:
+                rows.append(doc)
+
+            # pass list to dataframe constructor
+            df = pd.DataFrame(rows)
+
+            # Format time column
+            df['timestamp'] = df['timestamp'].apply(
+                lambda x: datetime.fromtimestamp(x))
+
+            # Set index
+            df.set_index("timestamp", inplace=True)
+
+            # append stored bars to dataframe
+
+            # format dataframe
 
         # Downsample 1 min data to target timeframe
         resampled_df = pd.DataFrame()
         try:
             resampled_df = (df.resample(tf).agg(self.RESAMPLE_KEY))
-        except Exception as e:
-            print(e)
+        except Exception as exc:
+            print("Resampling error", exc)
 
         return resampled_df.sort_values(by="timestamp", ascending=False)
 
