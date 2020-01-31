@@ -153,7 +153,7 @@ class Datahandler:
             self.db_collections[exchange.get_name()].count_documents({
                 "symbol": symbol}))
         origin_ts = exchange.get_origin_timestamp(symbol)
-        
+
         # handle case where there is no existing data (fresh DB)
         if total_stored == 0:
             oldest_ts = current_ts
@@ -190,7 +190,7 @@ class Datahandler:
             self.logger.info(
                 "Total locally stored bars:......" + str(total_stored))
             self.logger.info(
-                    "Total null-value bars:.........." + str(len(null_bars)))            
+                    "Total null-value bars:.........." + str(len(null_bars)))          
             self.logger.info(
                 "Total missing bars:............." + str(len(gaps)))
 

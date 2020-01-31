@@ -9,7 +9,7 @@ import time
 class Strategy:
     """Master control layer for all individual strategy models. Consumes market
     events from the event queue, updates strategy models with new data and
-    generating Signal events. Stores working data as dataframes in data{}."""
+    generating Signal events. Working data stored as dataframes in data{}."""
 
     ALL_TIMEFRAMES = [
         "1Min", "3Min", "5Min", "15Min", "30Min", "1H", "2H", "3H", "4H",
@@ -55,7 +55,7 @@ class Strategy:
         self.run_models(event, timeframes)
 
     def update_dataframes(self, event, timeframes):
-        """Update dataframes for the given asset and list of timeframes."""
+        """Update dataframes for the given event and list of timeframes."""
 
         sym = event.get_bar()['symbol']
         bar = self.remove_element(event.get_bar(), "symbol")
@@ -85,49 +85,9 @@ class Strategy:
             self.logger.debug(event)
 
     def run_models(self, event, timeframes):
+        """Run strategy models according to the just-elpased period."""
+
         pass
-
-    def get_relevant_timeframes(self, time):
-        """Return a list of timeframes relevant to the just-elapsed period.
-        E.g if time has just struck UTC 10:30am the list will contain "1m",
-        "3m", "5m", "m15" and "30m" strings. The first minute of a new day or
-        week will add daily/weekly/monthly timeframe strings. Timeframes in
-        use are 1, 3, 5, 15 and 30 mins, 1, 2, 3, 4, 6, 8 and 12 hours, 1, 2
-        and 3 days, weekly and monthly."""
-
-        # check against the previous minute - the just-elapsed period.
-        if type(time) is not datetime:
-            time = datetime.utcfromtimestamp(time)
-
-        timestamp = time - timedelta(hours=0, minutes=1)
-        timeframes = []
-
-        for i in self.MINUTE_TIMEFRAMES:
-            self.minute_timeframe(i, timestamp, timeframes)
-        for i in self.HOUR_TIMEFRAMES:
-            self.hour_timeframe(i, timestamp, timeframes)
-        for i in self.DAY_TIMEFRAMES:
-            self.day_timeframe(i, timestamp, timeframes)
-
-        if (timestamp.minute == 0 and timestamp.hour == 0 and
-                calendar.day_name[date.today().weekday()] == "Monday"):
-            timeframes.append("1w")
-
-        return timeframes
-
-    def minute_timeframe(self, minutes, timestamp, timeframes):
-        for i in range(0, 60, minutes):
-            if timestamp.minute == i:
-                timeframes.append(f"{minutes}Min")
-
-    def hour_timeframe(self, hours, timestamp, timeframes):
-        if timestamp.minute == 0 and timestamp.hour % hours == 0:
-            timeframes.append(f"{hours}H")
-
-    def day_timeframe(self, days, timestamp, timeframes):
-        if (timestamp.minute == 0 and timestamp.hour == 0 and
-                timestamp.day % days == 0):
-            timeframes.append(f"{days}D")
 
     def load_models(self, logger):
         """Create and return a list of trade strategy models."""
@@ -172,25 +132,6 @@ class Strategy:
         # Find the total number of 1min bars needed using TFM dict.
         size = self.TF_MINS[tf] * lookback
 
-        # Create Dataframe using only stored bars
-        if current_bar is None:
-
-            # Use a projection to remove mongo "_id" field and symbol.
-            result = self.db_collections[exc].find(
-                {"symbol": sym}, {
-                    "_id": 0, "symbol": 0}).limit(
-                        size).sort([("timestamp", -1)])
-
-            # Pass cursor to DataFrame constructor
-            df = pd.DataFrame(result)
-
-            # Format time column
-            df['timestamp'] = df['timestamp'].apply(
-                lambda x: datetime.fromtimestamp(x))
-
-            # Set index
-            df.set_index("timestamp", inplace=True)
-
         # Create Dataframe using current_bar and stored bars
         if current_bar:
 
@@ -222,6 +163,25 @@ class Strategy:
 
             # format dataframe
 
+        # Create Dataframe using only stored bars
+        if not current_bar:
+
+            # Use a projection to remove mongo "_id" field and symbol.
+            result = self.db_collections[exc].find(
+                {"symbol": sym}, {
+                    "_id": 0, "symbol": 0}).limit(
+                        size).sort([("timestamp", -1)])
+
+            # Pass cursor to DataFrame constructor
+            df = pd.DataFrame(result)
+
+            # Format time column
+            df['timestamp'] = df['timestamp'].apply(
+                lambda x: datetime.fromtimestamp(x))
+
+            # Set index
+            df.set_index("timestamp", inplace=True)
+
         # Downsample 1 min data to target timeframe
         resampled_df = pd.DataFrame()
         try:
@@ -251,8 +211,59 @@ class Strategy:
         return dicts
 
     def remove_element(self, dictionary, element):
-        """Return a new dict minuis the given element."""
+        """Return a shallow copy of dictionary less the given element."""
 
         new_dict = dict(dictionary)
         del new_dict[element]
         return new_dict
+
+    def get_relevant_timeframes(self, time):
+        """Return a list of timeframes relevant to the just-elapsed period.
+        E.g if time has just struck UTC 10:30am the list will contain "1m",
+        "3m", "5m", "m15" and "30m" strings. The first minute of a new day or
+        week will add daily/weekly/monthly timeframe strings. Timeframes in
+        use are 1, 3, 5, 15 and 30 mins, 1, 2, 3, 4, 6, 8 and 12 hours, 1, 2
+        and 3 days, weekly and monthly."""
+
+        # check against the previous minute - the just-elapsed period.
+        if type(time) is not datetime:
+            time = datetime.utcfromtimestamp(time)
+
+        timestamp = time - timedelta(hours=0, minutes=1)
+        timeframes = []
+
+        for i in self.MINUTE_TIMEFRAMES:
+            self.minute_timeframe(i, timestamp, timeframes)
+        for i in self.HOUR_TIMEFRAMES:
+            self.hour_timeframe(i, timestamp, timeframes)
+        for i in self.DAY_TIMEFRAMES:
+            self.day_timeframe(i, timestamp, timeframes)
+
+        if (timestamp.minute == 0 and timestamp.hour == 0 and
+                calendar.day_name[date.today().weekday()] == "Monday"):
+            timeframes.append("1w")
+
+        return timeframes
+
+    def minute_timeframe(self, minutes, timestamp, timeframes):
+        """ Adds minute timeframe codes to timeframes list if the relevant
+        period has just elapsed."""
+
+        for i in range(0, 60, minutes):
+            if timestamp.minute == i:
+                timeframes.append(f"{minutes}Min")
+
+    def hour_timeframe(self, hours, timestamp, timeframes):
+        """ Adds hourly timeframe codes to timeframes list if the relevant
+        period has just elapsed."""
+
+        if timestamp.minute == 0 and timestamp.hour % hours == 0:
+            timeframes.append(f"{hours}H")
+
+    def day_timeframe(self, days, timestamp, timeframes):
+        """ Adds daily timeframe codes to timeframes list if the relevant
+        period has just elapsed."""
+
+        if (timestamp.minute == 0 and timestamp.hour == 0 and
+                timestamp.day % days == 0):
+            timeframes.append(f"{days}D")

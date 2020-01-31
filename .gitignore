@@ -1,6 +1,6 @@
 __pycache__
 data
-mongo_test.py
+
 api_test.py
 multiprocessing_test.py
 *.pyc
@@ -9,3 +9,4 @@ errors_to_handle.txt
 df.csv
 log.log
 strategy_test.py
+terminals.bat
