@@ -1,7 +1,7 @@
 # trading-server
 An event-driven execution and backtesting platform for trading common markets.
 
-Use this software at your own risk. No responsibility taken for losses incurred.
+Use this software at your own risk.
 
 ## Exchange/broker support
 
