@@ -57,9 +57,9 @@ class Strategy:
     def update_dataframes(self, event, timeframes):
         """Update dataframes for the given asset and list of timeframes."""
 
-        bar = event.get_bar()
+        sym = event.get_bar()['symbol']
+        bar = self.remove_element(event.get_bar(), "symbol")
         exc = event.get_exchange()
-        sym = bar['symbol']
 
         # 1. If df empty, create a new one from stored data + the new bar
         # 2. If df not empty, check the second row timestamp. if it matches
@@ -72,7 +72,7 @@ class Strategy:
                 exc, sym, tf, bar)
             # print for sanity check
             self.logger.debug(tf)
-            self.logger.debug(self.data[exc][sym][tf].head(3))
+            self.logger.debug(self.data[exc][sym][tf].head(5))
             self.logger.debug(bar)
 
             self.logger.debug("should be the first index timestamp value:")
@@ -249,3 +249,10 @@ class Strategy:
             dicts[symbol] = {
                 tf: pd.DataFrame() for tf in self.ALL_TIMEFRAMES}
         return dicts
+
+    def remove_element(self, dictionary, element):
+        """Return a new dict minuis the given element."""
+
+        new_dict = dict(dictionary)
+        del new_dict[element]
+        return new_dict
