@@ -10,7 +10,7 @@ class MarketEvent(Event):
     """Wrapper for new market data. Consumed by Strategy object to
     produce Signal events."""
 
-    DTFMT = '%Y-%m-%d %H:%M:%S'
+    DTFMT = '%Y-%m-%d %H:%M'
 
     def __init__(self, exchange, bar):
         self.type = 'MARKET'
