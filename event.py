@@ -1,5 +1,5 @@
 from dateutil import parser
-import datetime
+from datetime import datetime
 
 
 class Event(object):
@@ -10,6 +10,8 @@ class MarketEvent(Event):
     """Wrapper for new market data. Consumed by Strategy object to
     produce Signal events."""
 
+    DTFMT = '%Y-%m-%d %H:%M:%S'
+
     def __init__(self, exchange, bar):
         self.type = 'MARKET'
         self.exchange = exchange
@@ -18,14 +20,17 @@ class MarketEvent(Event):
     def __str__(self):
         return "MarketEvent - Exchange: %s, Symbol: %s, TS: %s, Close: %s" % (
             self.exchange, self.bar['symbol'],
-            datetime.datetime.fromtimestamp(self.bar['timestamp']),
-            self.bar['close'])
+            self.get_datetime(), self.bar['close'])
 
     def get_bar(self):
         return self.bar
 
     def get_exchange(self):
         return self.exchange
+
+    def get_datetime(self):
+        return datetime.fromtimestamp(
+            self.bar['timestamp']).strftime(self.DTFMT),
 
 
 class SignalEvent(Event):
