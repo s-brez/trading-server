@@ -1,11 +1,9 @@
 # trading-server
 An event-driven execution and backtesting platform for trading common markets.
 
-Use this software at your own risk.
+## Venue support
 
-## Exchange/broker support
-
-Planned order of implementation: (this might change as exchanges come and go)
+Planned order of implementation: 
 
 Exchange |  Status   | Asset classes
 ---------|-----------|------------
