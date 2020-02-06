@@ -102,14 +102,14 @@ class Datahandler:
         self.logger.debug("Started diagnostics.")
         for exchange in self.exchanges:
             for symbol in exchange.get_symbols():
-                time.sleep(2)
+                time.sleep(1)
                 reports.append(self.get_status(
                     exchange, symbol, output))
 
         # resolve discrepancies
         self.logger.debug("Resolving missing data.")
         for report in reports:
-            time.sleep(2)
+            time.sleep(1)
             self.backfill_gaps(report)
             self.replace_null_bars(report)
 
@@ -209,106 +209,28 @@ class Datahandler:
             "null_bars": null_bars
         }
 
-    def backfill_bulk(self, report):
-        """Get and store missing bars between origin and oldest timestamps.
-        Use this once to get the bulk of historic data, then fill small gaps
-        with backfill_gaps() intermittently intradaily or as required."""
-
-        if report['origin_ts'] < report['oldest_ts']:
-
-            # Determine poll sizing and amounts accounting for max_bin_size.
-            # Split polling into a large batch of polls and then a final poll.
-            required = int((report['oldest_ts'] - report['origin_ts']) / 60)
-            final_poll_size = required % report['max_bin_size']
-            total_polls_batch = int((
-                (required - final_poll_size) / report['max_bin_size']))
-
-            # poll exchange REST endpoint for first bulk batch missing bars
-            start = report['origin_ts']
-            step = report['max_bin_size'] * 60
-            bars_to_store = []
-            delay = 1  # wait time before attmepting to re-poll after error
-            stagger = 2  # error delay co-efficient
-            timeout = 10
-            for i in range(total_polls_batch):
-                try:
-                    bars = report['exchange'].get_bars_in_period(
-                        report['symbol'], start, report['max_bin_size'])
-                    for bar in bars:
-                        bars_to_store.append(bar)
-                    stagger = 2  # reset stagger to base after successful poll
-                    start += step  # increment the starting poll timestamp
-                    time.sleep(stagger + 1)
-                except Exception as e:
-                    # retry poll with an exponential delay after each error
-                    for i in range(timeout):
-                        try:
-                            time.sleep(delay)
-                            bars = (
-                                report['exchange'].get_bars_in_period(
-                                    report['symbol'], start,
-                                    report['max_bin_size']))
-                            for bar in bars:
-                                bars_to_store.append(bar)
-                            stagger = 2
-                            start += step
-                            break
-                        except Exception as e:
-                            delay *= stagger
-                            if i == timeout - 1:
-                                raise Exception("Polling timeout.")
-
-            # finish with a single poll for final_poll_size number of bars
-            for i in range(timeout):
-                try:
-                    time.sleep(delay)
-                    final_bars = report['exchange'].get_bars_in_period(
-                        report['symbol'], start, final_poll_size)
-                    for bar in final_bars:
-                        bars_to_store.append(bar)
-                    stagger = 2
-                    break
-                except Exception as e:
-                    # retry poll with an exponential delay after each error
-                    delay *= stagger
-                    if i == timeout - 1:
-                        raise Exception("Polling timeout.")
-
-            # store bars, count how many stores
-            query = {"symbol": report['symbol']}
-            doc_count_before = (
-                self.db_collections[report[
-                    'exchange'].get_name()].count_documents(query))
-            for bar in bars_to_store:
-                try:
-                    self.db_collections[report['exchange']].insert_one(
-                        bar, upsert=True)
-                except pymongo.errors.DuplicateKeyError:
-                    continue  # skip duplicates if they exist
-            doc_count_after = (
-                self.db_collections[report['exchange']].count_documents(query))
-            doc_count = doc_count_after - doc_count_before
-            self.logger.debug(
-                "backfill_bulk() saved " + str(doc_count) + " bars.")
-            return True
-        return False
-
     def backfill_gaps(self, report):
         """ Get and store small bins of missing bars. Intended to be called
-        multiple times daily as a QA measure for patching small amounts of
-        bars missing from locally saved data."""
+        as a data QA measure for patching missing locally saved data incurred
+        from server downtime."""
 
+        # sort timestamps into sequential bins (to reduce # of polls)
         if len(report['gaps']) != 0:
-            # sort timestamps into sequential bins (to reduce polls)
             bins = [
                 list(g) for k, g in groupby(
                     sorted(report['gaps']),
                     key=lambda n, c=count(0, 60): n - next(c))]
 
+            # if any bins > max_bin_size, split them into smaller bins.
+            # takes the old list
+            bins = self.split_oversize_bins(bins, report['max_bin_size'])
+
+            delay = 1  # wait time before attmepting to re-poll after error
+            stagger = 2  # delay co-efficient
+            timeout = 10  # number of times to repoll before exception raised.
+
             # poll exchange REST endpoint for replacement bars
             bars_to_store = []
-            timeout = 10
-            delay = 1  # wait time before attmepting to re-poll after error
             for i in bins:
                 try:
                     bars = report['exchange'].get_bars_in_period(
@@ -318,7 +240,7 @@ class Datahandler:
                     stagger = 2  # reset stagger to base after successful poll
                     time.sleep(stagger + 1)
                 except Exception as e:
-                    # retry poll with an exponential delay after each error
+                    # retry polling with an exponential delay after each error
                     for i in range(timeout):
                         try:
                             time.sleep(delay + 1)
@@ -347,7 +269,8 @@ class Datahandler:
                         self.db_collections[
                             report['exchange'].get_name()].insert_one(bar)
                     except pymongo.errors.DuplicateKeyError:
-                        continue  # skip duplicates if they exist
+                        # Skip duplicates that exist in DB.
+                        continue
                 doc_count_after = (
                     self.db_collections[report[
                         'exchange'].get_name()].count_documents(query))
@@ -364,8 +287,49 @@ class Datahandler:
                 raise Exception(
                     "Fetched bars do not match missing timestamps.")
         else:
-            self.logger.debug("Data up to date.")
+            # Return false if there is no missing data.
+            self.logger.debug("No missing data.")
             return False
+
+    def split_oversize_bins(self, original_bins, max_bin_size):
+        """Given a list of lists (timestamp bins), if any top-level
+        element length > max_bin_size, split that element into
+        lists of max_bin_size, remove original element, replace with
+        new smaller elements, then return the new modified list."""
+
+        bins = original_bins
+
+        # Identify oversize bins and their positions in original list.
+        to_split = []
+        indices_to_remove = []
+        for i in bins:
+            if len(i) > max_bin_size:
+                # Save the bins.
+                to_split.append(bins.index(i))
+                # Save the indices.
+                indices_to_remove.append(bins.index(i))
+
+        # split into smaller bins
+        split_bins = []
+        for i in to_split:
+            new_bins = [(bins[i])[x:x+max_bin_size] for x in range(
+                0, len((bins[i])), max_bin_size)]
+            split_bins.append(new_bins)
+
+        final_bins = []
+        for i in split_bins:
+            for j in i:
+                final_bins.append(j)
+
+        # Remove the oversize bins by their indices, add the smaller split bins
+        for i in indices_to_remove:
+            del bins[i]
+
+        for i in final_bins:
+            bins.append(i)
+
+        return bins
+
 
     def replace_null_bars(self, report):
         """ Replace null bars in db with newly fetched ones. Null bar means
