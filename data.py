@@ -152,9 +152,14 @@ class Datahandler:
         total_stored = (
             self.db_collections[exchange.get_name()].count_documents({
                 "symbol": symbol}))
-        origin_ts = exchange.get_origin_timestamp(symbol)
-        oldest_ts = result[total_stored - 1]['timestamp']
-        newest_ts = result[0]['timestamp']
+
+        # handle case where there is no existing data (fresh DB)
+        if total_stored == 0:
+            oldest_ts = current_ts
+            newest_ts = current_ts
+        else:
+            oldest_ts = result[total_stored - 1]['timestamp']
+            newest_ts = result[0]['timestamp']
 
         # make timestamps sort-agnostic, in case of sorting mixups
         if oldest_ts > newest_ts:
