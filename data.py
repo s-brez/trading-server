@@ -152,6 +152,7 @@ class Datahandler:
         total_stored = (
             self.db_collections[exchange.get_name()].count_documents({
                 "symbol": symbol}))
+        origin_ts = exchange.get_origin_timestamp(symbol)
 
         # handle case where there is no existing data (fresh DB)
         if total_stored == 0:
@@ -356,6 +357,10 @@ class Datahandler:
                     report['symbol'] + " bars.")
                 return True
             else:
+                print("Start:", timestamps[0], bars[0])
+                print("End:", timestamps[-1], bars[-1])
+                print(
+                    "Length: timestamps:", len(timestamps), "bars", len(bars))
                 raise Exception(
                     "Fetched bars do not match missing timestamps.")
         else:
