@@ -81,7 +81,7 @@ class Exchange(ABC):
                    'volume': 0}
             return bar
 
-    def finished_parsing_ticks(self):
+    def get_finished_parsing_ticks(self):
         return self.finished_parsing_ticks
 
     @abstractmethod

@@ -118,7 +118,7 @@ class Strategy:
 
     def build_dataframe(self, exc, sym, tf, current_bar=None, lookback=150):
         """Return a dataframe of size lookback for the given symbol (sym),
-        exchange (exc) and timeframe (tf). If "curent_bar" param is passed in,
+        exchange (exc) and timeframe (tf). If "current_bar" param is passed in,
         construct the dataframe using current_bar as first row of dataframe.
 
         E.g 1 (no current_bar) for a dataframe with tf = 4h, lookback = 50, we
@@ -156,7 +156,7 @@ class Strategy:
             df['timestamp'] = df['timestamp'].apply(
                 lambda x: datetime.fromtimestamp(x))
 
-            # Set index
+            # Set timestamp as index of DataFrame
             df.set_index("timestamp", inplace=True)
 
             # append stored bars to dataframe
@@ -179,7 +179,7 @@ class Strategy:
             df['timestamp'] = df['timestamp'].apply(
                 lambda x: datetime.fromtimestamp(x))
 
-            # Set index
+            # Set timestamp as index of DataFrame
             df.set_index("timestamp", inplace=True)
 
         # Downsample 1 min data to target timeframe

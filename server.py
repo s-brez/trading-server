@@ -19,10 +19,10 @@ class Server:
     an event handling loop. The queue is processed at the start of each minute.
     Event loop lifecycle:
         1. A new minute begins - Tick data is parsed into 1 min bars.
-        2. Datahander wraps new bars and other data in Market Events.
+        2. Datahandler wraps new bars and other data in Market Events.
         3. Datahandler pushes Market Events into event queue.
         4. Market Events are consumed by Strategy object.
-        5. Strategy creates a Signal event and places it in event queque.
+        5. Strategy creates a Signal event and places it in event queue.
         6. Signal events consumed by Portfolio.
         7. Portfolio creates Order event from Signal, places it in queue.
         8. Broker executes Order events, creates Fill event post-transaction.

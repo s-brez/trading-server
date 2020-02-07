@@ -18,7 +18,7 @@ origin_timstamp_xbtusd = 1483228800
 origin_timstamp_ethusd = 1533200520
 
 
-def previous_minute():
+def get_previous_minute_timestamp():
     """ Return the previous minutes UTC ms epoch timestamp."""
 
     delta = datetime.datetime.utcnow().second

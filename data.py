@@ -27,6 +27,7 @@ class Datahandler:
         self.bars_save_to_db = queue.Queue(0)
 
         # processing performance variables
+
         self.parse_count = 0
         self.total_parse_time = 0
         self.mean_parse_time = 0

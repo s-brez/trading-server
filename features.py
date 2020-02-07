@@ -23,7 +23,7 @@ class Features:
         return levels
 
     def MA(period: int, bars: int):
-        """Simple moving average of previous n bars close price.
+        """Simple moving average of previous n (or period) bars close price.
 
         SMA = (sum of all closes in period) / period. """
 
@@ -66,3 +66,11 @@ class Features:
 
         cci = None
         return cci
+
+    def BB(period: int, bars: list):
+        """ Return top, bottom and mid Bollinger Bands for n bars close price.
+
+        It is assumed that Bollinger Bands are desired at 2 standard deviation's from the mean.
+        """
+        bb = None
+        return bb
