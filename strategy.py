@@ -7,9 +7,9 @@ import time
 
 
 class Strategy:
-    """Master control layer for all individual strategy models. Consumes market
-    events from the event queue, updates strategy models with new data and
-    generating Signal events. Working data stored as dataframes in data{}."""
+    """ Master control layer for all individual strategy models. Consumes
+    market events from the event queue, updates strategy models with new data
+    and generating Signal events."""
 
     ALL_TIMEFRAMES = [
         "1Min", "3Min", "5Min", "15Min", "30Min", "1H", "2H", "3H", "4H",
@@ -44,7 +44,7 @@ class Strategy:
         self.data = {}
 
     def parse_new_data(self, event):
-        """Process incoming market data, update all models with new data."""
+        """ Process incoming market data, update all models with new data."""
 
         timeframes = self.get_relevant_timeframes(event.get_bar()['timestamp'])
 
@@ -55,7 +55,7 @@ class Strategy:
         self.run_models(event, timeframes)
 
     def update_dataframes(self, event, timeframes):
-        """Update dataframes for the given event and list of timeframes."""
+        """ Update dataframes for the given event and list of timeframes."""
 
         sym = event.get_bar()['symbol']
         bar = self.remove_element(event.get_bar(), "symbol")
@@ -85,12 +85,12 @@ class Strategy:
             self.logger.debug(event)
 
     def run_models(self, event, timeframes):
-        """Run strategy models according to the just-elpased period."""
+        """ Run strategy models according to the just-elpased period."""
 
         pass
 
     def load_models(self, logger):
-        """Create and return a list of trade strategy models."""
+        """ Create and return a list of trade strategy models."""
 
         models = []
         models.append(TrendFollowing())
@@ -98,7 +98,7 @@ class Strategy:
         return models
 
     def init_dataframes(self):
-        """Create working datasets (self.data dict)"""
+        """ Create working datasets (self.data dict)"""
 
         self.logger.debug("Started building DataFrames.")
 
@@ -117,7 +117,7 @@ class Strategy:
             " timeframe datasets in " + str(duration) + " seconds.")
 
     def build_dataframe(self, exc, sym, tf, current_bar=None, lookback=150):
-        """Return a dataframe of size lookback for the given symbol (sym),
+        """ Return a dataframe of size lookback for the given symbol (sym),
         exchange (exc) and timeframe (tf). If "curent_bar" param is passed in,
         construct the dataframe using current_bar as first row of dataframe.
 
@@ -192,7 +192,7 @@ class Strategy:
         return resampled_df.sort_values(by="timestamp", ascending=False)
 
     def load_local_data(self, exchange):
-        """Create and return a dictionary of dataframes for all symbols and
+        """ Create and return a dictionary of dataframes for all symbols and
         timeframes for the given exchange."""
 
         # return dataframes with data
@@ -211,14 +211,14 @@ class Strategy:
         return dicts
 
     def remove_element(self, dictionary, element):
-        """Return a shallow copy of dictionary less the given element."""
+        """ Return a shallow copy of dictionary less the given element."""
 
         new_dict = dict(dictionary)
         del new_dict[element]
         return new_dict
 
     def get_relevant_timeframes(self, time):
-        """Return a list of timeframes relevant to the just-elapsed period.
+        """ Return a list of timeframes relevant to the just-elapsed period.
         E.g if time has just struck UTC 10:30am the list will contain "1m",
         "3m", "5m", "m15" and "30m" strings. The first minute of a new day or
         week will add daily/weekly/monthly timeframe strings. Timeframes in
