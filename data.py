@@ -4,6 +4,7 @@ from pymongo import MongoClient, errors
 import pymongo
 import queue
 import time
+import json
 
 
 class Datahandler:
@@ -229,18 +230,21 @@ class Datahandler:
             total_polls = str(len(bins))
             self.logger.debug("Total polls: " + total_polls)
 
-            delay = 1  # wait time before attmepting to re-poll after error
+            delay = 1.5  # wait time before attmepting to re-poll after error
             stagger = 2  # delay co-efficient
             timeout = 10  # number of times to repoll before exception raised.
 
             # Poll exchange REST endpoint for replacement bars
             bars_to_store = []
             for i in bins:
+
                 # Progress indicator
-                if poll_count % 5:
+                if poll_count % 10 == 0:
                     self.logger.debug(
-                        "Poll " + str(poll_count) + " of " + total_polls + " " +
-                        str(report['symbol']) + " " + str(report['exchange']))
+                        "Poll " + str(
+                            poll_count) + " of " + total_polls + " " +
+                        str(report['symbol']) + " " + str(
+                            report['exchange'].get_name()))
                 try:
                     bars = report['exchange'].get_bars_in_period(
                         report['symbol'], i[0], len(i))
@@ -266,6 +270,7 @@ class Datahandler:
                 poll_count += 1
 
             # Sanity check, check that the retreived bars match gaps
+            self.logger.debug("Verifying new data...")
             timestamps = [i['timestamp'] for i in bars_to_store]
             timestamps = sorted(timestamps)
             bars = sorted(report['gaps'])
@@ -274,12 +279,16 @@ class Datahandler:
                 doc_count_before = (
                     self.db_collections[report[
                         'exchange'].get_name()].count_documents(query))
+                self.logger.debug("Storing new data...")
+# !
                 for bar in bars_to_store:
                     try:
                         self.db_collections[
                             report['exchange'].get_name()].insert_one(bar)
                     except pymongo.errors.DuplicateKeyError:
                         # Skip duplicates that exist in DB.
+                        self.logger.debug(
+                            "Stored duplicate bars exist. Skipping.")
                         continue
                 doc_count_after = (
                     self.db_collections[report[
@@ -290,10 +299,12 @@ class Datahandler:
                     report['symbol'] + " bars.")
                 return True
             else:
-                print("Start:", timestamps[0], bars[0])
-                print("End:", timestamps[-1], bars[-1])
-                print(
-                    "Length: timestamps:", len(timestamps), "bars", len(bars))
+                # Dump the mismatched bars and timestamps to file
+                with open("bars.json", 'w', encoding='utf-8') as f1:
+                    json.dump(bars, f, ensure_ascii=False, indent=4)
+                with open("timestamps.json", 'w', encoding='utf-8') as f2:
+                    json.dump(timestamps, f, ensure_ascii=False, indent=4)
+
                 raise Exception(
                     "Fetched bars do not match missing timestamps.")
         else:
