@@ -7,7 +7,7 @@ import time
 
 
 class Datahandler:
-    """Datahandler wraps exchange data and locally stored data with Market
+    """ Datahandler wraps exchange data and locally stored data with Market
     events and adds it to the event queue as each timeframe period elapses.
 
     Market events are created from either live or stored data (depending on
@@ -34,7 +34,7 @@ class Datahandler:
         self.var_parse_time = 0
 
     def update_market_data(self, events):
-        """Push new market events to the event queue."""
+        """ Push new market events to the event queue."""
 
         if self.live_trading:
             market_data = self.get_new_data()
@@ -47,7 +47,7 @@ class Datahandler:
         return events
 
     def get_new_data(self):
-        """Return a list of market events (new bars) for all symbols from
+        """ Return a list of market events (new bars) for all symbols from
         all exchanges for the just-elapsed time period. Add new bar data
         to queue for storage in DB, after current minutes cycle completes."""
 
@@ -78,7 +78,7 @@ class Datahandler:
         return new_market_events
 
     def get_historic_data(self):
-        """Return a list of market events (historic bars) from
+        """ Return a list of market events (historic bars) from
         locally stored data. Used when backtesting."""
 
         historic_market_events = []
@@ -86,14 +86,14 @@ class Datahandler:
         return historic_market_events
 
     def track_performance(self, duration):
-        """Track tick processing times and other performance statistics."""
+        """ Track tick processing times and other performance statistics."""
 
         self.parse_count += 1
         self.total_parse_time += duration
         self.mean_parse_time = self.total_parse_time / self.parse_count
 
     def run_data_diagnostics(self, output):
-        """Check each symbol's stored data for completeness, repair/replace
+        """ Check each symbol's stored data for completeness, repair/replace
         missing data as needed. Once complete, set ready flag to True.
         Output parameter set true to print report."""
 
@@ -117,7 +117,7 @@ class Datahandler:
         self.ready = True
 
     def save_new_bars_to_db(self):
-        """Save bars in queue to database."""
+        """ Save bars in queue to database."""
 
         count = 0
         while True:
@@ -185,11 +185,11 @@ class Datahandler:
             print(
                 "Exchange & instrument:..........",
                 exchange.get_name() + ":", symbol)
-            # print("Origin (on-exchange) timestamp:.", origin_ts)
-            # print("Oldest locally stored timestamp:", oldest_ts)
-            # print("Newest locally stored timestamp:", newest_ts)
-            # print("Current timestamp:..............", current_ts)
-            # print("Max bin size per REST poll:.....", max_bin_size)
+            print("Origin (on-exchange) timestamp:.", origin_ts)
+            print("Oldest locally stored timestamp:", oldest_ts)
+            print("Newest locally stored timestamp:", newest_ts)
+            print("Current timestamp:..............", current_ts)
+            print("Max bin size per REST poll:.....", max_bin_size)
             print("Total required bars:............", len(required))
             print("Total locally stored bars:......", total_stored)
             print("Total null-value bars:..........", len(null_bars))
@@ -215,6 +215,7 @@ class Datahandler:
         from server downtime."""
 
         # sort timestamps into sequential bins (to reduce # of polls)
+        poll_count = 1
         if len(report['gaps']) != 0:
             bins = [
                 list(g) for k, g in groupby(
@@ -225,13 +226,21 @@ class Datahandler:
             # takes the old list
             bins = self.split_oversize_bins(bins, report['max_bin_size'])
 
+            total_polls = str(len(bins))
+            self.logger.debug("Total polls: " + total_polls)
+
             delay = 1  # wait time before attmepting to re-poll after error
             stagger = 2  # delay co-efficient
             timeout = 10  # number of times to repoll before exception raised.
 
-            # poll exchange REST endpoint for replacement bars
+            # Poll exchange REST endpoint for replacement bars
             bars_to_store = []
             for i in bins:
+                # Progress indicator
+                if poll_count % 5:
+                    self.logger.debug(
+                        "Poll " + str(poll_count) + " of " + total_polls + " " +
+                        str(report['symbol']) + " " + str(report['exchange']))
                 try:
                     bars = report['exchange'].get_bars_in_period(
                         report['symbol'], i[0], len(i))
@@ -254,6 +263,7 @@ class Datahandler:
                             delay *= stagger
                             if i == timeout - 1:
                                 raise Exception("Polling timeout.")
+                poll_count += 1
 
             # Sanity check, check that the retreived bars match gaps
             timestamps = [i['timestamp'] for i in bars_to_store]
@@ -292,7 +302,7 @@ class Datahandler:
             return False
 
     def split_oversize_bins(self, original_bins, max_bin_size):
-        """Given a list of lists (timestamp bins), if any top-level
+        """ Given a list of lists (timestamp bins), if any top-level
         element length > max_bin_size, split that element into
         lists of max_bin_size, remove original element, replace with
         new smaller elements, then return the new modified list."""
@@ -329,7 +339,6 @@ class Datahandler:
             bins.append(i)
 
         return bins
-
 
     def replace_null_bars(self, report):
         """ Replace null bars in db with newly fetched ones. Null bar means
@@ -409,14 +418,24 @@ class Datahandler:
             return False
 
     def set_live_trading(self, live_trading):
-        """Set true or false live execution flag"""
+        """ Set true or false live execution flag"""
 
         self.live_trading = live_trading
 
     def get_total_instruments(self):
-        """Return total number of monitored instruments."""
+        """ Return total number of monitored instruments."""
 
         total = 0
         for exchange in self.exchanges:
             total += len(exchange.symbols)
         return total
+
+    def get_instrument_symbols(self):
+        """ Return a list containing all instrument symbols."""
+
+        instruments = []
+        for exchange in self.exchanges:
+            for symbol in exchange.get_symbols():
+                instruments.append(
+                    exchange.get_name() + "-" + symbol)
+        return instruments
