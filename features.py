@@ -37,7 +37,7 @@ class Features:
 
         self.check_bars_type(bars)
 
-        ma = None
+        ma = ta.MA(bars['close'], timeperiod=period, matype=0)
         return ma
 
     def EMA(bars, period:int):
@@ -87,13 +87,16 @@ class Features:
     def BB(bars, period: int):
         """ Return top, bottom and mid Bollinger Bands for n bars close price.
 
-        It is assumed that Bollinger Bands are desired at 2 standard deviation's from the mean.
+        It is assumed that:
+        -- Bollinger Bands are desired at 2 standard deviation's from the mean.
+        -- moving average used is a simple moving average
         """
         
         self.check_bars_type(bars)
 
-        bb = None
-        return bb
+        upperband,middleband,lowerband = ta.BBANDS(close, timeperiod=period, nbdevup=2, nbdevdn=2, matype=0)
+
+        return upperband, middleband, lowerband
 
     def fractals(bars: list, window:int=5):
         """ Returns a list of size len(bars) containing a value for each bar. The value will state whether its corresponding
