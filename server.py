@@ -14,7 +14,7 @@ import datetime
 
 
 class Server:
-    """Server routes system events amongst worker components via a queue in
+    """ Server routes system events amongst worker components via a queue in
     an event handling loop. The queue is processed at the start of each minute.
 
     Event loop lifecycle:
@@ -68,7 +68,7 @@ class Server:
         self.run()
 
     def run(self):
-        """Core event handling loop."""
+        """ Core event handling loop."""
 
         self.data.set_live_trading(self.live_trading)
         self.broker.set_live_trading(self.live_trading)
@@ -105,7 +105,7 @@ class Server:
                 self.clear_event_queue()
 
     def clear_event_queue(self):
-        """Routes events to worker classes for processing."""
+        """ Routes events to worker classes for processing."""
 
         count = 0
         while True:
@@ -138,7 +138,7 @@ class Server:
                 self.events.task_done()
 
     def setup_logger(self):
-        """Create and configure logger"""
+        """ Create and configure logger"""
 
         logger = logging.getLogger()
         logger.setLevel(self.log_level)
@@ -158,7 +158,7 @@ class Server:
         return logger
 
     def load_exchanges(self, logger):
-        """Create and return list of all exchange objects"""
+        """ Create and return list of all exchange objects"""
 
         exchanges = []
         exchanges.append(Bitmex(logger))
@@ -173,7 +173,7 @@ class Server:
         return delay
 
     def check_db_connection(self):
-        """Raise exception if DB connection not active."""
+        """ Raise exception if DB connection not active."""
 
         try:
             time.sleep(self.DB_TIMEOUT_MS)
