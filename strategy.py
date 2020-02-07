@@ -85,7 +85,7 @@ class Strategy:
             self.logger.debug(event)
 
     def run_models(self, event, timeframes):
-        """Run strategy models according to the just-elpased period."""
+        """Run strategy models according to the just-elapsed period."""
 
         pass
 
@@ -104,7 +104,7 @@ class Strategy:
 
         start = time.time()
         self.data = {
-            i.get_name(): self.load_local_data(i) for i in self.exchanges}
+            i.get_name(): self.load_exchange_data(i) for i in self.exchanges}
         end = time.time()
         duration = round(end - start, 5)
 
@@ -191,7 +191,7 @@ class Strategy:
 
         return resampled_df.sort_values(by="timestamp", ascending=False)
 
-    def load_local_data(self, exchange):
+    def load_exchange_data(self, exchange):
         """Create and return a dictionary of dataframes for all symbols and
         timeframes for the given exchange."""
 

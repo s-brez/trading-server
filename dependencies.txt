@@ -1,3 +1,4 @@
 websocket-client
 pandas
 pymongo
+talib
