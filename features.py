@@ -53,7 +53,7 @@ class Features:
 
         self.check_bars_type(bars)
 
-        ema = None
+        ema = ta.EMA(bars['close'], timeperiod=period)
         return ema
 
     def MACD(bars):
