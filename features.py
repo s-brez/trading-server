@@ -1,10 +1,11 @@
 import talib as ta
 import pandas as pd
+import numpy as np
 
 class Features:
     """Model feature library. TA indicators are here."""
 
-    def trending(bars, lookback_period: int):
+    def trending(self, bars, lookback_period: int):
         """Return trending = True if price action (bars) forming successive higher or
         lower swings. Return direction = -1 for downtrend, 0 for no trend, 1 for
         uptrend."""
@@ -14,7 +15,7 @@ class Features:
         direction = None
         return trending, direction
 
-    def convergent(bars, lookback_period: int, indicator: list):
+    def convergent(self, bars, lookback_period: int, indicator: list):
         """ Return True if price and indicator swings are convergent."""
 
         self.check_bars_type(bars)
@@ -22,7 +23,7 @@ class Features:
         convergent = False
         return convergent
 
-    def sr_levels(bars):
+    def sr_levels(self, bars):
         """Return levels of support and resistance in given period."""
 
         self.check_bars_type(bars)
@@ -30,7 +31,7 @@ class Features:
         levels = None
         return levels
 
-    def SMA(bars, period:int):
+    def SMA(self, bars, period:int):
         """Simple moving average of previous n (or period) bars close price.
 
         SMA = (sum of all closes in period) / period. """
@@ -40,7 +41,7 @@ class Features:
         ma = ta.MA(bars['close'], timeperiod=period, matype=0)
         return ma
 
-    def EMA(bars, period:int):
+    def EMA(self, bars, period:int):
         """Exponential moving average of previous n bars close price.
 
         EMA = price(t) * k + EMA(y) * ( 1 − k )
@@ -56,7 +57,7 @@ class Features:
         ema = ta.EMA(bars['close'], timeperiod=period)
         return ema
 
-    def MACD(bars):
+    def MACD(self, bars):
         """Return MACD for given time series. Bars list must be 26 bars
         in length (last 26 bars for period).
 
@@ -67,7 +68,7 @@ class Features:
         macd = None
         return macd
 
-    def CCI(bars, period: int):
+    def CCI(self, bars, period: int):
         """ Return CCI (Commodity Chanel Index) for n bars close price.
 ​
         CCI = (Typical Price − MA) / 0.015 * Mean Deviation
@@ -84,7 +85,7 @@ class Features:
 
         return cci
 
-    def BB(bars, period: int):
+    def BB(self, bars, period: int):
         """ Return top, bottom and mid Bollinger Bands for n bars close price.
 
         It is assumed that:
@@ -98,7 +99,7 @@ class Features:
 
         return upperband, middleband, lowerband
 
-    def fractals(bars: list, window:int=5):
+    def fractals(self, bars, window:int=5):
         """ Returns a list of size len(bars) containing a value for each bar. The value will state whether its corresponding
         bar is a top fractal or a bottom fractal. Returns 1 for top fractals, 0 for non-fractals, -1 for bottom fractals.
         
@@ -121,8 +122,27 @@ class Features:
         """
         self.check_bars_type(bars)
 
-        frac = None
+
+        # df.shape[0] is more logical but has a slower runtime, so I went with len(df.index) instead:
+        bars_length = len(bars.index)
+        frac = np.zeros(bars_length).flatten()
+
+        for bar in range(2,bars_length-2):
+            if (bars['high'][bar]>bars['high'][bar-2]
+                and bars['high'][bar]>bars['high'][bar-1]
+                and bars['high'][bar]>bars['high'][bar+1]
+                and bars['high'][bar]>bars['high'][bar+2]):
+
+                frac[bar] = 1
+
+            elif (bars['low'][bar]<bars['low'][bar-2]
+                and bars['low'][bar]<bars['low'][bar-1]
+                and bars['low'][bar]<bars['low'][bar+1]
+                and bars['low'][bar]<bars['low'][bar+2]):
+
+                frac[bar] = -1
+
         return frac
 
-    def check_bars_type(bars):
+    def check_bars_type(self, bars):
         assert isinstance(bars, pd.DataFrame)

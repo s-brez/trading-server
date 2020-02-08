@@ -10,3 +10,5 @@ df.csv
 log.log
 strategy_test.py
 terminals.bat
+
+*.marc
