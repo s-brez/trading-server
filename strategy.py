@@ -50,7 +50,7 @@ class Strategy:
 
         timestamp = datetime.utcfromtimestamp(event.get_bar()['timestamp'])
         self.logger.debug("Relevant timeframes: " + str(timeframes))
-        self.logger.debug(str(timestamp) + str(event.get_bar()))
+        self.logger.debug(str(timestamp) + " " + str(event.get_bar()))
 
         # update relevant dataframes
         # self.update_dataframes(event, timeframes)
