@@ -98,12 +98,12 @@ class Server:
                     self.clear_event_queue()
 
                     # run diagnostics at 2 min mark to fix early missedd bars
-                    if (count == 2):
+                    if (count == 3):
                         thread = Thread(
                             target=lambda: self.data.run_data_diagnostics(0))
                         thread.daemon = True
                         thread.start()
-                    self.logger.debug("Started 2-min diagnostics.")
+                        self.logger.debug("Started 3-min diagnostics.")
 
                     # Check data integrity periodically thereafter
                     # if (count % self.DIAG_DELAY == 0):
@@ -146,7 +146,7 @@ class Server:
                 if event is not None:
                     count += 1
                     if event.type == "MARKET":
-                        self.strategy.parse_new_data(event)
+                        self.strategy.qparse_new_data(event)
                     elif event.type == "SIGNAL":
                         self.portfolio.update_signal(event)
                     elif event.type == "ORDER":
