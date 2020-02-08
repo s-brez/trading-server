@@ -280,7 +280,6 @@ class Datahandler:
                     self.db_collections[report[
                         'exchange'].get_name()].count_documents(query))
                 self.logger.debug("Storing new data...")
-# !
                 for bar in bars_to_store:
                     try:
                         self.db_collections[
@@ -299,7 +298,7 @@ class Datahandler:
                     report['symbol'] + " bars.")
                 return True
             else:
-                # Dump the mismatched bars and timestamps to file
+                # Dump the mismatched bars and timestamps to file if error
                 with open("bars.json", 'w', encoding='utf-8') as f1:
                     json.dump(bars, f, ensure_ascii=False, indent=4)
                 with open("timestamps.json", 'w', encoding='utf-8') as f2:
@@ -425,7 +424,6 @@ class Datahandler:
                 raise Exception(
                     "Fetched bars do not match missing timestamps.")
         else:
-            self.logger.debug("Data up to date.")
             return False
 
     def set_live_trading(self, live_trading):
@@ -440,7 +438,6 @@ class Datahandler:
         for exchange in self.exchanges:
             total += len(exchange.symbols)
         return total
-
     def get_instrument_symbols(self):
         """ Return a list containing all instrument symbols."""
 

@@ -48,8 +48,12 @@ class Strategy:
 
         timeframes = self.get_relevant_timeframes(event.get_bar()['timestamp'])
 
+        timestamp = datetime.utcfromtimestamp(event.get_bar()['timestamp'])
+        self.logger.debug("Relevant timeframes: " + str(timeframes))
+        self.logger.debug(str(timestamp) + str(event.get_bar()))
+
         # update relevant dataframes
-        self.update_dataframes(event, timeframes)
+        # self.update_dataframes(event, timeframes)
 
         # run models with new data
         self.run_models(event, timeframes)
@@ -154,7 +158,7 @@ class Strategy:
 
             # Format time column
             df['timestamp'] = df['timestamp'].apply(
-                lambda x: datetime.fromtimestamp(x))
+                lambda x: datetime.utcfromtimestamp(x))
 
             # Set index
             df.set_index("timestamp", inplace=True)
@@ -177,7 +181,7 @@ class Strategy:
 
             # Format time column
             df['timestamp'] = df['timestamp'].apply(
-                lambda x: datetime.fromtimestamp(x))
+                lambda x: datetime.utcfromtimestamp(x))
 
             # Set index
             df.set_index("timestamp", inplace=True)

@@ -92,6 +92,7 @@ class Bitmex(Exchange):
             f"{self.BASE_URL}{self.BARS_URL}{timeframe}&"
             f"symbol={symbol}&filter=&count={total}&"
             f"startTime={start}&reverse=false")
+        self.logger.debug("API request string: " + payload)
         bars_to_parse = requests.get(payload).json()
 
         # store only required values (OHLCV) and convert timestamp to epoch

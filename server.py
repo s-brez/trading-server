@@ -1,11 +1,12 @@
-from data import Datahandler
+from pymongo import MongoClient, errors
+from multiprocessing import Process
 from portfolio import Portfolio
 from strategy import Strategy
+from threading import Thread
+from data import Datahandler
 from broker import Broker
 from bitmex import Bitmex
 from time import sleep
-from threading import Thread
-from pymongo import MongoClient, errors
 import pymongo
 import time
 import logging
@@ -34,7 +35,7 @@ class Server:
     DB_URL = 'mongodb://127.0.0.1:27017/'
     DB_NAME = 'asset_price_master'
     DB_TIMEOUT_MS = 10
-    DIAG_DELAY = 30  # mins between diagnostics
+    DIAG_DELAY = 45  # mins between diagnostics
 
     def __init__(self):
         self.live_trading = True   # set False for backtesting
@@ -79,7 +80,9 @@ class Server:
             self.data.run_data_diagnostics(1)
 
         count = 0
+
         sleep(self.seconds_til_next_minute())
+
         while True:
             if self.live_trading:
                 # Only update data after at least one minute of new data
@@ -87,18 +90,32 @@ class Server:
                 if count >= 1 and self.data.ready:
                     self.start_processing = time.time()
                     self.logger.debug("Started processing events.")
+
                     # Parse and queue market data (new Market Events)
                     self.events = self.data.update_market_data(self.events)
+
                     # Data is ready, route events to worker classes
                     self.clear_event_queue()
-                    # Check data integrity every 30 mins
-                    if (count % self.DIAG_DELAY == 0):
+
+                    # run diagnostics at 2 min mark to fix early missedd bars
+                    if (count == 2):
                         thread = Thread(
-                            target=self.data.run_data_diagnostics(0))
+                            target=lambda: self.data.run_data_diagnostics(0))
+                        thread.daemon = True
                         thread.start()
+                    self.logger.debug("Started 2-min diagnostics.")
+
+                    # Check data integrity periodically thereafter
+                    # if (count % self.DIAG_DELAY == 0):
+                    #     thread = Thread(
+                    #         target=self.data.run_data_diagnostics(0))
+                    #     thread.daemon = True
+                    #     thread.start()
+
                 # Sleep til the next minute begins
                 sleep(self.seconds_til_next_minute())
                 count += 1
+
             elif not self.live_trading:
                 # Update data w/o delay when backtesting, don't run diagnostics
                 self.events = self.data.update_market_data(self.events)
@@ -108,6 +125,7 @@ class Server:
         """ Routes events to worker classes for processing."""
 
         count = 0
+
         while True:
             try:
                 # Get events from queue
@@ -123,17 +141,19 @@ class Server:
                 # Store new data now that time-critical work is complete
                 self.data.save_new_bars_to_db()
                 break
+
             else:
                 if event is not None:
                     count += 1
                     if event.type == "MARKET":
-                        self.strategy.parse_data(event)
+                        self.strategy.parse_new_data(event)
                     elif event.type == "SIGNAL":
                         self.portfolio.update_signal(event)
                     elif event.type == "ORDER":
                         self.broker.place_order(event)
                     elif event.type == "FILL":
                         self.portfolio.update_fill(event)
+
                 # finished all jobs in queue
                 self.events.task_done()
 

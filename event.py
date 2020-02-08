@@ -1,3 +1,6 @@
+from dateutil import parser
+from datetime import datetime
+
 
 class Event(object):
     """Base class for various system events."""
@@ -7,17 +10,27 @@ class MarketEvent(Event):
     """Wrapper for new market data. Consumed by Strategy object to
     produce Signal events."""
 
+    DTFMT = '%Y-%m-%d %H:%M'
+
     def __init__(self, exchange, bar):
         self.type = 'MARKET'
         self.exchange = exchange
         self.bar = bar
 
     def __str__(self):
-        return "Market event: Exchange=%s, Symbol=%s, Timestamp=%s" % (
-            self.exchange, self.bar['symbol'], self.bar['timestamp'])
+        return "MarketEvent - Exchange: %s, Symbol: %s, TS: %s, Close: %s" % (
+            self.exchange, self.bar['symbol'],
+            self.get_datetime(), self.bar['close'])
 
     def get_bar(self):
         return self.bar
+
+    def get_exchange(self):
+        return self.exchange
+
+    def get_datetime(self):
+        return datetime.fromtimestamp(
+            self.bar['timestamp']).strftime(self.DTFMT),
 
 
 class SignalEvent(Event):
@@ -42,7 +55,7 @@ class OrderEvent(Event):
         self.direction = direction      # BUY or SELL
 
     def __str__(self):
-        return "Order: Symbol=%s, Type=%s, Quantity=%s, Direction=%s" % (
+        return "OrderEvent - Symbol: %s, Type: %s, Qty: %s, Direction: %s" % (
             self.symbol, self.order_type, self.quantity, self.direction)
 
 
