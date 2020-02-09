@@ -24,7 +24,21 @@ class Features:
         return convergent
 
     def sr_levels(self, bars):
-        """Return levels of support and resistance in given period."""
+        """Return:
+        -- levels of support and resistance in given period.
+        -- times the level has been tested (both as a support or as a resistance)
+        -- last time it was tested. Older levels are less relevant now.
+
+        Steps:
+        1) Obtain fractals to find local maxima an minima
+        2) Define distance margin between fractals that will be allowed (they won't be at exactly the same price).
+        3) Find fractals located around the same price. Define those as possible sr levels.
+        4) Determine how many fractals are located at that level to determine it's strength.
+        5) ?
+        """
+
+        # TODO: doesn't find sr levels that aren't horizontal.
+        # TODO: does function work properly when no levels are found?
 
         self.check_bars_type(bars)
 
