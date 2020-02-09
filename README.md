@@ -41,4 +41,4 @@ Custom model implementations or any other enquiries: sam@sdbgroup.io
 Born from the designs described at QuantStart.com (QSTrader), and the writings of E. Chan and M. Lopez de Prado. Thanks all.
 
 ## License
-This project is licensed under the MIT License.
+GNU GPLv3
