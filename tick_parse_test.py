@@ -1,10 +1,10 @@
+from datetime import timezone, datetime, timedelta
 from bitmex_ws import Bitmex_WS
+from dateutil.tz import gettz
 from dateutil import parser
 from time import sleep
 import traceback
-import datetime
 import requests
-import datetime
 import logging
 
 # For debugging/testimg ing parse_ticks() using bitmex_WS.
@@ -12,6 +12,15 @@ import logging
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
+ch = logging.StreamHandler()
+formatter = logging.Formatter(
+    "%(asctime)s:%(levelname)s:%(module)s - %(message)s")
+ch.setFormatter(formatter)
+logger.addHandler(ch)
+logging.getLogger("urllib3").propagate = False
+requests_log = logging.getLogger("requests")
+requests_log.addHandler(logging.NullHandler())
+requests_log.propagate = False
 
 WS_URL = "wss://www.bitmex.com/realtime"
 symbols = ["XBTUSD", "ETHUSD"]
@@ -29,10 +38,12 @@ if not ws.ws.sock.connected:
 
 def get_recent_bars(timeframe, symbol, n):
     """ Return n recent bars of desired timeframe and symbol. """
+
+    sleep(1)
     payload = (
         "https://www.bitmex.com/api/v1/trade/bucketed?binSize=" +
         timeframe + "&partial=false&symbol=" + symbol +
-        "&count=" + n + "&reverse=true")
+        "&count=" + str(n) + "&reverse=true")
 
     return requests.get(payload).json()
 
@@ -40,7 +51,7 @@ def get_recent_bars(timeframe, symbol, n):
 def seconds_til_next_minute():
     """ Return number of seconds to next minute."""
 
-    now = datetime.datetime.utcnow().second
+    now = datetime.utcnow().second
     delay = 60 - now
     return delay
 
@@ -48,16 +59,19 @@ def seconds_til_next_minute():
 def previous_minute():
     """ Return the previous minute UTC ms epoch timestamp."""
 
-    delay = datetime.datetime.utcnow().second
-    timestamp = datetime.datetime.utcnow() - datetime.timedelta(
-        seconds=delay)
-    timestamp.replace(second=0, microsecond=0)
+    d1 = datetime.now().second
+    d2 = datetime.now().microsecond
+    timestamp = datetime.now() - timedelta(
+        minutes=1, seconds=d1, microseconds=d2)
+
     # convert to epoch
     timestamp = int(timestamp.timestamp())
-    # replace final digit with zero, can be 1 or more during a slow cycle
+
+    # # replace final digit with zero, can be 1 or more during a slow cycle
     timestamp_str = list(str(timestamp))
     timestamp_str[len(timestamp_str) - 1] = "0"
     timestamp = int(''.join(timestamp_str))
+
     return timestamp
 
 
@@ -101,7 +115,7 @@ def parse_ticks():
         logger.debug("BitMEX websocket disconnected.")
     else:
         all_ticks = ws.get_ticks()
-        target_minute = datetime.datetime.utcnow().minute - 1
+        target_minute = datetime.now().minute - 1
         ticks_target_minute = []
         tcount = 0
 
@@ -109,7 +123,7 @@ def parse_ticks():
         for i in reversed(all_ticks):
             try:
                 ts = i['timestamp']
-                if type(ts) is not datetime.datetime:
+                if type(ts) is not datetime:
                     ts = parser.parse(ts)
             except Exception:
                 logger.debug(traceback.format_exc())
@@ -140,18 +154,30 @@ def parse_ticks():
         return bars
 
 
-print("Started..")
-sleeptime = seconds_til_next_minute()
-sleep(sleeptime)
-
+sleep(seconds_til_next_minute())
 while True:
     print("Waiting for full minute to elapse..")
-    sleeptime = seconds_til_next_minute()
-    sleep(sleeptime)
+    sleep(seconds_til_next_minute())
 
-    print("Parsing ticks..")
+    logger.debug("Parsed bars: (should match reference bars):")
     bars = parse_ticks()
+    for symbol in symbols:
+        print(
+            bars[symbol][0]['timestamp'],
+            datetime.utcfromtimestamp(bars[symbol][0]['timestamp']),
+            "O:", bars[symbol][0]['open'], "H:", bars[symbol][0]['high'],
+            "L:", bars[symbol][0]['low'], "C:", bars[symbol][0]['close'],
+            "V:", bars[symbol][0]['volume'])
 
-    for bar in bars:
-        for symbol in symbols:
-            print(bar[symbol])
+    logger.debug("Reference bars (correct values):")
+    ref_bars = []
+    for symbol in symbols:
+        ref_bars.append(get_recent_bars("1m", symbol, 1))
+    for bar in ref_bars:
+        isodt = parser.parse(bar[0]['timestamp'])
+        epoch = int(isodt.replace(tzinfo=timezone.utc).timestamp())
+        print(
+            epoch, bar[0]['timestamp'],
+            "O:", bar[0]['open'], "H:", bar[0]['high'], "L:", bar[0]['low'],
+            "C:", bar[0]['close'], "V:", bar[0]['volume'])
+    print("\n")
