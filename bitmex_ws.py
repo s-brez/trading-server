@@ -7,8 +7,6 @@ import traceback
 
 class Bitmex_WS:
 
-    # data table size - increase if ticks get cut off during high vol periods
-    MAX_SIZE = 1000
     RECONNECT_TIMEOUT = 10
 
     def __init__(self, logger, symbols, channels, URL, api_key, api_secret):
@@ -18,6 +16,11 @@ class Bitmex_WS:
         self.symbols = symbols
         self.channels = channels
         self.URL = URL
+
+        # data table size - increase if ticks get cut off during high vol
+        self.MAX_SIZE = 1000 * len(symbols)
+        self.logger.debug("Data table size:" + " " + str(self.MAX_SIZE))
+
         if api_key is not None and api_secret is None:
             raise ValueError('Enter both public and secret keys')
         if api_key is None and api_secret is not None:
@@ -61,19 +64,22 @@ class Bitmex_WS:
             if 'subscribe' in msg:
                 self.logger.debug(
                     "Subscribed to " + msg['subscribe'] + ".")
+
             elif action:
                 if table not in self.data:
                     self.data[table] = []
 
             if action == 'partial':
-                self.data[table] += msg['data']
+                self.data[table] = msg['data']
                 self.keys[table] = msg['keys']
+
             elif action == 'insert':
                 self.data[table] += msg['data']
                 # trim data table size when it exceeds MAX_SIZE
                 if(table not in ['order', 'orderBookL2'] and
                         len(self.data[table]) > self.MAX_SIZE):
-                    self.data[table] = self.data[table][int(self.MAX_SIZE / 2):]  # noqa
+                    self.data[table] = self.data[table][self.MAX_SIZE // 2:]  # noqa
+
             elif action == 'update':
                 # Locate the item in the collection and update it.
                 for updateData in msg['data']:
@@ -87,6 +93,7 @@ class Bitmex_WS:
                     # Remove cancelled / filled orders
                     if table == 'order' and not self.order_leaves_quantity(item):  # noqa
                         self.data[table].remove(item)
+
             elif action == 'delete':
                 # Locate the item in the collection and remove it.
                 for deleteData in msg['data']:
@@ -106,7 +113,7 @@ class Bitmex_WS:
 
     def on_error(self, ws, msg):
         self.logger.debug("BitMEX websocket error: " + str(msg))
-        
+
         # attempt to reconnect if  ws is not connected
         self.ws = None
         self.logger.debug("Attempting to reconnect.")

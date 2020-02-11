@@ -71,7 +71,8 @@ class Bitmex(Exchange):
 
             # build 1 min bars for each symbol
             for symbol in self.symbols:
-                ticks = [i for i in ticks_target_minute if i['symbol'] == symbol]
+                ticks = [
+                    i for i in ticks_target_minute if i['symbol'] == symbol]
                 bar = self.build_OHLCV(ticks, symbol)
                 self.bars[symbol].append(bar)
                 # self.logger.debug(bar)

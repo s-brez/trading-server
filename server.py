@@ -146,7 +146,7 @@ class Server:
                 if event is not None:
                     count += 1
                     if event.type == "MARKET":
-                        self.strategy.qparse_new_data(event)
+                        self.strategy.parse_new_data(event)
                     elif event.type == "SIGNAL":
                         self.portfolio.update_signal(event)
                     elif event.type == "ORDER":
