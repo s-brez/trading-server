@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-import datetime
+from datetime import datetime, timedelta
 
 
 class Exchange(ABC):
@@ -27,16 +27,19 @@ class Exchange(ABC):
     def previous_minute(self):
         """ Return the previous minute UTC ms epoch timestamp."""
 
-        delay = datetime.datetime.utcnow().second
-        timestamp = datetime.datetime.utcnow() - datetime.timedelta(
-            seconds=delay)
-        timestamp.replace(second=0, microsecond=0)
+        d1 = datetime.now().second
+        d2 = datetime.now().microsecond
+        timestamp = datetime.now() - timedelta(
+            minutes=1, seconds=d1, microseconds=d2)
+
         # convert to epoch
         timestamp = int(timestamp.timestamp())
-        # replace final digit with zero, can be 1 or more during a slow cycle
+
+        # # replace final digit with zero, can be 1 or more during a slow cycle
         timestamp_str = list(str(timestamp))
         timestamp_str[len(timestamp_str) - 1] = "0"
         timestamp = int(''.join(timestamp_str))
+
         return timestamp
 
     def seconds_til_next_minute(self):
