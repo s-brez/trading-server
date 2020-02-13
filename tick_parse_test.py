@@ -6,9 +6,9 @@ from time import sleep
 import traceback
 import requests
 import logging
+import sys
 
 # For debugging/testimg ing parse_ticks() using bitmex_WS.
-
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
@@ -154,6 +154,9 @@ def parse_ticks():
         return bars
 
 
+count = 0
+parsed = []
+fetched = []
 sleep(seconds_til_next_minute())
 while True:
     print("Waiting for full minute to elapse..")
@@ -169,6 +172,16 @@ while True:
             "L:", bars[symbol][0]['low'], "C:", bars[symbol][0]['close'],
             "V:", bars[symbol][0]['volume'])
 
+        parsed.append(str(
+                str(bars[symbol][0]['timestamp']) + "," +
+                str(datetime.utcfromtimestamp(
+                    bars[symbol][0]['timestamp'])) + "," +
+                "O:" + str(bars[symbol][0]['open']) + "," +
+                "H:" + str(bars[symbol][0]['high']) + "," +
+                "L:" + str(bars[symbol][0]['low']) + "," +
+                "C:" + str(bars[symbol][0]['close']) + "," +
+                "V:" + str(bars[symbol][0]['volume'])))
+
     logger.debug("Reference bars (correct values):")
     ref_bars = []
     for symbol in symbols:
@@ -180,4 +193,25 @@ while True:
             epoch, bar[0]['timestamp'],
             "O:", bar[0]['open'], "H:", bar[0]['high'], "L:", bar[0]['low'],
             "C:", bar[0]['close'], "V:", bar[0]['volume'])
-    print("\n")
+
+        fetched.append(str(
+            str(epoch) + "," +
+            str(bar[0]['timestamp']) + "," +
+            "O:" + str(bar[0]['open']) + "," +
+            "H:" + str(bar[0]['high']) + "," +
+            "L:" + str(bar[0]['low']) + "," +
+            "C:" + str(bar[0]['close']) + "," +
+            "V:" + str(bar[0]['volume'])))
+
+    count += 1
+    if count == 10:
+
+        print("Parsed bars:")
+        for i in parsed:
+            print(i)
+
+        print("Fetched bars:")
+        for i in fetched:
+            print(i)
+
+        sys.exit(0)
