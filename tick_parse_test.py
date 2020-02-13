@@ -154,6 +154,9 @@ def parse_ticks():
         return bars
 
 
+# Store parsed tick-derived bars and reference bars. Once 10 mins complete,
+# compare both side by side.
+
 count = 0
 parsed = []
 fetched = []
