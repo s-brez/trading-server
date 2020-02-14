@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-import datetime
+from datetime import datetime, timedelta
 
 
 class Exchange(ABC):
@@ -9,48 +9,101 @@ class Exchange(ABC):
         super.__init__()
 
     def get_new_bars(self):
-        """Return dict of new 1min OHLCV bars."""
+        """
+        Args:
+
+        Returns:
+            Exchange objects self.bars[symbol] tree (dict).
+
+        Raises:
+        """
         return self.bars
 
     def get_max_bin_size(self):
-        """"Return max number of bars allowed per REST API request"""
+        """
+        Args:
+
+        Returns:
+            Max amount of items returned per REST poll for http api (int).
+
+        Raises:
+        """
         return self.MAX_BARS_PER_REQUEST
 
     def get_symbols(self):
-        """Return list of all instrument symbols strings."""
+        """
+        Args:
+
+        Returns:
+            List of all symbols ticker code strings.
+
+        Raises:
+        """
         return self.symbols
 
     def get_name(self):
-        """Return name string."""
+        """
+        Args:
+
+        Returns:
+            Venue name string.
+
+        Raises:
+        """
         return self.name
 
     def previous_minute(self):
-        """ Return the previous minute UTC ms epoch timestamp."""
+        """
+        Args:
 
-        # need to +1 second, do not change
-        delay = datetime.datetime.utcnow().second + 1
-        timestamp = datetime.datetime.utcnow() - datetime.timedelta(
-            seconds=delay)
-        timestamp.replace(second=0, microsecond=0)
+        Returns:
+            The previous minute epoch timestamp (int).
+
+        Raises:
+        """
+
+        d1 = datetime.now().second
+        d2 = datetime.now().microsecond
+        timestamp = datetime.now() - timedelta(
+            minutes=1, seconds=d1, microseconds=d2)
+
         # convert to epoch
         timestamp = int(timestamp.timestamp())
-        # replace final digit with zero, can be 1 or more during a slow cycle
+
+        # # replace final digit with zero, can be 1 or more during a slow cycle
         timestamp_str = list(str(timestamp))
         timestamp_str[len(timestamp_str) - 1] = "0"
         timestamp = int(''.join(timestamp_str))
+
         return timestamp
 
-    def seconds_til_next_minute(self):
-        """Return number of seconds until T-1 sec to next minute."""
+    def seconds_til_next_minute(self: int):
+        """
+        Args:
+
+        Returns:
+            Number of second to next minute (int).
+
+        Raises:
+        """
 
         now = datetime.datetime.utcnow().second
         delay = 60 - now - 1
         return delay
 
     def build_OHLCV(self, ticks: list, symbol):
-        """Return a 1 min bar dict from a list of ticks. Assumes the given
-        list's first tick is from the previous minute, uses this tick for
-        bar open price."""
+        """
+        Args:
+            ticks: A list of ticks to aggregate. Assumes the list's first tick
+                is from the previous minute, this tick is used for open price.
+            symbol: instrument ticker code (string)
+
+        Returns:
+            A 1 min OHLCV bar (dict).
+
+        Raises:
+
+        """
 
         if ticks:
             volume = sum(i['size'] for i in ticks) - ticks[0]['size']
@@ -85,13 +138,71 @@ class Exchange(ABC):
         return self.finished_parsing_ticks
 
     @abstractmethod
-    def get_bars_in_period(self):
-        """Return list of historic 1min OHLCV bars for specified period."""
+    def get_bars_in_period(self, symbol: str, start_time: int, total: int):
+        """
+        Args:
+            symbol: instrument ticker code (string)
+            start_time: epoch timestamp (int)
+            total: amount of bars to fetch (int)
+
+        Returns:
+            List of historic 1min OHLCV bars for specified period.
+
+        Raises:
+
+        """
+
+    @abstractmethod
+    def get_recent_bars(self, timeframe: str, symbol: str, n: int):
+        """
+        Args:
+            timeframe: timeframe code (string)
+            symbol: instrument ticker code (string)
+            n: amount of bars
+
+        Returns:
+            List of n recent 1-min bars of specified timeframe and symbol.
+
+        Raises:
+
+        """
 
     @abstractmethod
     def get_origin_timestamp(self, symbol: str):
-        """Return millisecond timestamp of first available 1 min bar."""
+        """
+        Args:
+            symbol: instrument ticker code (string)
+
+        Returns:
+            Epoch timestamp (int) of first available (oldest) 1 min bar.
+
+        Raises:
+
+        """
+
+    @abstractmethod
+    def get_recent_ticks(symbol, n):
+        """
+        Args:
+            symbol: instrument ticker code (string)
+            n: amount of bars
+
+        Returns:
+            List containing n minutes of recent ticks for the specified symbol.
+
+        Raises:
+
+        """
 
     @abstractmethod
     def parse_ticks(self):
-        """Scrape previous minutes ticks."""
+        """
+        Args:
+
+        Returns:
+            Converts streamed websocket tick data into a 1-min OHLCV bars, then
+            appends new bars to the exchange object self.bars[symbol] tree.
+
+        Raises:
+
+        """
