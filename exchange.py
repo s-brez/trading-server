@@ -146,7 +146,8 @@ class Exchange(ABC):
             total: amount of bars to fetch (int)
 
         Returns:
-            List of historic 1min OHLCV bars for specified period.
+            List of historic 1min OHLCV bars for specified period. Returns
+            specified amount of 1 min bars starting from start_time.
 
         Raises:
 
