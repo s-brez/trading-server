@@ -21,7 +21,12 @@ logging.getLogger("urllib3").propagate = False
 requests_log = logging.getLogger("requests")
 requests_log.addHandler(logging.NullHandler())
 requests_log.propagate = False
+<<<<<<< Updated upstream
 
+=======
+BASE_URL = "https://www.bitmex.com/api/v1"
+BARS_URL = "/trade/bucketed?binSize="
+>>>>>>> Stashed changes
 WS_URL = "wss://www.bitmex.com/realtime"
 symbols = ["XBTUSD", "ETHUSD"]
 channels = ["trade"]
@@ -37,6 +42,7 @@ if not ws.ws.sock.connected:
 
 
 def get_recent_bars(timeframe, symbol, n):
+<<<<<<< Updated upstream
     """ Return n recent bars of desired timeframe and symbol. """
 
     sleep(1)
@@ -44,6 +50,14 @@ def get_recent_bars(timeframe, symbol, n):
         "https://www.bitmex.com/api/v1/trade/bucketed?binSize=" +
         timeframe + "&partial=false&symbol=" + symbol +
         "&count=" + str(n) + "&reverse=true")
+=======
+    """ Return n recent 1-min bars of desired timeframe and symbol. """
+
+    sleep(0.5)
+    payload = str(
+        BASE_URL + BARS_URL + timeframe + "&partial=false&symbol=" +
+        symbol + "&count=" + str(n) + "&reverse=true")
+>>>>>>> Stashed changes
 
     return requests.get(payload).json()
 
@@ -154,6 +168,25 @@ def parse_ticks():
         return bars
 
 
+<<<<<<< Updated upstream
+=======
+def get_recent_ticks(symbol, n):
+    """ Return n minutes of recent ticks for the desired symbol. """
+
+    diff = n * 60
+    start_time = previous_minute() - diff
+    end_time = previous_minute()
+
+    sleep(0.5)
+    payload = None
+
+
+# ticks = get_recent_ticks("XBTUSD", 3)
+# for tick in ticks:
+#     print(tick)
+
+
+>>>>>>> Stashed changes
 # Store parsed tick-derived bars and reference bars. Once 10 mins complete,
 # compare both side by side.
 
