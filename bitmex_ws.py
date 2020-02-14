@@ -31,12 +31,14 @@ class Bitmex_WS:
     def connect(self):
         """
         Args:
+            None
 
         Returns:
             Starts the websocket in a thread and connects to subscription
             channels.
 
         Raises:
+            None.
         """
 
         self.ws = websocket.WebSocketApp(
@@ -133,6 +135,7 @@ class Bitmex_WS:
             Invoked when websocket starts. Used to subscribe to channels.
 
         Raises:
+            None.
         """
 
         ws.send(self.get_channel_subscription_string())
@@ -148,6 +151,7 @@ class Bitmex_WS:
             reconnect websocket after an error.
 
         Raises:
+            None.
         """
 
         self.logger.debug("BitMEX websocket error: " + str(msg))
@@ -167,6 +171,7 @@ class Bitmex_WS:
             Invoked when websocket closes.
 
         Raises:
+            None.
         """
 
         ws.close()
@@ -174,11 +179,13 @@ class Bitmex_WS:
     def get_orderbook(self):
         """
         Args:
+            None.
 
         Returns:
             L2 Orderbook (list).
 
         Raises:
+            None.
         """
 
         return self.data['orderBookL2']
@@ -186,11 +193,13 @@ class Bitmex_WS:
     def get_ticks(self):
         """
         Args:
+            None.
 
         Returns:
             Ticks (list)
 
         Raises:
+            None.
         """
 
         return self.data['trade']
@@ -206,7 +215,9 @@ class Bitmex_WS:
             Finds an item in the data table by the provided key.
 
         Raises:
+            None.
         """
+
         for item in table:
             matched = True
             for key in keys:
@@ -218,11 +229,13 @@ class Bitmex_WS:
     def get_channel_subscription_string(self):
         """
         Args:
+            None.
 
         Returns:
             Subscription payload (string) for all symbols and channels.
 
         Raises:
+            None.
         """
 
         prefix = '{"op": "subscribe", "args": ['
@@ -247,6 +260,7 @@ class Bitmex_WS:
             True if o['leavesQty'] is zero, False if > 0
 
         Raises:
+            None.
         """
         if o['leavesQty'] is None:
             return True
