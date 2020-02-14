@@ -78,8 +78,6 @@ class Bitmex(Exchange):
                 # self.logger.debug(bar)
 
     def get_bars_in_period(self, symbol, start_time, total):
-        """Returns specified amount of 1 min bars starting from start_time.
-        E.g      get_bars_in_period("XBTUSD", 1562971900, 100)"""
 
         if total >= self.MAX_BARS_PER_REQUEST:
             total = self.MAX_BARS_PER_REQUEST
@@ -110,8 +108,6 @@ class Bitmex(Exchange):
         return new_bars
 
     def get_origin_timestamp(self, symbol: str):
-        """Return millisecond timestamp of first available 1 min bar. If the
-        timestamp is stored, return that, otherwise poll the exchange."""
 
         if self.origin_tss[symbol] is not None:
             return self.origin_tss[symbol]
@@ -123,3 +119,15 @@ class Bitmex(Exchange):
             response = requests.get(payload).json()[0]['timestamp']
 
             return int(parser.parse(response).timestamp())
+
+    def get_recent_bars(timeframe, symbol, n):
+
+        sleep(0.5)
+        payload = str(
+            self.BASE_URL + self.BARS_URL + timeframe + "&partial=false&symbol=" +
+            symbol + "&count=" + str(n) + "&reverse=true")
+
+        return requests.get(payload).json()
+
+    def get_recent_ticks(symbol, n):
+        pass
