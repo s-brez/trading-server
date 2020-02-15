@@ -21,12 +21,11 @@ logging.getLogger("urllib3").propagate = False
 requests_log = logging.getLogger("requests")
 requests_log.addHandler(logging.NullHandler())
 requests_log.propagate = False
-<<<<<<< Updated upstream
 
-=======
 BASE_URL = "https://www.bitmex.com/api/v1"
 BARS_URL = "/trade/bucketed?binSize="
->>>>>>> Stashed changes
+TICKS_URL = "/trade?symbol="
+
 WS_URL = "wss://www.bitmex.com/realtime"
 symbols = ["XBTUSD", "ETHUSD"]
 channels = ["trade"]
@@ -42,22 +41,12 @@ if not ws.ws.sock.connected:
 
 
 def get_recent_bars(timeframe, symbol, n):
-<<<<<<< Updated upstream
-    """ Return n recent bars of desired timeframe and symbol. """
-
-    sleep(1)
-    payload = (
-        "https://www.bitmex.com/api/v1/trade/bucketed?binSize=" +
-        timeframe + "&partial=false&symbol=" + symbol +
-        "&count=" + str(n) + "&reverse=true")
-=======
     """ Return n recent 1-min bars of desired timeframe and symbol. """
 
     sleep(0.5)
     payload = str(
         BASE_URL + BARS_URL + timeframe + "&partial=false&symbol=" +
         symbol + "&count=" + str(n) + "&reverse=true")
->>>>>>> Stashed changes
 
     return requests.get(payload).json()
 
@@ -154,6 +143,11 @@ def parse_ticks():
                 break
         ticks_target_minute.reverse()
 
+        logger.debug("Ticks to parse:")
+        for tick in ticks_target_minute:
+            print(tick['timestamp'], tick['side'], tick['size'], tick['price'])
+        print("Number of ticks to parse:", len(ticks_target_minute))
+
         # reset bar dict ready for new bars
         bars = {i: [] for i in symbols}
 
@@ -168,86 +162,124 @@ def parse_ticks():
         return bars
 
 
-<<<<<<< Updated upstream
-=======
-def get_recent_ticks(symbol, n):
-    """ Return n minutes of recent ticks for the desired symbol. """
+def get_recent_ticks(symbol, n=1):
+    """
+    Args:
+        symbol:
+        n:
 
-    diff = n * 60
-    start_time = previous_minute() - diff
-    end_time = previous_minute()
+    Returns:
+        List containing n minutes of recent ticks for the desired symbol.
 
-    sleep(0.5)
-    payload = None
+    Raises:
+    """
+
+    # find difference between start and end of period
+    delta = n * 60
+
+    # find start timestamp and convert to ISO1806
+    start_epoch = previous_minute() + 60 - delta
+    start_iso = datetime.utcfromtimestamp(start_epoch).isoformat()
+
+    # find end timestamp and convert to ISO1806
+    end_epoch = previous_minute() + 60
+    end_iso = datetime.utcfromtimestamp(end_epoch).isoformat()
+
+    # poll
+    sleep(1)
+    payload = str(
+        BASE_URL + TICKS_URL + symbol + "&count=" +
+        "1000&reverse=false&startTime=" + start_iso)
+
+    print("Starting timestamp", start_iso)
+    print("End timestamp     ", end_iso)
+
+    return requests.get(payload).json()
+
+# print("Number of ticks in n minutes:", len(ticks))
 
 
-# ticks = get_recent_ticks("XBTUSD", 3)
-# for tick in ticks:
-#     print(tick)
-
-
->>>>>>> Stashed changes
-# Store parsed tick-derived bars and reference bars. Once 10 mins complete,
+# Store parsed tick-derived bars and reference bars. Once 3 mins complete,
 # compare both side by side.
 
+# count = 0
+# parsed = []
+# fetched = []
+# sleep(seconds_til_next_minute())
+# while True:
+#     print("Waiting for full minute to elapse..")
+#     sleep(seconds_til_next_minute())
+
+#     logger.debug("Parsed bars: (should match reference bars):")
+#     bars = parse_ticks()
+#     for symbol in symbols:
+#         print(
+#             bars[symbol][0]['timestamp'],
+#             datetime.utcfromtimestamp(bars[symbol][0]['timestamp']),
+#             "O:", bars[symbol][0]['open'], "H:", bars[symbol][0]['high'],
+#             "L:", bars[symbol][0]['low'], "C:", bars[symbol][0]['close'],
+#             "V:", bars[symbol][0]['volume'])
+
+#         parsed.append(str(
+#                 str(bars[symbol][0]['timestamp']) + "," +
+#                 str(datetime.utcfromtimestamp(
+#                     bars[symbol][0]['timestamp'])) + "," +
+#                 "O:" + str(bars[symbol][0]['open']) + "," +
+#                 "H:" + str(bars[symbol][0]['high']) + "," +
+#                 "L:" + str(bars[symbol][0]['low']) + "," +
+#                 "C:" + str(bars[symbol][0]['close']) + "," +
+#                 "V:" + str(bars[symbol][0]['volume'])))
+
+#     logger.debug("Reference bars (correct values):")
+#     ref_bars = []
+#     for symbol in symbols:
+#         ref_bars.append(get_recent_bars("1m", symbol, 1))
+#     for bar in ref_bars:
+#         isodt = parser.parse(bar[0]['timestamp'])
+#         epoch = int(isodt.replace(tzinfo=timezone.utc).timestamp())
+#         print(
+#             epoch, bar[0]['timestamp'],
+#             "O:", bar[0]['open'], "H:", bar[0]['high'], "L:", bar[0]['low'],
+#             "C:", bar[0]['close'], "V:", bar[0]['volume'])
+
+#         fetched.append(str(
+#             str(epoch) + "," +
+#             str(bar[0]['timestamp']) + "," +
+#             "O:" + str(bar[0]['open']) + "," +
+#             "H:" + str(bar[0]['high']) + "," +
+#             "L:" + str(bar[0]['low']) + "," +
+#             "C:" + str(bar[0]['close']) + "," +
+#             "V:" + str(bar[0]['volume'])))
+
+#     count += 1
+#     if count == 3:
+
+#         print("Parsed bars:")
+#         for i in parsed:
+#             print(i)
+
+#         print("Fetched bars:")
+#         for i in fetched:
+#             print(i)
+
+#         sys.exit(0)
+
 count = 0
-parsed = []
-fetched = []
 sleep(seconds_til_next_minute())
 while True:
     print("Waiting for full minute to elapse..")
     sleep(seconds_til_next_minute())
 
-    logger.debug("Parsed bars: (should match reference bars):")
     bars = parse_ticks()
-    for symbol in symbols:
-        print(
-            bars[symbol][0]['timestamp'],
-            datetime.utcfromtimestamp(bars[symbol][0]['timestamp']),
-            "O:", bars[symbol][0]['open'], "H:", bars[symbol][0]['high'],
-            "L:", bars[symbol][0]['low'], "C:", bars[symbol][0]['close'],
-            "V:", bars[symbol][0]['volume'])
 
-        parsed.append(str(
-                str(bars[symbol][0]['timestamp']) + "," +
-                str(datetime.utcfromtimestamp(
-                    bars[symbol][0]['timestamp'])) + "," +
-                "O:" + str(bars[symbol][0]['open']) + "," +
-                "H:" + str(bars[symbol][0]['high']) + "," +
-                "L:" + str(bars[symbol][0]['low']) + "," +
-                "C:" + str(bars[symbol][0]['close']) + "," +
-                "V:" + str(bars[symbol][0]['volume'])))
+    ticks = get_recent_ticks("XBTUSD", 1)
 
-    logger.debug("Reference bars (correct values):")
-    ref_bars = []
-    for symbol in symbols:
-        ref_bars.append(get_recent_bars("1m", symbol, 1))
-    for bar in ref_bars:
-        isodt = parser.parse(bar[0]['timestamp'])
-        epoch = int(isodt.replace(tzinfo=timezone.utc).timestamp())
-        print(
-            epoch, bar[0]['timestamp'],
-            "O:", bar[0]['open'], "H:", bar[0]['high'], "L:", bar[0]['low'],
-            "C:", bar[0]['close'], "V:", bar[0]['volume'])
-
-        fetched.append(str(
-            str(epoch) + "," +
-            str(bar[0]['timestamp']) + "," +
-            "O:" + str(bar[0]['open']) + "," +
-            "H:" + str(bar[0]['high']) + "," +
-            "L:" + str(bar[0]['low']) + "," +
-            "C:" + str(bar[0]['close']) + "," +
-            "V:" + str(bar[0]['volume'])))
+    logger.debug("Reference ticks:")
+    for tick in ticks:
+        if tick['timestamp']:
+            print(tick['timestamp'], tick['side'], tick['size'], tick['price'])
+    print("Number of reference ticks:", len(ticks))
 
     count += 1
-    if count == 10:
-
-        print("Parsed bars:")
-        for i in parsed:
-            print(i)
-
-        print("Fetched bars:")
-        for i in fetched:
-            print(i)
-
+    if count == 1:
         sys.exit(0)
