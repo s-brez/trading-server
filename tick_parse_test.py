@@ -8,6 +8,7 @@ import requests
 import logging
 import sys
 
+
 # For debugging/testimg ing parse_ticks() using bitmex_WS.
 
 logger = logging.getLogger()
@@ -78,7 +79,7 @@ def previous_minute():
     return timestamp
 
 
-def build_OHLCV(ticks: list, symbol):
+def build_OHLCV(ticks: list, symbol: str):
     """Return a 1 min bar as dict from a list of ticks. Assumes the given
     list's first tick is from the previous minute, uses this tick for
     bar open price."""
@@ -141,23 +142,36 @@ def parse_ticks():
                 ticks_target_minute.append(i)
                 ticks_target_minute[tcount]['timestamp'] = ts
                 break
+
         ticks_target_minute.reverse()
 
-        logger.debug("Ticks to parse:")
+        # debug only
+        print("Ticks to parse:")
         for tick in ticks_target_minute:
-            print(tick['timestamp'], tick['side'], tick['size'], tick['price'])
-        print("Number of ticks to parse:", len(ticks_target_minute))
+            if tick['symbol'] == "XBTUSD":
+                print(
+                    tick['timestamp'], tick['side'],
+                    tick['size'], tick['price'])
 
-        # reset bar dict ready for new bars
+        # group ticks by symbol
+        ticks = {i: [] for i in symbols}
+        for tick in ticks_target_minute:
+            ticks[tick['symbol']].append(tick)
+
+        # build bars from ticks
         bars = {i: [] for i in symbols}
-
-        # build 1 min bars for each symbol
         for symbol in symbols:
-            ticks = [
-                i for i in ticks_target_minute if i['symbol'] == symbol]
-            bar = build_OHLCV(ticks, symbol)
+            bar = build_OHLCV(ticks[symbol], symbol)
             bars[symbol].append(bar)
-            # logger.debug(bar)
+            print(bar)
+
+            # debug only
+            # if symbol == "XBTUSD":
+            #     print("Final ticks before build_OHLCV() called:")
+            #     for tick in ticks[symbol]:
+            #         print(
+            #             tick['timestamp'], tick['side'],
+            #             tick['size'], tick['price'])
 
         return bars
 
@@ -185,16 +199,41 @@ def get_recent_ticks(symbol, n=1):
     end_epoch = previous_minute() + 60
     end_iso = datetime.utcfromtimestamp(end_epoch).isoformat()
 
-    # poll
+    # initial poll
     sleep(1)
     payload = str(
         BASE_URL + TICKS_URL + symbol + "&count=" +
-        "1000&reverse=false&startTime=" + start_iso)
+        "1000&reverse=false&startTime=" + start_iso + "&endTime" + end_iso)
+    print(payload)
 
-    print("Starting timestamp", start_iso)
-    print("End timestamp     ", end_iso)
+    # print("Starting timestamp", start_iso)
+    # print("End timestamp     ", end_iso)
+    ticks = []
+    initial_result = requests.get(payload).json()
+    for tick in initial_result:
+        ticks.append(tick)
 
-    return requests.get(payload).json()
+    # if 1000 ticks in result (max size), keep polling until
+    # we get a response with length <1000
+    if len(initial_result) == 1000:
+        print("Over 1000 ticks exist in the previous minute.")
+
+        maxed_out = True
+        while maxed_out:
+
+            # Dont use endTime as it seems to cut off the final few ticks.
+            payload = str(
+                BASE_URL + TICKS_URL + symbol + "&count=" +
+                "1000&reverse=false&startTime=" + ticks[-1]['timestamp'])
+
+            interim_result = requests.get(payload).json()
+            for tick in interim_result:
+                ticks.append(tick)
+
+            if len(interim_result) != 1000:
+                maxed_out = False
+
+    return ticks
 
 # print("Number of ticks in n minutes:", len(ticks))
 
@@ -267,19 +306,18 @@ def get_recent_ticks(symbol, n=1):
 count = 0
 sleep(seconds_til_next_minute())
 while True:
-    print("Waiting for full minute to elapse..")
-    sleep(seconds_til_next_minute())
+    if count == 0 or count % 3:
+        print("Waiting for full minute to elapse..")
+        sleep(seconds_til_next_minute())
 
-    bars = parse_ticks()
+        bars = parse_ticks()
 
-    ticks = get_recent_ticks("XBTUSD", 1)
+        ticks = get_recent_ticks("XBTUSD", 1)
 
-    logger.debug("Reference ticks:")
-    for tick in ticks:
-        if tick['timestamp']:
+        print("\nReference ticks:")
+        for tick in ticks:
             print(tick['timestamp'], tick['side'], tick['size'], tick['price'])
-    print("Number of reference ticks:", len(ticks))
 
     count += 1
-    if count == 1:
+    if count == 180:
         sys.exit(0)
