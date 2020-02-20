@@ -233,7 +233,18 @@ def get_recent_ticks(symbol, n=1):
             if len(interim_result) != 1000:
                 maxed_out = False
 
-    return ticks
+    # check median tick timestamp matches start_iso
+    median_dt = parser.parse(ticks[int((len(ticks) / 2))]['timestamp'])
+    match_dt = parser.parse(start_iso)
+    if median_dt.minute != match_dt.minute:
+        raise Exception("Tick data timestamp error: timestamp mismatch.")
+
+    # populate list with matching-timestamped ticks only
+    final_ticks = [
+        i for i in ticks if parser.parse(
+            i['timestamp']).minute == match_dt.minute]
+
+    return final_ticks
 
 # print("Number of ticks in n minutes:", len(ticks))
 
@@ -319,5 +330,5 @@ while True:
             print(tick['timestamp'], tick['side'], tick['size'], tick['price'])
 
     count += 1
-    if count == 180:
+    if count == 1:
         sys.exit(0)
