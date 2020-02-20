@@ -41,7 +41,7 @@ if not ws.ws.sock.connected:
     logger.debug("Failed to to connect to BitMEX websocket.")
 
 
-def get_recent_bars(timeframe, symbol, n):
+def get_recent_bar(timeframe, symbol, n=1):
     """ Return n recent 1-min bars of desired timeframe and symbol. """
 
     sleep(0.5)
@@ -49,7 +49,21 @@ def get_recent_bars(timeframe, symbol, n):
         BASE_URL + BARS_URL + timeframe + "&partial=false&symbol=" +
         symbol + "&count=" + str(n) + "&reverse=true")
 
-    return requests.get(payload).json()
+    # print(payload)nnnnnn
+
+    result = requests.get(payload).json()
+
+    bars = []
+    for i in result:
+        bars.append({
+                'symbol': symbol,
+                'timestamp': i['timestamp'],
+                'open': i['open'],
+                'high': i['high'],
+                'low': i['low'],
+                'close': i['close'],
+                'volume': i['volume']})
+    return bars
 
 
 def seconds_til_next_minute():
@@ -89,6 +103,9 @@ def build_OHLCV(ticks: list, symbol: str, close_as_open=True):
             resulting in no gaps between bars (some exchanges follow this
             practice as standard, some dont). If false, use arg "ticks" first
             tick as the open price.
+
+        Note: Some venues use a 1 min offset for bar timestamps. Tradingview
+        bars are timestamped 1 minute behind bitmex, for example.
 
     Returns:
         1-minute OHLCV bar (dict).
@@ -140,7 +157,7 @@ def build_OHLCV(ticks: list, symbol: str, close_as_open=True):
         close_price = ticks[-1]['price'] if len(prices) >= 1 else None
 
         bar = {'symbol': symbol,
-               'timestamp': previous_minute(),
+               'timestamp': previous_minute() + 60,
                'open': open_price,
                'high': high_price,
                'low': low_price,
@@ -150,7 +167,7 @@ def build_OHLCV(ticks: list, symbol: str, close_as_open=True):
 
     elif ticks is None or not ticks:
         bar = {'symbol': symbol,
-               'timestamp': previous_minute(),
+               'timestamp': previous_minute() + 60,
                'open': None,
                'high': None,
                'low': None,
@@ -191,12 +208,12 @@ def parse_ticks():
         ticks_target_minute.reverse()
 
         # debug only
-        print("Ticks to parse:")
-        for tick in ticks_target_minute:
-            if tick['symbol'] == "ETHUSD":
-                print(
-                    tick['timestamp'], tick['side'],
-                    tick['size'], tick['price'])
+        # print("Ticks to parse:")
+        # for tick in ticks_target_minute:
+        #     if tick['symbol'] == "ETHUSD":
+        #         print(
+        #             tick['timestamp'], tick['side'],
+        #             tick['size'], tick['price'])
 
         # group ticks by symbol
         ticks = {i: [] for i in symbols}
@@ -208,7 +225,6 @@ def parse_ticks():
         for symbol in symbols:
             bar = build_OHLCV(ticks[symbol], symbol)
             bars[symbol].append(bar)
-            print(bar)
 
             # debug only
             # if symbol == "XBTUSD":
@@ -218,7 +234,7 @@ def parse_ticks():
             #             tick['timestamp'], tick['side'],
             #             tick['size'], tick['price'])
 
-        return bars
+        return bars, ticks
 
 
 def get_recent_ticks(symbol, n=1):
@@ -250,7 +266,7 @@ def get_recent_ticks(symbol, n=1):
     payload = str(
         BASE_URL + TICKS_URL + symbol + "&count=" +
         "1000&reverse=false&startTime=" + start_iso + "&endTime" + end_iso)
-    print(payload)
+    # print(payload)
 
     # print("Starting timestamp", start_iso)
     # print("End timestamp     ", end_iso)
@@ -292,73 +308,6 @@ def get_recent_ticks(symbol, n=1):
 
     return final_ticks
 
-# print("Number of ticks in n minutes:", len(ticks))
-
-
-# Store parsed tick-derived bars and reference bars. Once 3 mins complete,
-# compare both side by side.
-
-# count = 0
-# parsed = []
-# fetched = []
-# sleep(seconds_til_next_minute())
-# while True:
-#     print("Waiting for full minute to elapse..")
-#     sleep(seconds_til_next_minute())
-
-#     logger.debug("Parsed bars: (should match reference bars):")
-#     bars = parse_ticks()
-#     for symbol in symbols:
-#         print(
-#             bars[symbol][0]['timestamp'],
-#             datetime.utcfromtimestamp(bars[symbol][0]['timestamp']),
-#             "O:", bars[symbol][0]['open'], "H:", bars[symbol][0]['high'],
-#             "L:", bars[symbol][0]['low'], "C:", bars[symbol][0]['close'],
-#             "V:", bars[symbol][0]['volume'])
-
-#         parsed.append(str(
-#                 str(bars[symbol][0]['timestamp']) + "," +
-#                 str(datetime.utcfromtimestamp(
-#                     bars[symbol][0]['timestamp'])) + "," +
-#                 "O:" + str(bars[symbol][0]['open']) + "," +
-#                 "H:" + str(bars[symbol][0]['high']) + "," +
-#                 "L:" + str(bars[symbol][0]['low']) + "," +
-#                 "C:" + str(bars[symbol][0]['close']) + "," +
-#                 "V:" + str(bars[symbol][0]['volume'])))
-
-#     logger.debug("Reference bars (correct values):")
-#     ref_bars = []
-#     for symbol in symbols:
-#         ref_bars.append(get_recent_bars("1m", symbol, 1))
-#     for bar in ref_bars:
-#         isodt = parser.parse(bar[0]['timestamp'])
-#         epoch = int(isodt.replace(tzinfo=timezone.utc).timestamp())
-#         print(
-#             epoch, bar[0]['timestamp'],
-#             "O:", bar[0]['open'], "H:", bar[0]['high'], "L:", bar[0]['low'],
-#             "C:", bar[0]['close'], "V:", bar[0]['volume'])
-
-#         fetched.append(str(
-#             str(epoch) + "," +
-#             str(bar[0]['timestamp']) + "," +
-#             "O:" + str(bar[0]['open']) + "," +
-#             "H:" + str(bar[0]['high']) + "," +
-#             "L:" + str(bar[0]['low']) + "," +
-#             "C:" + str(bar[0]['close']) + "," +
-#             "V:" + str(bar[0]['volume'])))
-
-#     count += 1
-#     if count == 3:
-
-#         print("Parsed bars:")
-#         for i in parsed:
-#             print(i)
-
-#         print("Fetched bars:")
-#         for i in fetched:
-#             print(i)
-
-#         sys.exit(0)
 
 count = 0
 sleep(seconds_til_next_minute())
@@ -367,13 +316,38 @@ while True:
         print("Waiting for full minute to elapse..")
         sleep(seconds_til_next_minute())
 
-        bars = parse_ticks()
+        bars, pticks = parse_ticks()
 
-        ticks = get_recent_ticks("ETHUSD", 1)
+        # print("Parsed ticks:")
+        # for tick in pticks["XBTUSD"]:
+        #     print(
+        #         tick['timestamp'], tick['side'],
+        #         tick['size'], tick['price'])
 
-        print("\nReference ticks:")
-        for tick in ticks:
-            print(tick['timestamp'], tick['side'], tick['size'], tick['price'])
+        print("Parsed bars:")
+        print(bars["XBTUSD"])
+        # print(bars["ETHUSD"])
+
+        # stats
+        # print(
+        #     "Open:", pticks["XBTUSD"][0]['price'])
+            # "High:",
+            # "Low:",
+            # "Close:",
+            # "Volume:", )
+
+        # print("\nReference ticks:")
+        ticks = get_recent_ticks("XBTUSD")
+        # for tick in ticks:
+        #     print(
+        #         tick['timestamp'], tick['side'], tick['size'],
+        #         tick['price'])
+
+        print("Reference bars:")
+        print(get_recent_bar("1m", "XBTUSD"))
+        # print(get_recent_bars("1m", "ETHUSD", 1))
+
+        # stats
 
     count += 1
     if count == 1:
