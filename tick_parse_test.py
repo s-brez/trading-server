@@ -71,7 +71,7 @@ def previous_minute():
     # convert to epoch
     timestamp = int(timestamp.timestamp())
 
-    # # replace final digit with zero, can be 1 or more during a slow cycle
+    # Replace final digit with zero, can be 1 or more during a slow cycle.
     timestamp_str = list(str(timestamp))
     timestamp_str[len(timestamp_str) - 1] = "0"
     timestamp = int(''.join(timestamp_str))
@@ -79,22 +79,66 @@ def previous_minute():
     return timestamp
 
 
-def build_OHLCV(ticks: list, symbol: str):
-    """Return a 1 min bar as dict from a list of ticks. Assumes the given
-    list's first tick is from the previous minute, uses this tick for
-    bar open price."""
+def build_OHLCV(ticks: list, symbol: str, close_as_open=True):
+    """
+    Args:
+        ticks: List of ticks to be converted to 1-min bar.
+        symbol: Ticker code.
+        close_as_open: If true, the first tick in arg "ticks" must be the final
+            tick from the previous minute, to be used for bar open price,
+            resulting in no gaps between bars (some exchanges follow this
+            practice as standard, some dont). If false, use arg "ticks" first
+            tick as the open price.
+
+    Returns:
+        1-minute OHLCV bar (dict).
+
+    Raises:
+        Tick data timestamp mismatch error.
+    """
 
     if ticks:
-        volume = sum(i['size'] for i in ticks) - ticks[0]['size']
-        # dont include the first tick for volume calc
-        # as first tick comes from the previous minute - used for
-        # bar open price only
-        prices = [i['price'] for i in ticks]
+
+        if close_as_open:
+
+            # Convert incoming timestamp format if required.
+            if type(ticks[0]['timestamp']) is not datetime:
+                median = parser.parse(
+                    ticks[int((len(ticks) / 2))]['timestamp'])
+                first = parser.parse(ticks[0]['timestamp'])
+            else:
+                median = ticks[int((len(ticks) / 2))]['timestamp']
+                first = ticks[0]['timestamp']
+
+            # This should be the most common case if close_as_open=True.
+            # Dont include the first tick for volume and price calc.
+            if first.minute == median.minute - 1:
+                volume = sum(i['size'] for i in ticks) - ticks[0]['size']
+                prices = [i['price'] for i in ticks]
+                prices.pop(0)
+
+            # If the timestamps are same, may mean there were no early
+            # trades, proceed as though close_as_open=False
+            elif first.minute == median.minute:
+                volume = sum(i['size'] for i in ticks)
+                prices = [i['price'] for i in ticks]
+
+            # There's a timing/data problem is neither case above is true.
+            else:
+                raise Exception(
+                    "Tick data timestamp error: timestamp mismatch." +
+                    "\nFirst tick minute: " + str(first) +
+                    "\nMedian tick minute: " + str(median))
+
+        elif not close_as_open or close_as_open is False:
+            volume = sum(i['size'] for i in ticks)
+            prices = [i['price'] for i in ticks]
+
         high_price = max(prices) if len(prices) >= 1 else None
         low_price = min(prices) if len(prices) >= 1 else None
         open_price = ticks[0]['price'] if len(prices) >= 1 else None
         close_price = ticks[-1]['price'] if len(prices) >= 1 else None
-        # format OHLCV as 1 min bar
+
         bar = {'symbol': symbol,
                'timestamp': previous_minute(),
                'open': open_price,
@@ -103,6 +147,7 @@ def build_OHLCV(ticks: list, symbol: str):
                'close': close_price,
                'volume': volume}
         return bar
+
     elif ticks is None or not ticks:
         bar = {'symbol': symbol,
                'timestamp': previous_minute(),
@@ -148,7 +193,7 @@ def parse_ticks():
         # debug only
         print("Ticks to parse:")
         for tick in ticks_target_minute:
-            if tick['symbol'] == "XBTUSD":
+            if tick['symbol'] == "ETHUSD":
                 print(
                     tick['timestamp'], tick['side'],
                     tick['size'], tick['price'])
@@ -186,6 +231,7 @@ def get_recent_ticks(symbol, n=1):
         List containing n minutes of recent ticks for the desired symbol.
 
     Raises:
+        Tick data timestamp mismatch error.
     """
 
     # find difference between start and end of period
@@ -323,7 +369,7 @@ while True:
 
         bars = parse_ticks()
 
-        ticks = get_recent_ticks("XBTUSD", 1)
+        ticks = get_recent_ticks("ETHUSD", 1)
 
         print("\nReference ticks:")
         for tick in ticks:
