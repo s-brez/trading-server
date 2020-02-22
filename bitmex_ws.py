@@ -1,3 +1,14 @@
+"""
+trading-server is a multi-asset, multi-strategy, event-driven execution
+and backtesting platform (OEMS) for trading common markets.
+
+Copyright (C) 2020  Sam Breznikar <sam@sdbgroup.io>
+
+Licensed under GNU General Public License 3.0 or later.
+
+Some rights reserved. See LICENSE.md, AUTHORS.md.
+"""
+
 from time import sleep
 from threading import Thread
 import websocket
@@ -22,8 +33,8 @@ class Bitmex_WS:
         self.keys = {}
         # websocket.enableTrace(True)
 
-        # data table size - increase if ticks get cut off during high vol.
-        self.MAX_SIZE = 1000 * len(symbols)
+        # Data table size - approcimate tick/min capacity per symbol.
+        self.MAX_SIZE = 15000 * len(symbols)
         self.RECONNECT_TIMEOUT = 10
 
         self.connect()
@@ -60,19 +71,21 @@ class Bitmex_WS:
             timeout -= 1
         if not timeout:
             self.logger.debug("Websocket connection timed out.")
-            # attempt to reconnect
+            # Attempt to reconnect
             if not self.ws.sock.connected:
                 sleep(5)
                 self.connect()
 
     def on_message(self, ws, msg):
         """
+        Handles incoming websocket messages.
+        
         Args:
             ws: WebSocketApp object
             msg: message object
 
         Returns:
-            Handles incoming websocket messages.
+            None.
 
         Raises:
             Exception("Unknown")
@@ -83,9 +96,11 @@ class Bitmex_WS:
         table = msg['table'] if 'table' in msg else None
         action = msg['action'] if 'action' in msg else None
         try:
+
             if 'subscribe' in msg:
                 self.logger.debug(
                     "Subscribed to " + msg['subscribe'] + ".")
+
             elif action:
                 if table not in self.data:
                     self.data[table] = []
@@ -93,12 +108,15 @@ class Bitmex_WS:
             if action == 'partial':
                 self.data[table] = msg['data']
                 self.keys[table] = msg['keys']
+
             elif action == 'insert':
                 self.data[table] += msg['data']
-                # trim data table size when it exceeds MAX_SIZE
+
+                # Trim data table size when it exceeds MAX_SIZE.
                 if(table not in ['order', 'orderBookL2'] and
                         len(self.data[table]) > self.MAX_SIZE):
                     self.data[table] = self.data[table][self.MAX_SIZE // 2:]
+
             elif action == 'update':
                 # Locate the item in the collection and update it.
                 for updateData in msg['data']:
@@ -109,9 +127,10 @@ class Bitmex_WS:
                     if not item:
                         return  # No item found to update.
                     item.update(updateData)
-                    # Remove cancelled / filled orders
-                    if table == 'order' and not self.order_leaves_quantity(item):  # noqa
+                    # Remove cancelled / filled orders.
+                    if table == 'order' and not self.match_leaves_quantity(item):  # noqa
                         self.data[table].remove(item)
+
             elif action == 'delete':
                 # Locate the item in the collection and remove it.
                 for deleteData in msg['data']:
@@ -128,11 +147,13 @@ class Bitmex_WS:
 
     def on_open(self, ws):
         """
+        Invoked when websocket starts. Used to subscribe to channels.
+        
         Args:
             ws: WebSocketApp object
 
         Returns:
-            Invoked when websocket starts. Used to subscribe to channels.
+            None.
 
         Raises:
             None.
@@ -142,13 +163,15 @@ class Bitmex_WS:
 
     def on_error(self, ws, msg):
         """
+        Invoked when websocket encounters an error. Will attempt to
+        reconnect websocket after an error.
+    
         Args:
             ws: WebSocketApp object
             msg: message object
 
         Returns:
-            Invoked when websocket encounters an error. Will attempt to
-            reconnect websocket after an error.
+            None.
 
         Raises:
             None.
@@ -164,6 +187,8 @@ class Bitmex_WS:
 
     def on_close(self, ws):
         """
+        Invoked when websocket closes.
+        
         Args:
             ws: WebSocketApp object
 
@@ -178,6 +203,8 @@ class Bitmex_WS:
 
     def get_orderbook(self):
         """
+        Returns the L2 orderbook.
+        
         Args:
             None.
 
@@ -192,6 +219,8 @@ class Bitmex_WS:
 
     def get_ticks(self):
         """
+        Returns ticks for the recent minute.
+        
         Args:
             None.
 
@@ -206,13 +235,15 @@ class Bitmex_WS:
 
     def find_item_by_keys(self, keys, table, match_data):
         """
+        Finds an item in the data table using the provided key.
+        
         Args:
             keys: key array object
             table: data table object
             match_data: key to match
 
         Returns:
-            Finds an item in the data table by the provided key.
+            item: matched item.
 
         Raises:
             None.
@@ -228,6 +259,8 @@ class Bitmex_WS:
 
     def get_channel_subscription_string(self):
         """
+        Returns websocket channel subscription string.
+        
         Args:
             None.
 
@@ -251,11 +284,10 @@ class Bitmex_WS:
                     string += ", "
         return prefix + string + suffix
 
-    def order_leaves_quantity(self, o):
+    def match_leaves_quantity(self, o):
         """
         Args:
             o: item to match
-
         Returns:
             True if o['leavesQty'] is zero, False if > 0
 

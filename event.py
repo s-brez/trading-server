@@ -1,14 +1,31 @@
+"""
+trading-server is a multi-asset, multi-strategy, event-driven execution
+and backtesting platform (OEMS) for trading common markets.
+
+Copyright (C) 2020  Sam Breznikar <sam@sdbgroup.io>
+
+Licensed under GNU General Public License 3.0 or later.
+
+Some rights reserved. See LICENSE.md, AUTHORS.md.
+"""
+
 from dateutil import parser
 from datetime import datetime
 
 
 class Event(object):
-    """Base class for various system events."""
+    """
+    Base class for various system events.
+    """
 
 
 class MarketEvent(Event):
-    """Wrapper for new market data. Consumed by Strategy object to
-    produce Signal events."""
+    """
+    Wrapper for new market data. Consumed by Strategy object to
+    produce Signal events.
+    """
+
+    DTFMT = '%Y-%m-%d %H:%M'
 
     DTFMT = '%Y-%m-%d %H:%M'
 
@@ -34,25 +51,28 @@ class MarketEvent(Event):
 
 
 class SignalEvent(Event):
-    """A trade signal. Consumed by Portfolio to produce Order events."""
+    """
+    A trade signal. Consumed by Portfolio to produce Order events.
+    """
 
     def __init__(self, symbol, datetime, signal_type):
         self.type = 'SIGNAL'
-        self.symbol = symbol            # ticker
+        self.symbol = symbol            # Ticker code.
         self.datetime = datetime
-        self.signal_type = signal_type  # LONG, SHORT
+        self.signal_type = signal_type  # LONG, SHORT.
 
 
 class OrderEvent(Event):
-    """Contains order details to be sent to a broker/exchange."""
+    """
+    Contains order details to be sent to a broker/exchange.
+    """
 
-    def __init__(self, symbol, exchange, order_type, quantity, direction):
+    def __init__(self, symbol, exchange, order_type, quantity):
         self.type = 'ORDER'
-        self.symbol = symbol            # instrument ticker
-        self.exchange = exchange        # source exchange
-        self.order_type = order_type    # MKT, LMT, SMKT, SLMT
-        self.quantity = quantity        # positive integer
-        self.direction = direction      # BUY or SELL
+        self.symbol = symbol            # Instrument ticker.
+        self.exchange = exchange        # Source exchange.
+        self.order_type = order_type    # MKT, LMT, SMKT, SLMT.
+        self.quantity = quantity        # Integer.
 
     def __str__(self):
         return "OrderEvent - Symbol: %s, Type: %s, Qty: %s, Direction: %s" % (
@@ -60,19 +80,19 @@ class OrderEvent(Event):
 
 
 class FillEvent(Event):
-    """Holds transaction data including fees/comissions, slippage, brokerage,
+    """
+    Holds transaction data including fees/comissions, slippage, brokerage,
     actual fill price, timestamp, etc.
     """
 
     def __init__(self, timestamp, symbol, exchange, quantity,
                  direction, fill_cost, commission=None):
         self.type = 'FILL'
-        self.timestamp = timestamp     # fill timestamp
-        self.symbol = symbol           # instrument ticker
-        self.exchange = exchange       # source exchange
-        self.quantity = quantity       # position size in asset quantity
-        self.direction = direction     # BUY or SELL
-        self.fill_cost = fill_cost     # USD value of position
+        self.timestamp = timestamp     # Fill timestamp
+        self.symbol = symbol           # Instrument ticker
+        self.exchange = exchange       # Source exchange
+        self.quantity = quantity       # Position size.
+        self.fill_cost = fill_cost     # USD value of fees.
 
         # use BitMEX taker fees as placeholder
         if commission is None:
@@ -82,5 +102,4 @@ class FillEvent(Event):
 
     def calculate_commission(self):
         """
-        TODO: model IC markets fee structuring for all instruments
         """

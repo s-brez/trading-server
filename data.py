@@ -1,18 +1,35 @@
+"""
+trading-server is a multi-asset, multi-strategy, event-driven execution
+and backtesting platform (OEMS) for trading common markets.
+
+Copyright (C) 2020  Sam Breznikar <sam@sdbgroup.io>
+
+Licensed under GNU General Public License 3.0 or later.
+
+Some rights reserved. See LICENSE.md, AUTHORS.md.
+"""
+
+from event import MarketEvent
+from itertools import groupby, count
+
 from pymongo import MongoClient, errors
 from itertools import groupby, count
 from event import MarketEvent
 import pymongo
 import queue
 import time
+import json
 
 
 class Datahandler:
-    """Datahandler wraps exchange data and locally stored data with Market
+    """
+    Datahandler wraps exchange data and locally stored data with Market
     events and adds it to the event queue as each timeframe period elapses.
 
     Market events are created from either live or stored data (depending on
     if backtesting or live trading) and pushed to the event queue for the
-    Strategy object to consume."""
+    Strategy object to consume.
+    """
 
     def __init__(self, exchanges, logger, db, db_client):
         self.exchanges = exchanges
@@ -26,15 +43,17 @@ class Datahandler:
         self.total_instruments = self.get_total_instruments()
         self.bars_save_to_db = queue.Queue(0)
 
-        # processing performance variables
-        self.parse_count = 0
-        self.total_parse_time = 0
-        self.mean_parse_time = 0
-        self.std_dev_parse_time = 0
-        self.var_parse_time = 0
-
     def update_market_data(self, events):
-        """Push new market events to the event queue."""
+        """
+        Pushes new market events to the event queue.
+
+        Args:
+            events: empty event queue object.
+        Returns:
+            events: event queue object filled with new market events.
+        Raises:
+            None.
+        """
 
         if self.live_trading:
             market_data = self.get_new_data()
@@ -47,11 +66,22 @@ class Datahandler:
         return events
 
     def get_new_data(self):
-        """Return a list of market events (new bars) for all symbols from
+        """
+        Return a list of market events (new bars) for all symbols from
         all exchanges for the just-elapsed time period. Add new bar data
-        to queue for storage in DB, after current minutes cycle completes."""
+        to queue for storage in DB, after current minutes cycle completes.
 
-        # record bar parse performance
+        Logs parse time for tick processing.
+
+        Args:
+            None.
+        Returns:
+            new_market_events: list containing new market events.
+        Raises:
+            None.
+        """
+
+        # Record tick parse performance.
         self.logger.debug("Started parsing new ticks.")
         start_parse = time.time()
         for exchange in self.exchanges:
@@ -64,52 +94,71 @@ class Datahandler:
             " instruments' ticks in " + str(duration) + " seconds.")
         self.track_tick_processing_performance(duration)
 
-        # wrap new 1 min bars in market events
+        # Wrap new 1 min bars in market events.
         new_market_events = []
         for exchange in self.exchanges:
             bars = exchange.get_new_bars()
+
             for symbol in exchange.get_symbols():
+
                 for bar in bars[symbol]:
                     event = MarketEvent(exchange.get_name(), bar)
                     new_market_events.append(event)
-                    # add bars to save-to-db-later queue
-                    # TODO: store new bars concurrently with a processpool
+
+                    # Add bars to save-to-db-later queue.
+                    # TODO: store bars concurrently in a separate process.
                     self.bars_save_to_db.put(event)
+
         return new_market_events
 
     def get_historic_data(self):
-        """Return a list of market events (historic bars) from
-        locally stored data. Used when backtesting."""
+        """
+        Return a list of market events (historic bars) from
+        locally stored data. Used when backtesting.
+
+        Args:
+            None.
+        Returns:
+            historic_market_events: list containing historic market events.
+        Raises:
+            None.
+        """
 
         historic_market_events = []
 
+        # TODO: Needs completing.
+
+
         return historic_market_events
 
-    def track_tick_processing_performance(self, duration):
-        """Track tick processing times and other performance statistics."""
-
-        self.parse_count += 1
-        self.total_parse_time += duration
-        self.mean_parse_time = self.total_parse_time / self.parse_count
-
     def run_data_diagnostics(self, output):
-        """Check each symbol's stored data for completeness, repair/replace
+        """
+        Check each symbol's stored data for completeness, repair/replace
         missing data as needed. Once complete, set ready flag to True.
-        Output parameter set true to print report."""
+        Output parameter set true to print report.
 
-        # get a status report for each symbols stored data
+        Args:
+            output: if True, print verbose report. If false, do not print.
+        Returns:
+            None.
+        Raises:
+            None.
+        """
+
+        # Get a status report for each symbols stored data.
         reports = []
-        self.logger.debug("Started diagnostics.")
+        self.logger.debug("Started data diagnostics.")
         for exchange in self.exchanges:
             for symbol in exchange.get_symbols():
-                time.sleep(2)
-                reports.append(self.get_stored_data_status(
+                time.sleep(0.5)
+                reports.append(self.data_status_report(
                     exchange, symbol, output))
 
-        # resolve discrepancies in stored data
-        self.logger.debug("Fetching missing data.")
+        # Resolve discrepancies in stored data.
+        self.logger.debug("Resolving missing data.")
+
         for report in reports:
-            time.sleep(2)
+            time.sleep(0.5)
             self.backfill_gaps(report)
             self.replace_null_bars(report)
 
@@ -117,17 +166,29 @@ class Datahandler:
         self.ready = True
 
     def save_new_bars_to_db(self):
-        """Save bars in queue to database."""
+        """
+        Save bars in storage queue to database.
+
+        Args:
+            None.
+        Returns:
+            None.
+        Raises:
+            pymongo.errors.DuplicateKeyError.
+        """
 
         count = 0
         while True:
+
             try:
                 bar = self.bars_save_to_db.get(False)
+
             except queue.Empty:
                 self.logger.debug(
-                    "Wrote " + str(count) + " new bars to " +
+                    "Wrote " + str(count) + " new bars to database " +
                     str(self.db.name) + ".")
                 break
+
             else:
                 if bar is not None:
                     count += 1
@@ -135,16 +196,30 @@ class Datahandler:
                     try:
                         self.db_collections[bar.exchange].insert_one(
                             bar.get_bar())
+
+                    # Skip duplicates if they exist.
                     except pymongo.errors.DuplicateKeyError:
-                        continue  # skip duplicates if they exist
-                # finished all jobs in queue
+                        continue
+
                 self.bars_save_to_db.task_done()
 
-    def get_stored_data_status(self, exchange, symbol, output=False):
-        """ Return dict showing state and completeness of given symbols
-        stored data. Contains pertinent timestamps, periods of missing bars and
-        other relevant info."""
+    def data_status_report(self, exchange, symbol, output=False):
+        """
+        Create a stored data completness report for the given instrment.
 
+        Args:
+            exchange: exchange object.
+            symbol: instrument ticker code (string)
+            output: if True, print verbose report. If false, do not print.
+
+        Returns:
+            report: dict showing state and completeness of given symbols
+            stored data. Contains pertinent timestamps, periods of missing bars
+            and other relevant info.
+
+        Raises:
+            None.
+        """
         current_ts = exchange.previous_minute()
         max_bin_size = exchange.get_max_bin_size()
         result = self.db_collections[exchange.get_name()].find(
@@ -154,7 +229,7 @@ class Datahandler:
                 "symbol": symbol}))
         origin_ts = exchange.get_origin_timestamp(symbol)
 
-        # handle case where there is no existing data (fresh DB)
+        # Handle case where there is no existing data (e.g fresh DB).
         if total_stored == 0:
             oldest_ts = current_ts
             newest_ts = current_ts
@@ -162,16 +237,16 @@ class Datahandler:
             oldest_ts = result[total_stored - 1]['timestamp']
             newest_ts = result[0]['timestamp']
 
-        # make timestamps sort-agnostic, in case of sorting mixups
+        # Make timestamps sort-agnostic, in case of sorting mixups.
         if oldest_ts > newest_ts:
             oldest_ts, newest_ts = newest_ts, oldest_ts
 
-        # find gaps in stored data
-        actual = {doc['timestamp'] for doc in result}  # actual
-        required = {i for i in range(origin_ts, current_ts + 60, 60)}  # reqd
-        gaps = required.difference(actual)  # find the difference
+        # Find gaps (missing bars) in stored data.
+        actual = {doc['timestamp'] for doc in result}
+        required = {i for i in range(origin_ts, current_ts + 60, 60)}
+        gaps = required.difference(actual)
 
-        # find bars with all null values (happens sometimes if ws's drop out)
+        # Find bars with all null values (if ws drop out, or no trades).
         result = self.db_collections[exchange.get_name()].find({"$and": [
             {"symbol": symbol},
             {"high": None},
@@ -183,16 +258,16 @@ class Datahandler:
 
         if output:
             self.logger.info(
-                "Exchange & instrument:.........." +
+                "Exchange & instrument:......" +
                 exchange.get_name() + ":" + str(symbol))
             self.logger.info(
-                "Total required bars:............" + str(len(required)))
+                "Total required bars:........" + str(len(required)))
             self.logger.info(
-                "Total locally stored bars:......" + str(total_stored))
+                "Total locally stored bars:.." + str(total_stored))
             self.logger.info(
-                    "Total null-value bars:.........." + str(len(null_bars)))          
+                    "Total null-value bars:......" + str(len(null_bars)))
             self.logger.info(
-                "Total missing bars:............." + str(len(gaps)))
+                "Total missing bars:........." + str(len(gaps)))
 
         return {
             "exchange": exchange,
@@ -207,125 +282,71 @@ class Datahandler:
             "gaps": list(gaps),
             "null_bars": null_bars}
 
-    def backfill_bulk(self, report):
-        """Get and store missing bars between origin and oldest timestamps.
-        Use this once to get the bulk of historic data, then fill small gaps
-        with backfill_gaps() intermittently intradaily or as required."""
-
-        if report['origin_ts'] < report['oldest_ts']:
-
-            # Determine poll sizing accounting for max_bin_size. Split
-            # polling into a large batch of polls and then a final poll.
-            required = int((report['oldest_ts'] - report['origin_ts']) / 60)
-            final_poll_size = required % report['max_bin_size']
-            total_polls_batch = int((
-                (required - final_poll_size) / report['max_bin_size']))
-
-            start = report['origin_ts']
-            step = report['max_bin_size'] * 60
-
-            delay = 1  # wait time before attmepting to re-poll after error
-            stagger = 2  # delay co-efficient
-            timeout = 10  # number of times to repoll before exception raised.
-
-            # poll exchange REST endpoint for first bulk batch missing bars
-            bars_to_store = []
-            for i in range(total_polls_batch):
-                try:
-                    bars = report['exchange'].get_bars_in_period(
-                        report['symbol'], start, report['max_bin_size'])
-                    for bar in bars:
-                        bars_to_store.append(bar)
-                    stagger = 2  # reset stagger to base after successful poll
-                    start += step  # increment the starting poll timestamp
-                    time.sleep(stagger + 1)
-                except Exception as e:
-                    # retry poll with an exponential delay after each error
-                    for i in range(timeout):
-                        try:
-                            time.sleep(delay)
-                            bars = (
-                                report['exchange'].get_bars_in_period(
-                                    report['symbol'], start,
-                                    report['max_bin_size']))
-                            for bar in bars:
-                                bars_to_store.append(bar)
-                            stagger = 2
-                            start += step
-                            break
-                        except Exception as e:
-                            delay *= stagger
-                            if i == timeout - 1:
-                                raise Exception("Polling timeout.")
-
-            # finish with a single poll for final_poll_size number of bars
-            for i in range(timeout):
-                try:
-                    time.sleep(delay)
-                    final_bars = report['exchange'].get_bars_in_period(
-                        report['symbol'], start, final_poll_size)
-                    for bar in final_bars:
-                        bars_to_store.append(bar)
-                    stagger = 2
-                    break
-                except Exception as e:
-                    # retry poll with an exponential delay after each error
-                    delay *= stagger
-                    if i == timeout - 1:
-                        raise Exception("Polling timeout.")
-
-            # store bars, count how many stores
-            query = {"symbol": report['symbol']}
-            doc_count_before = (
-                self.db_collections[report[
-                    'exchange'].get_name()].count_documents(query))
-            for bar in bars_to_store:
-                try:
-                    self.db_collections[report['exchange']].insert_one(
-                        bar, upsert=True)
-                except pymongo.errors.DuplicateKeyError:
-                    continue  # skip duplicates if they exist
-            doc_count_after = (
-                self.db_collections[report['exchange']].count_documents(query))
-            doc_count = doc_count_after - doc_count_before
-            self.logger.debug(
-                "backfill_bulk() saved " + str(doc_count) + " bars.")
-            return True
-        return False
-
     def backfill_gaps(self, report):
-        """ Get and store small bins of missing bars. Intended to be called
+        """
+        Get and store small bins of missing bars. Intended to be called
         as a data QA measure for patching missing locally saved data incurred
-        from server downtime."""
+        from server downtime.
 
-        # sort timestamps into sequential bins (to reduce # of polls)
+        Args:
+            exchange: exchange object.
+            symbol: instrument ticker code (string)
+            output: if True, print verbose report. If false, do not print.
+
+        Returns:
+            report: dict showing state and completeness of given symbols
+            stored data. Contains pertinent timestamps, periods of missing bars
+            and other relevant info.
+
+        Raises:
+            Polling timeout error.
+            pymongo.errors.DuplicateKeyError.
+            Timestamp mismatch error.
+        """
+
+        # Sort timestamps into sequential bins (to reduce # of polls).
+        poll_count = 1
         if len(report['gaps']) != 0:
             bins = [
                 list(g) for k, g in groupby(
                     sorted(report['gaps']),
                     key=lambda n, c=count(0, 60): n - next(c))]
 
-            # if any bins > max_bin_size, split them into smaller bins.
-            # takes the old list
+            # If any bins > max_bin_size, split them into smaller bins.
             bins = self.split_oversize_bins(bins, report['max_bin_size'])
 
-            delay = 1  # wait time before attmepting to re-poll after error
-            stagger = 2  # delay co-efficient
-            timeout = 10  # number of times to repoll before exception raised.
+            total_polls = str(len(bins))
+            self.logger.debug(
+                "Total polls for " + report['symbol'] + ": " + total_polls)
 
-            # poll exchange REST endpoint for replacement bars
+            delay = 1.5  # Wait time before attmepting to re-poll after error.
+            stagger = 2  # Delay co-efficient, increment with each failed poll.
+            timeout = 10  # Number of times to repoll before exception raised.
+
+            # Poll venue API for replacement bars.
             bars_to_store = []
             for i in bins:
+                # Progress indicator.
+                if poll_count:
+                    self.logger.debug(
+                        "Poll " + str(
+                            poll_count) + " of " + total_polls + " " +
+                        str(report['symbol']) + " " + str(
+                            report['exchange'].get_name()))
                 try:
                     bars = report['exchange'].get_bars_in_period(
                         report['symbol'], i[0], len(i))
                     for bar in bars:
                         bars_to_store.append(bar)
-                    stagger = 2  # reset stagger to base after successful poll
+                    # Reset stagger to base after successful poll.
+                    stagger = 2
                     time.sleep(stagger + 1)
+
                 except Exception as e:
-                    # retry polling with an exponential delay after each error
+                    # Retry polling with an exponential delay.
+
                     for i in range(timeout):
+
                         try:
                             time.sleep(delay + 1)
                             bars = report['exchange'].get_bars_in_period(
@@ -334,45 +355,129 @@ class Datahandler:
                                 bars_to_store.append(bar)
                             stagger = 2
                             break
+
                         except Exception as e:
                             delay *= stagger
                             if i == timeout - 1:
                                 raise Exception("Polling timeout.")
+                poll_count += 1
 
-            # Sanity check, check that the retreived bars match gaps
+            # Sanity check, check that the retreived bars match gaps.
+            self.logger.debug("Verifying new data...")
             timestamps = [i['timestamp'] for i in bars_to_store]
             timestamps = sorted(timestamps)
             bars = sorted(report['gaps'])
+
             if timestamps == bars:
                 query = {"symbol": report['symbol']}
                 doc_count_before = (
                     self.db_collections[report[
                         'exchange'].get_name()].count_documents(query))
+                self.logger.debug("Storing new data...")
+
                 for bar in bars_to_store:
                     try:
                         self.db_collections[
                             report['exchange'].get_name()].insert_one(bar)
                     except pymongo.errors.DuplicateKeyError:
                         # Skip duplicates that exist in DB.
+                        self.logger.debug(
+                            "Stored duplicate bars exist. Skipping.")
                         continue
+
                 doc_count_after = (
                     self.db_collections[report[
                         'exchange'].get_name()].count_documents(query))
+
                 doc_count = doc_count_after - doc_count_before
+
                 self.logger.debug(
                     "Saved " + str(doc_count) + " missing " +
                     report['symbol'] + " bars.")
                 return True
+
             else:
+                # Dump the mismatched bars and timestamps to file if error.
+                with open("bars.json", 'w', encoding='utf-8') as f1:
+                    json.dump(bars, f, ensure_ascii=False, indent=4)
+                with open("timestamps.json", 'w', encoding='utf-8') as f2:
+                    json.dump(timestamps, f, ensure_ascii=False, indent=4)
+
                 raise Exception(
                     "Fetched bars do not match missing timestamps.")
         else:
             # Return false if there is no missing data.
+            self.logger.debug("No missing data.")
             return False
 
+    def split_oversize_bins(self, original_bins, max_bin_size):
+        """
+        Splits oversize lists into smaller lists.
+
+        Args:
+            original_bins: list of lists (timestamps in bins)
+            max_bin_size: int, maximum items per api respons (bin).
+
+        Returns:
+            bins: list of lists (timestamps in bins) containing
+            the timestamps from orignal_bins, but split into bins
+            not larger than max_bin_size.
+
+        Raises:
+            None.
+        """
+
+        bins = original_bins
+
+        # Identify oversize bins and their positions in original list.
+        to_split = []
+        indices_to_remove = []
+        for i in bins:
+            if len(i) > max_bin_size:
+                # Save the bins.
+                to_split.append(bins.index(i))
+                # Save the indices.
+                indices_to_remove.append(bins.index(i))
+
+        # Split into smaller bins.
+        split_bins = []
+        for i in to_split:
+            new_bins = [(bins[i])[x:x+max_bin_size] for x in range(
+                0, len((bins[i])), max_bin_size)]
+            split_bins.append(new_bins)
+
+        final_bins = []
+        for i in split_bins:
+            for j in i:
+                final_bins.append(j)
+
+        # Remove the oversize bins by their indices, add the smaller split bins
+        for i in indices_to_remove:
+            del bins[i]
+
+        for i in final_bins:
+            bins.append(i)
+
+        return bins
+
     def replace_null_bars(self, report):
-        """ Replace null bars in db with newly fetched ones. Null bar means
-        all OHLCV values are None or zero."""
+        """
+        Replace null bars in db with newly fetched ones. Null bar means
+        all OHLCV values are None or zero.
+
+        Args:
+            report: dict showing state and completeness of given symbols
+            stored data. Contains pertinent timestamps, periods of missing bars
+            and other relevant info.
+
+        Returns:
+            True if all null bars are successfully replaces, False if not.
+
+        Raises:
+            Polling timeout error.
+            pymongo.errors.DuplicateKeyError.
+            Timestamp mismatch error.
+        """
 
         if len(report['null_bars']) != 0:
             # sort timestamps into sequential bins (to reduce polls)
@@ -491,24 +596,53 @@ class Datahandler:
         return bins
 
     def set_live_trading(self, live_trading):
-        """Set true or false live execution flag"""
+        """
+        Set boolean live_trading flag.
 
-        self.live_trading = live_trading
+        Args:
+            live_trading: Boolean
+        Returns:
+            None.
+        Raises:
+            None.
+        """
+
+        self.set_live_trading = live_trading
 
     def get_total_instruments(self):
-        """Return total number of monitored instruments."""
+        """
+        Return total number of monitored instruments.
+
+        Args:
+            None.
+        Returns:
+            total: int, all instruments grand total.
+        Raises:
+            None.
+        """
 
         total = 0
         for exchange in self.exchanges:
             total += len(exchange.symbols)
+
         return total
 
     def get_instrument_symbols(self):
-        """Return a list containing all instrument symbols."""
+        """
+        Return a list containing all instrument symbols.
 
+        Args:
+            None.
+        Returns:
+            instruments: list of all instruments ticker codes.
+        Raises:
+            None.
+        """
         instruments = []
         for exchange in self.exchanges:
             for symbol in exchange.get_symbols():
                 instruments.append(
                     exchange.get_name() + "-" + symbol)
+
         return instruments
+
