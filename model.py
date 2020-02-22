@@ -53,5 +53,6 @@ class TrendFollowing(Model):
         "12": 100, "1d": 100, "2d": 100,
         "3d": 100, "7d": 100, "14d": 100}
 
+
     def __init__(self):
         super()

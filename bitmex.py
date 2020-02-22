@@ -224,3 +224,4 @@ class Bitmex(Exchange):
                 i['timestamp']).minute == match_dt.minute]
 
         return final_ticks
+

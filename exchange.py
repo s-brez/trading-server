@@ -24,9 +24,13 @@ class Exchange(ABC):
     def get_new_bars(self):
         """
         Args:
+            None.
+        
         Returns:
-            Exchange objects self.bars[symbol] tree (dict).
+            self.bars[symbol] tree (dict).
+        
         Raises:
+            None.
         """
 
         return self.bars
@@ -34,9 +38,13 @@ class Exchange(ABC):
     def get_max_bin_size(self):
         """
         Args:
+            None.
+        
         Returns:
             Max amount of items returned per REST poll for http api (int).
+        
         Raises:
+            None.
         """
 
         return self.MAX_BARS_PER_REQUEST
@@ -44,9 +52,13 @@ class Exchange(ABC):
     def get_symbols(self):
         """
         Args:
+            None.
+        
         Returns:
             List of all symbols ticker code strings.
+        
         Raises:
+            None.
         """
 
         return self.symbols
@@ -54,9 +66,13 @@ class Exchange(ABC):
     def get_name(self):
         """
         Args:
+            None.
+        
         Returns:
             Venue name string.
+        
         Raises:
+            None.
         """
 
         return self.name
@@ -64,9 +80,13 @@ class Exchange(ABC):
     def previous_minute(self):
         """
         Args:
+            None.
+            
         Returns:
-            The previous minute epoch timestamp (int).
+            Previous minute epoch timestamp (int).
+            
         Raises:
+            None.
         """
 
         d1 = datetime.now().second
@@ -84,12 +104,16 @@ class Exchange(ABC):
 
         return timestamp
 
-    def seconds_til_next_minute(self: int):
+    def seconds_til_next_minute(self):
         """
         Args:
+            None.
+        
         Returns:
             Number of second to next minute (int).
+
         Raises:
+            None.
         """
 
         now = datetime.datetime.utcnow().second
@@ -98,6 +122,7 @@ class Exchange(ABC):
 
     def build_OHLCV(
             self, ticks: list, symbol: str, close_as_open=True, offset=60):
+
         """
         Args:
             ticks: A list of ticks to aggregate. Assumes the list's first tick
@@ -111,10 +136,13 @@ class Exchange(ABC):
             offset: number of second to advance timestamps by. Some venues
                 timestamp their bars differently. Tradingview bars are
                 timestamped 1 minute behind bitmex, for example.
+        
         Returns:
             A 1 min OHLCV bar (dict).
+        
         Raises:
             Tick data timestamp mismatch error.
+
         """
 
         if ticks:
@@ -188,10 +216,13 @@ class Exchange(ABC):
             symbol: instrument ticker code (string)
             start_time: epoch timestamp (int)
             total: amount of bars to fetch (int)
+
         Returns:
             List of historic 1min OHLCV bars for specified period. Returns
             specified amount of 1 min bars starting from start_time.
+        
         Raises:
+            None.
         """
 
     @abstractmethod
@@ -201,9 +232,12 @@ class Exchange(ABC):
             timeframe: timeframe code (string)
             symbol: instrument ticker code (string)
             n: amount of bars
+
         Returns:
             List of n recent 1-min bars of specified timeframe and symbol.
+        
         Raises:
+            None.
         """
 
     @abstractmethod
@@ -211,8 +245,10 @@ class Exchange(ABC):
         """
         Args:
             symbol: instrument ticker code (string)
+
         Returns:
             Epoch timestamp (int) of first available (oldest) 1 min bar.
+
         Raises:
         """
 
@@ -228,14 +264,19 @@ class Exchange(ABC):
 
         Raises:
             Tick data timestamp mismatch error.
+
         """
 
     @abstractmethod
     def parse_ticks(self):
         """
         Args:
+            None.
+        
         Returns:
             Converts streamed websocket tick data into a 1-min OHLCV bars, then
             appends new bars to the exchange object self.bars[symbol] tree.
+        
         Raises:
+            None.
         """

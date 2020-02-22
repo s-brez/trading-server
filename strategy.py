@@ -218,6 +218,7 @@ class Strategy:
             Resampling error.
         """
 
+
         # Find the total number of 1min bars needed using TFM dict.
         size = self.TF_MINS[tf] * lookback
 
@@ -283,6 +284,7 @@ class Strategy:
         return resampled_df.sort_values(by="timestamp", ascending=False)
 
     def load_local_data(self, exchange):
+
         """
         Create and return a dictionary of dataframes for all symbols and
         timeframes for the given exchange.
@@ -389,6 +391,7 @@ class Strategy:
         Adds hourly timeframe codes to timeframes list if the relevant
         period has just elapsed.
         """
+
 
         if timestamp.minute == 0 and timestamp.hour % hours == 0:
             timeframes.append(f"{hours}H")

@@ -43,9 +43,11 @@ class Bitmex_WS:
         """
         Args:
             None
+
         Returns:
             Starts the websocket in a thread and connects to subscription
             channels.
+
         Raises:
             None.
         """
@@ -76,11 +78,15 @@ class Bitmex_WS:
 
     def on_message(self, ws, msg):
         """
+        Handles incoming websocket messages.
+        
         Args:
             ws: WebSocketApp object
             msg: message object
+
         Returns:
-            Handles incoming websocket messages.
+            None.
+
         Raises:
             Exception("Unknown")
         """
@@ -141,10 +147,14 @@ class Bitmex_WS:
 
     def on_open(self, ws):
         """
+        Invoked when websocket starts. Used to subscribe to channels.
+        
         Args:
             ws: WebSocketApp object
+
         Returns:
-            Invoked when websocket starts. Used to subscribe to channels.
+            None.
+
         Raises:
             None.
         """
@@ -153,12 +163,16 @@ class Bitmex_WS:
 
     def on_error(self, ws, msg):
         """
+        Invoked when websocket encounters an error. Will attempt to
+        reconnect websocket after an error.
+    
         Args:
             ws: WebSocketApp object
             msg: message object
+
         Returns:
-            Invoked when websocket encounters an error. Will attempt to
-            reconnect websocket after an error.
+            None.
+
         Raises:
             None.
         """
@@ -173,10 +187,14 @@ class Bitmex_WS:
 
     def on_close(self, ws):
         """
+        Invoked when websocket closes.
+        
         Args:
             ws: WebSocketApp object
+
         Returns:
             Invoked when websocket closes.
+
         Raises:
             None.
         """
@@ -185,10 +203,14 @@ class Bitmex_WS:
 
     def get_orderbook(self):
         """
+        Returns the L2 orderbook.
+        
         Args:
             None.
+
         Returns:
             L2 Orderbook (list).
+
         Raises:
             None.
         """
@@ -197,10 +219,14 @@ class Bitmex_WS:
 
     def get_ticks(self):
         """
+        Returns ticks for the recent minute.
+        
         Args:
             None.
+
         Returns:
             Ticks (list)
+
         Raises:
             None.
         """
@@ -209,12 +235,16 @@ class Bitmex_WS:
 
     def find_item_by_keys(self, keys, table, match_data):
         """
+        Finds an item in the data table using the provided key.
+        
         Args:
             keys: key array object
             table: data table object
             match_data: key to match
+
         Returns:
-            Finds an item in the data table by the provided key.
+            item: matched item.
+
         Raises:
             None.
         """
@@ -229,10 +259,14 @@ class Bitmex_WS:
 
     def get_channel_subscription_string(self):
         """
+        Returns websocket channel subscription string.
+        
         Args:
             None.
+
         Returns:
             Subscription payload (string) for all symbols and channels.
+
         Raises:
             None.
         """
@@ -256,6 +290,7 @@ class Bitmex_WS:
             o: item to match
         Returns:
             True if o['leavesQty'] is zero, False if > 0
+
         Raises:
             None.
         """

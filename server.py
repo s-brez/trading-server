@@ -19,17 +19,15 @@ from broker import Broker
 from bitmex import Bitmex
 from time import sleep
 import pymongo
-import time
 import logging
+import time
 import queue
-import datetime
 
 
 class Server:
     """
     Server routes system events amongst worker components via a queue in
     an event handling loop. The queue is processed at the start of each minute.
-
     Event loop lifecycle:
         1. A new minute begins - Tick data is parsed into 1 min bars.
         2. Datahander wraps new bars and other data in Market Events.
@@ -44,6 +42,8 @@ class Server:
        11. Strategy prepares data for the next minutes calculuations.
        12. Sleep until current minute elapses."""
 
+    VERSION = "0.1"
+
     DB_URL = 'mongodb://127.0.0.1:27017/'
     DB_NAME = 'asset_price_master'
     DB_TIMEOUT_MS = 10
@@ -55,6 +55,7 @@ class Server:
 
         # Set False for backtesting
         self.live_trading = True
+
         self.log_level = logging.DEBUG
         self.logger = self.setup_logger()
 
@@ -92,10 +93,24 @@ class Server:
         self.data.set_live_trading(self.live_trading)
         self.broker.set_live_trading(self.live_trading)
 
-        # Check data is current, repair if necessary before live trading.
-        # No need to do so if backtesting, just use existing stored data.
-        if self.live_trading:
-            self.data.run_data_diagnostics(1)
+        # Check data is current and complete
+        print("Updating price database...")
+        self.data.run_data_diagnostics(1)
+
+        # Build working datasets
+        print("Building working datasets...")
+        self.strategy.init_dataframes()
+        self.logger.debug("Initialised datasets.")
+
+        # Start UI
+        self.shell = Shell(
+            self.VERSION,
+            self.logger,
+            self.data,
+            self.exchanges,
+            self.strategy,
+            self.portfolio,
+            self.broker)
 
         count = 0
 
@@ -195,11 +210,11 @@ class Server:
 
         logger = logging.getLogger()
         logger.setLevel(self.log_level)
-        ch = logging.StreamHandler()
+        log_file = logging.FileHandler('log.log', 'w+')
         formatter = logging.Formatter(
             "%(asctime)s:%(levelname)s:%(module)s - %(message)s")
-        ch.setFormatter(formatter)
-        logger.addHandler(ch)
+        log_file.setFormatter(formatter)
+        logger.addHandler(log_file)
 
         # Supress requests/urlib3/connectionpool messages as
         # logging.DEBUG produces messages with each https request.

@@ -27,6 +27,8 @@ class MarketEvent(Event):
 
     DTFMT = '%Y-%m-%d %H:%M'
 
+    DTFMT = '%Y-%m-%d %H:%M'
+
     def __init__(self, exchange, bar):
         self.type = 'MARKET'
         self.exchange = exchange

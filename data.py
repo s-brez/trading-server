@@ -11,7 +11,10 @@ Some rights reserved. See LICENSE.md, AUTHORS.md.
 
 from event import MarketEvent
 from itertools import groupby, count
+
 from pymongo import MongoClient, errors
+from itertools import groupby, count
+from event import MarketEvent
 import pymongo
 import queue
 import time
@@ -89,7 +92,7 @@ class Datahandler:
         self.logger.debug(
             "Parsed " + str(self.total_instruments) +
             " instruments' ticks in " + str(duration) + " seconds.")
-        self.track_performance(duration)
+        self.track_tick_processing_performance(duration)
 
         # Wrap new 1 min bars in market events.
         new_market_events = []
@@ -125,6 +128,7 @@ class Datahandler:
 
         # TODO: Needs completing.
 
+
         return historic_market_events
 
     def run_data_diagnostics(self, output):
@@ -152,6 +156,7 @@ class Datahandler:
 
         # Resolve discrepancies in stored data.
         self.logger.debug("Resolving missing data.")
+
         for report in reports:
             time.sleep(0.5)
             self.backfill_gaps(report)
@@ -215,7 +220,6 @@ class Datahandler:
         Raises:
             None.
         """
-
         current_ts = exchange.previous_minute()
         max_bin_size = exchange.get_max_bin_size()
         result = self.db_collections[exchange.get_name()].find(
@@ -276,8 +280,7 @@ class Datahandler:
             "total_stored": total_stored,
             "total_needed": len(required),
             "gaps": list(gaps),
-            "null_bars": null_bars
-        }
+            "null_bars": null_bars}
 
     def backfill_gaps(self, report):
         """
@@ -320,7 +323,7 @@ class Datahandler:
             stagger = 2  # Delay co-efficient, increment with each failed poll.
             timeout = 10  # Number of times to repoll before exception raised.
 
-            # Poll vanue API for replacement bars.
+            # Poll venue API for replacement bars.
             bars_to_store = []
             for i in bins:
                 # Progress indicator.
@@ -341,6 +344,7 @@ class Datahandler:
 
                 except Exception as e:
                     # Retry polling with an exponential delay.
+
                     for i in range(timeout):
 
                         try:
@@ -482,10 +486,12 @@ class Datahandler:
                     sorted(report['null_bars']),
                     key=lambda n, c=count(0, 60): n - next(c))]
 
+            delay = 1  # wait time before attmepting to re-poll after error
+            stagger = 2  # delay co-efficient
+            timeout = 10  # number of times to repoll before exception raised.
+
             # poll exchange REST endpoint for missing bars
             bars_to_store = []
-            delay = 2  # wait time before attmepting to re-poll after error
-            timeout = 10
             for i in bins:
                 try:
                     bars = report['exchange'].get_bars_in_period(
@@ -544,8 +550,50 @@ class Datahandler:
             else:
                 raise Exception(
                     "Fetched bars do not match missing timestamps.")
+                self.logger.debug(
+                    "Bars length: " + str(len(bars)) +
+                    " Timestamps length: " + str(len(timestamps)))
         else:
             return False
+
+    def split_oversize_bins(self, original_bins, max_bin_size):
+        """Given a list of lists (timestamp bins), if any top-level
+        element length > max_bin_size, split that element into
+        lists of max_bin_size, remove original element, replace with
+        new smaller elements, then return the new modified list."""
+
+        bins = original_bins
+
+        # Identify oversize bins and their positions in original list.
+        to_split = []
+        indices_to_remove = []
+        for i in bins:
+            if len(i) > max_bin_size:
+                # Save the bins.
+                to_split.append(bins.index(i))
+                # Save the indices.
+                indices_to_remove.append(bins.index(i))
+
+        # split into smaller bins
+        split_bins = []
+        for i in to_split:
+            new_bins = [(bins[i])[x:x+max_bin_size] for x in range(
+                0, len((bins[i])), max_bin_size)]
+            split_bins.append(new_bins)
+
+        final_bins = []
+        for i in split_bins:
+            for j in i:
+                final_bins.append(j)
+
+        # Remove the oversize bins by their indices, add the smaller split bins
+        for i in indices_to_remove:
+            del bins[i]
+
+        for i in final_bins:
+            bins.append(i)
+
+        return bins
 
     def set_live_trading(self, live_trading):
         """
@@ -590,7 +638,6 @@ class Datahandler:
         Raises:
             None.
         """
-
         instruments = []
         for exchange in self.exchanges:
             for symbol in exchange.get_symbols():
@@ -598,3 +645,4 @@ class Datahandler:
                     exchange.get_name() + "-" + symbol)
 
         return instruments
+
