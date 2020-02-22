@@ -103,19 +103,17 @@ class Server:
         sleep(self.seconds_til_next_minute())
 
         while True:
-
             if self.live_trading:
 
                 # Only update data after at least one minute of new data
-                # has been collected, datahandler and strategy ready.
+                # has been collected, plus datahandler and strategy ready.
                 if count >= 1 and self.data.ready:
                     self.start_processing = time.time()
 
                     # Parse and queue market data (new Market Events).
                     self.events = self.data.update_market_data(self.events)
 
-                    # Data is ready, route events to worker classes.
-                    self.logger.debug("clear_event_queue() called.")
+                    # Market data is ready, route events to worker classes.
                     self.clear_event_queue()
 
                     # Run diagnostics at 4 and 8 mins to be very sure missed
@@ -125,7 +123,7 @@ class Server:
                             target=lambda: self.data.run_data_diagnostics(0))
                         thread.daemon = True
                         thread.start()
-                        self.logger.debug("Started preliminary diagnostics.")
+                        self.logger.debug("Started data diagnostics.")
 
                     # Check data integrity periodically thereafter.
                     if (count % self.DIAG_DELAY == 0):
@@ -138,8 +136,8 @@ class Server:
                 sleep(self.seconds_til_next_minute())
                 count += 1
 
+            # Update data w/o delay when backtesting, no diagnostics.
             elif not self.live_trading:
-                # Update data w/o delay when backtesting, no diagnostics.
                 self.events = self.data.update_market_data(self.events)
                 self.clear_event_queue()
 
@@ -154,7 +152,6 @@ class Server:
 
             try:
                 # Get events from queue
-                self.logger.debug("About to get events from queue.")
                 event = self.events.get(False)
 
             except queue.Empty:
