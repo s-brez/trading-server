@@ -1,3 +1,14 @@
+"""
+trading-server is a multi-asset, multi-strategy, event-driven execution
+and backtesting platform (OEMS) for trading common markets.
+
+Copyright (C) 2020  Sam Breznikar <sam@sdbgroup.io>
+
+Licensed under GNU General Public License 3.0 or later.
+
+Some rights reserved. See LICENSE.md, AUTHORS.md.
+"""
+
 from datetime import date, datetime, timedelta
 from model import TrendFollowing
 from dateutil import parser
@@ -7,9 +18,11 @@ import time
 
 
 class Strategy:
-    """ Master control layer for all individual strategy models. Consumes
+    """
+    Ccontrol layer for all individual strategy models. Consumes
     market events from the event queue, updates strategy models with new data
-    and generating Signal events."""
+    and generating Signal events.
+    """
 
     ALL_TIMEFRAMES = [
         "1Min", "3Min", "5Min", "15Min", "30Min", "1H", "2H", "3H", "4H",
@@ -40,11 +53,22 @@ class Strategy:
             i.get_name(): db[i.get_name()] for i in self.exchanges}
         self.models = self.load_models(self.logger)
 
-        # DataFrame container: data[exchange][symbol][timeframe]
+        # DataFrame container: data[exchange][symbol][timeframe].
         self.data = {}
 
     def parse_new_data(self, event):
-        """ Process incoming market data, update all models with new data."""
+        """
+        Process incoming market data, update all models with new data.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+
+        Raises:
+            None.
+        """
 
         timeframes = self.get_relevant_timeframes(event.get_bar()['timestamp'])
 
@@ -59,7 +83,19 @@ class Strategy:
         self.run_models(event, timeframes)
 
     def update_dataframes(self, event, timeframes):
-        """ Update dataframes for the given event and list of timeframes."""
+        """
+        Update dataframes for the given event and list of timeframes.
+
+        Args:
+            event: new market event.
+            timeframes: list of relevant timeframes to the just-elapsed period.
+
+        Returns:
+            None.
+
+        Raises:
+            None.
+        """
 
         sym = event.get_bar()['symbol']
         bar = self.remove_element(event.get_bar(), "symbol")
@@ -89,12 +125,35 @@ class Strategy:
             self.logger.debug(event)
 
     def run_models(self, event, timeframes):
-        """ Run strategy models according to the just-elpased period."""
+        """
+        Run strategy models according to the just-elpased period.
+
+        Args:
+            event: new market event.
+            timeframes: list of relevant timeframes to the just-elapsed period.
+
+        Returns:
+            None.
+
+        Raises:
+            None.
+        """
 
         pass
 
     def load_models(self, logger):
-        """ Create and return a list of trade strategy models."""
+        """
+        Create and return a list of trade strategy models.
+
+        Args:
+            logger: logger object.
+
+        Returns:
+            models: list of models.
+
+        Raises:
+            None.
+        """
 
         models = []
         models.append(TrendFollowing())
@@ -102,7 +161,18 @@ class Strategy:
         return models
 
     def init_dataframes(self):
-        """ Create working datasets (self.data dict)"""
+        """
+        Create working datasets (self.data dict).
+
+        Args:
+            None.
+
+        Returns:
+            None.
+
+        Raises:
+            None.
+        """
 
         self.logger.debug("Started building DataFrames.")
 
@@ -121,8 +191,9 @@ class Strategy:
             " timeframe datasets in " + str(duration) + " seconds.")
 
     def build_dataframe(self, exc, sym, tf, current_bar=None, lookback=150):
-        """ Return a dataframe of size lookback for the given symbol (sym),
-        exchange (exc) and timeframe (tf). If "curent_bar" param is passed in,
+        """
+        Return a dataframe of size lookback for the given symbol,
+        exchange and timeframe. If "curent_bar" param is passed in,
         construct the dataframe using current_bar as first row of dataframe.
 
         E.g 1 (no current_bar) for a dataframe with tf = 4h, lookback = 50, we
@@ -131,15 +202,29 @@ class Strategy:
 
         E.g 2 (with current_bar) for dataframe with tf = 4h, lookback = 50, we
         need to fetch and resample 4*60*50 - 1 1 min bars (11999 bars) into 50
-        4h bars, using current_bar as the first bar (total 12000 bars)."""
+        4h bars, using current_bar as the first bar (total 12000 bars).
+
+        Args:
+            exc: exchange name (string).
+            symb: instrument ticker code (string)
+            tf: timeframe code (string).
+            current_bar: bar to insert first, if using
+            lookback: number of final bars required for the model to use.
+
+        Returns:
+            dataframe: dataframe containing resampled price data.
+
+        Raises:
+            Resampling error.
+        """
 
         # Find the total number of 1min bars needed using TFM dict.
         size = self.TF_MINS[tf] * lookback
 
-        # Create Dataframe using current_bar and stored bars
+        # Create Dataframe using current_bar and stored bars.
         if current_bar:
 
-            # reduce size to account for current_bar
+            # Reduce size to account for current_bar.
             size = size - 1
 
             # Use a projection to remove mongo "_id" field and symbol.
@@ -148,24 +233,26 @@ class Strategy:
                     "_id": 0, "symbol": 0}).limit(
                         size).sort([("timestamp", -1)])
 
-            # add current_bar and DB results to a list
+            # Add current_bar and DB results to a list.
             rows = [current_bar]
             for doc in result:
                 rows.append(doc)
 
-            # pass list to dataframe constructor
+            # Pass list to dataframe constructor.
             df = pd.DataFrame(rows)
 
-            # Format time column
+            # Format time column.
             df['timestamp'] = df['timestamp'].apply(
                 lambda x: datetime.utcfromtimestamp(x))
 
-            # Set index
+            # Set index.
             df.set_index("timestamp", inplace=True)
 
-            # append stored bars to dataframe
+            # TODO
+            # Append stored bars to dataframe.
 
-            # format dataframe
+            # TODO
+            # Format dataframe.
 
         # Create Dataframe using only stored bars
         if not current_bar:
@@ -176,14 +263,14 @@ class Strategy:
                     "_id": 0, "symbol": 0}).limit(
                         size).sort([("timestamp", -1)])
 
-            # Pass cursor to DataFrame constructor
+            # Pass cursor to DataFrame constructor.
             df = pd.DataFrame(result)
 
-            # Format time column
+            # Format time column.
             df['timestamp'] = df['timestamp'].apply(
                 lambda x: datetime.utcfromtimestamp(x))
 
-            # Set index
+            # Set index.
             df.set_index("timestamp", inplace=True)
 
         # Downsample 1 min data to target timeframe
@@ -196,10 +283,22 @@ class Strategy:
         return resampled_df.sort_values(by="timestamp", ascending=False)
 
     def load_local_data(self, exchange):
-        """ Create and return a dictionary of dataframes for all symbols and
-        timeframes for the given exchange."""
+        """
+        Create and return a dictionary of dataframes for all symbols and
+        timeframes for the given exchange.
 
-        # return dataframes with data
+        Args:
+            exchange: exchange object.
+
+        Returns:
+            dicts: tree containing a dataframe for all symbols and
+            timeframes for the given exchange.
+
+        Raises:
+            None.
+        """
+
+        # Return dataframes with data.
         # dicts = {}
         # for symbol in exchange.get_symbols():
         #     dicts[symbol] = {
@@ -207,29 +306,55 @@ class Strategy:
         #             exchange, symbol, tf) for tf in self.ALL_TIMEFRAMES}
         # return dicts
 
-        # return empty dataframes
+        # Return empty dataframes.
         dicts = {}
         for symbol in exchange.get_symbols():
             dicts[symbol] = {
-                tf: pd.DataFrame() for tf in self.ALL_TIMEFRAMES}
+                tf: pd.DataFrame() for tf in self.ALL_TIMEFRAMES}\
+
         return dicts
 
     def remove_element(self, dictionary, element):
-        """ Return a shallow copy of dictionary less the given element."""
+        """
+        Return a shallow copy of dictionary less the given element.
+
+        Args:
+            dictionary: dictionary to be copied.
+            element: element to be removed.
+
+        Returns:
+            new_dic
+
+        Raises:
+
+        """
 
         new_dict = dict(dictionary)
         del new_dict[element]
+
         return new_dict
 
     def get_relevant_timeframes(self, time):
-        """ Return a list of timeframes relevant to the just-elapsed period.
+        """
+        Return a list of timeframes relevant to the just-elapsed period.
         E.g if time has just struck UTC 10:30am the list will contain "1m",
         "3m", "5m", "m15" and "30m" strings. The first minute of a new day or
         week will add daily/weekly/monthly timeframe strings. Timeframes in
         use are 1, 3, 5, 15 and 30 mins, 1, 2, 3, 4, 6, 8 and 12 hours, 1, 2
-        and 3 days, weekly and monthly."""
+        and 3 days, weekly and monthly.
 
-        # check against the previous minute - the just-elapsed period.
+        Args:
+            time: datetime object
+
+        Returns:
+            timeframes: list containing relevant timeframe string codes.
+
+        Raises:
+            None.
+
+        """
+
+        # Check against the previous minute - the just-elapsed period.
         if type(time) is not datetime:
             time = datetime.utcfromtimestamp(time)
 
@@ -250,23 +375,29 @@ class Strategy:
         return timeframes
 
     def minute_timeframe(self, minutes, timestamp, timeframes):
-        """ Adds minute timeframe codes to timeframes list if the relevant
-        period has just elapsed."""
+        """
+        Adds minute timeframe codes to timeframes list if the relevant
+        period has just elapsed.
+        """
 
         for i in range(0, 60, minutes):
             if timestamp.minute == i:
                 timeframes.append(f"{minutes}Min")
 
     def hour_timeframe(self, hours, timestamp, timeframes):
-        """ Adds hourly timeframe codes to timeframes list if the relevant
-        period has just elapsed."""
+        """
+        Adds hourly timeframe codes to timeframes list if the relevant
+        period has just elapsed.
+        """
 
         if timestamp.minute == 0 and timestamp.hour % hours == 0:
             timeframes.append(f"{hours}H")
 
     def day_timeframe(self, days, timestamp, timeframes):
-        """ Adds daily timeframe codes to timeframes list if the relevant
-        period has just elapsed."""
+        """
+        Adds daily timeframe codes to timeframes list if the relevant
+        period has just elapsed.
+        """
 
         if (timestamp.minute == 0 and timestamp.hour == 0 and
                 timestamp.day % days == 0):
