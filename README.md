@@ -1,9 +1,20 @@
 # trading-server
 An event-driven execution and backtesting platform for trading common markets.
 
-## Venue support
+## Planned Features
+Trade crypto, FX, traditional markets etc at any API-accessible venue.
+Event-driven backtesting
+Execution simulation
+Live execution
+Dynamic risk management
+Discrete feature library
+Strategy sandbox
+Browser frontend
+Account multicasting
+Order-splitting across venues
+Back office: accounting and compliance
 
-Planned order of implementation: 
+## Venue support
 
 Exchange |  Status   | Asset classes
 ---------|-----------|------------
@@ -38,7 +49,7 @@ Strategy model implementations are not included. A template model class is inclu
 Custom model implementations or any other enquiries: sam@sdbgroup.io 
 
 ## Acknowledgements
-Born from the designs described at QuantStart.com (QSTrader), and the writings of E. Chan and M. Lopez de Prado. Thanks all.
+Based on architecture described at QuantStart.com (QSTrader), and the writings of E. Chan and M. Lopez de Prado. Thanks all.
 
 ## License
 GNU GPLv3
