@@ -43,6 +43,13 @@ class Datahandler:
         self.total_instruments = self.get_total_instruments()
         self.bars_save_to_db = queue.Queue(0)
 
+        # Data processing performance tracking variables.
+        self.parse_count = 0
+        self.total_parse_time = 0
+        self.mean_parse_time = 0
+        self.std_dev_parse_time = 0
+        self.var_parse_time = 0
+
     def update_market_data(self, events):
         """
         Pushes new market events to the event queue.
@@ -57,6 +64,7 @@ class Datahandler:
 
         if self.live_trading:
             market_data = self.get_new_data()
+
         else:
             market_data = self.get_historic_data()
 
@@ -128,14 +136,30 @@ class Datahandler:
 
         # TODO: Needs completing.
 
-
         return historic_market_events
+
+    def track_tick_processing_performance(self, duration):
+        """
+        Track tick processing time statistics.
+
+        Args:
+            duration: (float) seconds taken to process events.
+
+        Returns:
+            None.
+
+        Raises:
+            None.
+        """
+
+        self.parse_count += 1
+        self.total_parse_time += duration
+        self.mean_parse_time = self.total_parse_time / self.parse_count
 
     def run_data_diagnostics(self, output):
         """
         Check each symbol's stored data for completeness, repair/replace
         missing data as needed. Once complete, set ready flag to True.
-        Output parameter set true to print report.
 
         Args:
             output: if True, print verbose report. If false, do not print.
@@ -316,8 +340,6 @@ class Datahandler:
             bins = self.split_oversize_bins(bins, report['max_bin_size'])
 
             total_polls = str(len(bins))
-            self.logger.debug(
-                "Total polls for " + report['symbol'] + ": " + total_polls)
 
             delay = 1.5  # Wait time before attmepting to re-poll after error.
             stagger = 2  # Delay co-efficient, increment with each failed poll.
@@ -594,20 +616,6 @@ class Datahandler:
             bins.append(i)
 
         return bins
-
-    def set_live_trading(self, live_trading):
-        """
-        Set boolean live_trading flag.
-
-        Args:
-            live_trading: Boolean
-        Returns:
-            None.
-        Raises:
-            None.
-        """
-
-        self.set_live_trading = live_trading
 
     def get_total_instruments(self):
         """

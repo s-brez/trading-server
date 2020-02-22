@@ -19,17 +19,4 @@ class Broker:
     def __init__(self, exchanges, logger):
         self.exchanges = exchanges
         self.logger = logger
-
-    def set_live_trading(self, live_trading):
-        """
-        Set boolean live_trading flag.
-
-        Args:
-            live_trading: Boolean
-        Returns:
-            None.
-        Raises:
-            None.
-        """
-
-        self.set_live_trading = live_trading
+        self.live_trading = False
