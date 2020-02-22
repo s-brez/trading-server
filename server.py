@@ -55,6 +55,7 @@ class Server:
 
         # Set False for backtesting
         self.live_trading = True
+
         self.log_level = logging.DEBUG
         self.logger = self.setup_logger()
 
@@ -89,8 +90,8 @@ class Server:
         Core event handling loop.
         """
 
-        self.data.set_live_trading(self.live_trading)
-        self.broker.set_live_trading(self.live_trading)
+        self.data.live_trading = self.live_trading
+        self.broker.live_trading = self.live_trading
 
         # Check data is current, repair if necessary before live trading.
         # No need to do so if backtesting, just use existing stored data.
@@ -114,11 +115,12 @@ class Server:
                     self.events = self.data.update_market_data(self.events)
 
                     # Data is ready, route events to worker classes.
+                    self.logger.debug("clear_event_queue() called.")
                     self.clear_event_queue()
 
-                    # Run diagnostics at 4 and 9 mins in to be sure any missed
-                    # bars are addressed.
-                    if (count == 4 or count == 9):
+                    # Run diagnostics at 4 and 8 mins to be very sure missed
+                    # bars are addressed before ongoing system operation.
+                    if (count == 4 or count == 8):
                         thread = Thread(
                             target=lambda: self.data.run_data_diagnostics(0))
                         thread.daemon = True
@@ -149,9 +151,12 @@ class Server:
         count = 0
 
         while True:
+
             try:
                 # Get events from queue
+                self.logger.debug("About to get events from queue.")
                 event = self.events.get(False)
+
             except queue.Empty:
                 # Log processing performance stats
                 self.end_processing = time.time()
@@ -227,6 +232,7 @@ class Server:
         exchanges = []
         exchanges.append(Bitmex(logger))
         self.logger.debug("Initialised exchanges.")
+
         return exchanges
 
     def seconds_til_next_minute(self: int):
