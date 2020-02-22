@@ -1,3 +1,14 @@
+"""
+trading-server is a multi-asset, multi-strategy, event-driven execution
+and backtesting platform (OEMS) for trading common markets.
+
+Copyright (C) 2020  Sam Breznikar <sam@sdbgroup.io>
+
+Licensed under GNU General Public License 3.0 or later.
+
+Some rights reserved. See LICENSE.md, AUTHORS.md.
+"""
+
 from pymongo import MongoClient, errors
 from multiprocessing import Process
 from portfolio import Portfolio
@@ -15,7 +26,8 @@ import datetime
 
 
 class Server:
-    """ Server routes system events amongst worker components via a queue in
+    """
+    Server routes system events amongst worker components via a queue in
     an event handling loop. The queue is processed at the start of each minute.
 
     Event loop lifecycle:
@@ -35,25 +47,29 @@ class Server:
     DB_URL = 'mongodb://127.0.0.1:27017/'
     DB_NAME = 'asset_price_master'
     DB_TIMEOUT_MS = 10
-    DIAG_DELAY = 45  # mins between diagnostics
+
+    # Mins between recurring data diagnostics.
+    DIAG_DELAY = 45
 
     def __init__(self):
-        self.live_trading = True   # set False for backtesting
+
+        # Set False for backtesting
+        self.live_trading = True
         self.log_level = logging.DEBUG
         self.logger = self.setup_logger()
 
-        # Don't connect to live data feeds if backtesting
+        # Don't connect to live data feeds if backtesting.
         if self.live_trading:
             self.exchanges = self.load_exchanges(self.logger)
 
-        # Connect to database
+        # Database.
         self.db_client = MongoClient(
             self.DB_URL,
             serverSelectionTimeoutMS=self.DB_TIMEOUT_MS)
         self.db = self.db_client[self.DB_NAME]
         self.check_db_connection()
 
-        # Event queue and producer/consumer worker classes
+        # Event queue and producer/consumer worker classes.
         self.events = queue.Queue(0)
         self.data = Datahandler(
             self.exchanges, self.logger, self.db, self.db_client)
@@ -62,14 +78,16 @@ class Server:
         self.portfolio = Portfolio(self.logger)
         self.broker = Broker(self.exchanges, self.logger)
 
-        # processing performance variables
+        # Processing performance variables.
         self.start_processing = None
         self.end_processing = None
 
         self.run()
 
     def run(self):
-        """ Core event handling loop."""
+        """
+        Core event handling loop.
+        """
 
         self.data.set_live_trading(self.live_trading)
         self.broker.set_live_trading(self.live_trading)
@@ -84,45 +102,49 @@ class Server:
         sleep(self.seconds_til_next_minute())
 
         while True:
+
             if self.live_trading:
+
                 # Only update data after at least one minute of new data
                 # has been collected, datahandler and strategy ready.
                 if count >= 1 and self.data.ready:
                     self.start_processing = time.time()
-                    self.logger.debug("Started processing events.")
 
-                    # Parse and queue market data (new Market Events)
+                    # Parse and queue market data (new Market Events).
                     self.events = self.data.update_market_data(self.events)
 
-                    # Data is ready, route events to worker classes
+                    # Data is ready, route events to worker classes.
                     self.clear_event_queue()
 
-                    # run diagnostics at 2 min mark to fix early missedd bars
-                    if (count == 3):
+                    # Run diagnostics at 4 and 9 mins in to be sure any missed
+                    # bars are addressed.
+                    if (count == 4 or count == 9):
                         thread = Thread(
                             target=lambda: self.data.run_data_diagnostics(0))
                         thread.daemon = True
                         thread.start()
-                        self.logger.debug("Started 3-min diagnostics.")
+                        self.logger.debug("Started preliminary diagnostics.")
 
-                    # Check data integrity periodically thereafter
-                    # if (count % self.DIAG_DELAY == 0):
-                    #     thread = Thread(
-                    #         target=self.data.run_data_diagnostics(0))
-                    #     thread.daemon = True
-                    #     thread.start()
+                    # Check data integrity periodically thereafter.
+                    if (count % self.DIAG_DELAY == 0):
+                        thread = Thread(
+                            target=self.data.run_data_diagnostics(0))
+                        thread.daemon = True
+                        thread.start()
 
-                # Sleep til the next minute begins
+                # Sleep til the next minute begins.
                 sleep(self.seconds_til_next_minute())
                 count += 1
 
             elif not self.live_trading:
-                # Update data w/o delay when backtesting, don't run diagnostics
+                # Update data w/o delay when backtesting, no diagnostics.
                 self.events = self.data.update_market_data(self.events)
                 self.clear_event_queue()
 
     def clear_event_queue(self):
-        """ Routes events to worker classes for processing."""
+        """
+        Routes events to worker classes for processing.
+        """
 
         count = 0
 
@@ -158,7 +180,18 @@ class Server:
                 self.events.task_done()
 
     def setup_logger(self):
-        """ Create and configure logger"""
+        """
+        Create and configure logger.
+
+        Args:
+            None.
+
+        Returns:
+            logger: configured logger object.
+
+        Raises:
+            None.
+        """
 
         logger = logging.getLogger()
         logger.setLevel(self.log_level)
@@ -168,8 +201,8 @@ class Server:
         ch.setFormatter(formatter)
         logger.addHandler(ch)
 
-        # supress requests/urlib3/connectionpool messages
-        # logging.DEBUG produces messages with each https request...
+        # Supress requests/urlib3/connectionpool messages as
+        # logging.DEBUG produces messages with each https request.
         logging.getLogger("urllib3").propagate = False
         requests_log = logging.getLogger("requests")
         requests_log.addHandler(logging.NullHandler())
@@ -178,22 +211,53 @@ class Server:
         return logger
 
     def load_exchanges(self, logger):
-        """ Create and return list of all exchange objects"""
+        """
+        Create and return list of all exchange object.
+
+        Args:
+            None.
+
+        Returns:
+            exchanges: list of exchange objects.
+
+        Raises:
+            None.
+        """
 
         exchanges = []
         exchanges.append(Bitmex(logger))
         self.logger.debug("Initialised exchanges.")
         return exchanges
 
-    def seconds_til_next_minute(self):
-        """ Return number of seconds to next minute."""
+    def seconds_til_next_minute(self: int):
+        """
+        Args:
+            None.
+
+        Returns:
+            Number of second to next minute (int).
+
+        Raises:
+            None.
+        """
 
         now = datetime.datetime.utcnow().second
         delay = 60 - now
         return delay
 
     def check_db_connection(self):
-        """ Raise exception if DB connection not active."""
+        """
+        Raise exception if DB connection not active.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+
+        Raises:
+            Database connection failure error.
+        """
 
         try:
             time.sleep(self.DB_TIMEOUT_MS)
