@@ -3,16 +3,26 @@ An event-driven execution and backtesting platform for trading common markets.
 
 ## Planned Features
 Trade crypto, FX, traditional markets etc at any API-accessible venue.
-Event-driven backtesting
-Execution simulation
-Live execution
-Dynamic risk management
-Discrete feature library
-Strategy sandbox
-Browser frontend
-Account multicasting
-Order-splitting across venues
-Back office: accounting and compliance
+
+Event-driven backtesting.
+
+Execution simulation (paper trading).
+
+Live execution.
+
+Dynamic risk management.
+
+Discrete feature library.
+
+Strategy sandbox.
+
+Browser frontend.
+
+Account multicasting.
+
+Order-splitting across venues.
+
+Back office: accounting and compliance reports.
 
 ## Venue support
 
