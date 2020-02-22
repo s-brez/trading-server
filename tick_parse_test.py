@@ -96,7 +96,8 @@ def previous_minute():
 def build_OHLCV(ticks: list, symbol: str, close_as_open=True):
     """
     Args:
-        ticks: List of ticks to be converted to 1-min bar.
+        ticks: A list of ticks to aggregate. Assumes the list's first tick
+               is from the previous minute, this tick is used for open price.
         symbol: Ticker code.
         close_as_open: If true, the first tick in arg "ticks" must be the final
             tick from the previous minute, to be used for bar open price,
@@ -175,66 +176,49 @@ def build_OHLCV(ticks: list, symbol: str, close_as_open=True):
                'volume': 0}
         return bar
 
+    def parse_ticks():
+        if not ws.ws:
+            logger.debug("BitMEX websocket disconnected.")
+        else:
+            all_ticks = ws.get_ticks()
+            target_minute = datetime.now().minute - 1
+            ticks_target_minute = []
+            tcount = 0
 
-def parse_ticks():
-    if not ws.ws:
-        logger.debug("BitMEX websocket disconnected.")
-    else:
-        all_ticks = ws.get_ticks()
-        target_minute = datetime.now().minute - 1
-        ticks_target_minute = []
-        tcount = 0
+            # search from end of tick list to grab newest ticks first
+            for i in reversed(all_ticks):
+                try:
+                    ts = i['timestamp']
+                    if type(ts) is not datetime:
+                        ts = parser.parse(ts)
+                except Exception:
+                    logger.debug(traceback.format_exc())
+                # scrape prev minutes ticks
+                if ts.minute == target_minute:
+                    ticks_target_minute.append(i)
+                    ticks_target_minute[tcount]['timestamp'] = ts
+                    tcount += 1
+                # store the previous-to-target bar's last
+                # traded price to use as the open price for target bar
+                if ts.minute == target_minute - 1:
+                    ticks_target_minute.append(i)
+                    ticks_target_minute[tcount]['timestamp'] = ts
+                    break
 
-        # search from end of tick list to grab newest ticks first
-        for i in reversed(all_ticks):
-            try:
-                ts = i['timestamp']
-                if type(ts) is not datetime:
-                    ts = parser.parse(ts)
-            except Exception:
-                logger.debug(traceback.format_exc())
-            # scrape prev minutes ticks
-            if ts.minute == target_minute:
-                ticks_target_minute.append(i)
-                ticks_target_minute[tcount]['timestamp'] = ts
-                tcount += 1
-            # store the previous-to-target bar's last
-            # traded price to use as the open price for target bar
-            if ts.minute == target_minute - 1:
-                ticks_target_minute.append(i)
-                ticks_target_minute[tcount]['timestamp'] = ts
-                break
+            ticks_target_minute.reverse()
 
-        ticks_target_minute.reverse()
+            # group ticks by symbol
+            ticks = {i: [] for i in symbols}
+            for tick in ticks_target_minute:
+                ticks[tick['symbol']].append(tick)
 
-        # debug only
-        # print("Ticks to parse:")
-        # for tick in ticks_target_minute:
-        #     if tick['symbol'] == "ETHUSD":
-        #         print(
-        #             tick['timestamp'], tick['side'],
-        #             tick['size'], tick['price'])
+            # build bars from ticks
+            bars = {i: [] for i in symbols}
+            for symbol in symbols:
+                bar = build_OHLCV(ticks[symbol], symbol)
+                bars[symbol].append(bar)
 
-        # group ticks by symbol
-        ticks = {i: [] for i in symbols}
-        for tick in ticks_target_minute:
-            ticks[tick['symbol']].append(tick)
-
-        # build bars from ticks
-        bars = {i: [] for i in symbols}
-        for symbol in symbols:
-            bar = build_OHLCV(ticks[symbol], symbol)
-            bars[symbol].append(bar)
-
-            # debug only
-            # if symbol == "XBTUSD":
-            #     print("Final ticks before build_OHLCV() called:")
-            #     for tick in ticks[symbol]:
-            #         print(
-            #             tick['timestamp'], tick['side'],
-            #             tick['size'], tick['price'])
-
-        return bars, ticks
+            return bars, ticks
 
 
 def get_recent_ticks(symbol, n=1):
