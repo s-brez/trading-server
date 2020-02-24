@@ -216,8 +216,8 @@ class Datahandler:
                     count += 1
                     # store bar in relevant db collection
                     try:
-                        self.db_collections[bar.exchange].insert_one(
-                            bar.get_bar())
+                        self.db_collections[
+                            bar.exchange.get_name()].insert_one(bar.get_bar())
 
                     # Skip duplicates if they exist.
                     except pymongo.errors.DuplicateKeyError:
