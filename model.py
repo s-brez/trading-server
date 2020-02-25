@@ -11,6 +11,7 @@ Some rights reserved. See LICENSE.md, AUTHORS.md.
 
 from abc import ABC, abstractmethod
 from features import Features as f
+import re
 
 
 class Model(ABC):
@@ -26,7 +27,7 @@ class Model(ABC):
         Return list of operating timeframes.
         """
 
-        return self.timeframes
+        return self.operating_timeframes
 
     def lookback(self, timeframe: str):
         """
@@ -41,7 +42,21 @@ class Model(ABC):
         Return dict of features in use by the model.
         """
 
-        return self.timeframes
+        return self.features
+
+    def get_name(self):
+        """
+        Return model name.
+        """
+
+        return self.name
+
+    def get_instruments(self):
+        """
+        Return dict of instrument amd venues the model is applicable to.
+        """
+
+        return self.instruments
 
     @abstractmethod
     def required_timeframes(self, timeframes):
@@ -64,7 +79,7 @@ class Model(ABC):
 
 class TrendFollowing(Model):
     """
-    Core trend-following long-short model based on EMA's and MACD.
+    Long-short trend-following model based on EMA's and MACD.
 
     Rules:
         1: Price must be trending on trigger timeframe.
@@ -90,6 +105,24 @@ class TrendFollowing(Model):
             stop-loss to each new swing high/low.
     """
 
+    name = "10/20 EMA EQ Trend-following"
+
+    # Instruments and venues the model runs on.
+    instruments = {
+        "BitMEX": {
+            "XBTUSD": "XBTUSD",
+            "ETHUSD": "ETHUSD"
+            },
+
+        "Binance": {
+
+            },
+
+        "FTX": {
+
+            }}
+
+    # Timeframes that the strategy runs on.
     operating_timeframes = [
         "5Min", "15Min", "30Min", "1H", "2H", "3H", "4H",
         "6H", "8H", "12H", "16H", "1D", "2D", "3D", "4D", "7D", "14D"]
@@ -99,7 +132,7 @@ class TrendFollowing(Model):
         "5Min": 150, "15Min": 150, "30Min": 150,
         "1H": 150, "2H": 150, "3H": 150,
         "4H": 150, "6H": 150, "8H": 150,
-        "12H": 150, "16H": 150 "1D": 150, "2D": 150,
+        "12H": 150, "16H": 150, "1D": 150, "2D": 150,
         "3D": 150, "4D": 150, "7D": 150, "14D": 150}
 
     features = {
@@ -111,7 +144,7 @@ class TrendFollowing(Model):
         6: f.sr_levels,
         7: f.small_bar,
         8: f.reversal_bar,
-        9. f.new_trend}
+        9: f.new_trend}
 
     def __init__(self):
         super()
@@ -133,7 +166,7 @@ class TrendFollowing(Model):
 
         pass
 
-    def required_timeframes(timeframes):
+    def required_timeframes(self, timeframes):
         """
         Add the equivalent doubled timeframe for each timeframe in
         the given list of operating timeframes.
