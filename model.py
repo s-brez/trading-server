@@ -22,14 +22,14 @@ class Model(ABC):
     def __init__(self):
         super.__init__()
 
-    def operating_timeframes(self):
+    def get_operating_timeframes(self):
         """
         Return list of operating timeframes.
         """
 
         return self.operating_timeframes
 
-    def lookback(self, timeframe: str):
+    def get_lookback(self, timeframe: str):
         """
         Return model's required lookback (number of
         previous bars to analyse) for a given timeframe.
@@ -37,7 +37,7 @@ class Model(ABC):
 
         return self.lookback[timeframe]
 
-    def features(self):
+    def get_features(self):
         """
         Return dict of features in use by the model.
         """
@@ -59,7 +59,7 @@ class Model(ABC):
         return self.instruments
 
     @abstractmethod
-    def required_timeframes(self, timeframes):
+    def get_required_timeframes(self, timeframes):
         """
         Given a list of operating timeframes, append additional required
         timeframe strings to the list (amend in-place, no new list created).
@@ -135,16 +135,18 @@ class TrendFollowing(Model):
         "12H": 150, "16H": 150, "1D": 150, "2D": 150,
         "3D": 150, "4D": 150, "7D": 150, "14D": 150}
 
+    # Use EMA for testing, for now.
     features = {
-        1: f.trending,
-        2: f.convergent,
+        # 1: f.trending,
+        # 2: f.convergent,
         3: f.EMA,
-        4: f.MACD,
-        5: f.j_curve,
-        6: f.sr_levels,
-        7: f.small_bar,
-        8: f.reversal_bar,
-        9: f.new_trend}
+        # 4: f.MACD,
+        # 5: f.j_curve,
+        # 6: f.sr_levels,
+        # 7: f.small_bar,
+        # 8: f.reversal_bar,
+        # 9: f.new_trend
+        }
 
     def __init__(self):
         super()
@@ -166,7 +168,7 @@ class TrendFollowing(Model):
 
         pass
 
-    def required_timeframes(self, timeframes):
+    def get_required_timeframes(self, timeframes):
         """
         Add the equivalent doubled timeframe for each timeframe in
         the given list of operating timeframes.
