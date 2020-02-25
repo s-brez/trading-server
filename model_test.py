@@ -1,9 +1,7 @@
 import re
 
 
-timeframes = [
-    "5Min", "30Min", "2H", "3H", "4H",
-    "6H", "8H", "12H", "16H", "2D", "3D", "4D", "7D", "14D"]
+timeframes = ["1D"]
 
 
 def required_timeframes(timeframes):
@@ -17,17 +15,27 @@ def required_timeframes(timeframes):
     to_add = []
     for timeframe in timeframes:
 
-        # 5Min use 15Min as the doubled trigger timeframe.
-        if timeframe == "5Min":
+        # 1Min use 3Min as the "doubled" trigger timeframe.
+        if timeframe == "1Min":
+            if "3Min" not in timeframes and "3Min" not in to_add:
+                to_add.append("3Min")
+
+        # 3Min use 5Min as the "doubled" trigger timeframe.
+        elif timeframe == "3Min":
+            if "5Min" not in timeframes and "5Min" not in to_add:
+                to_add.append("5Min")
+
+        # 5Min use 15Min as the "doubled" trigger timeframe.
+        elif timeframe == "5Min":
             if "15Min" not in timeframes and "15Min" not in to_add:
                 to_add.append("15Min")
 
-        # 12H and 16H use 1D.
+        # 12H and 16H use 1D as the "doubled" trigger timeframe.
         elif timeframe == "12H" or timeframe == "16H":
             if "1D" not in timeframes and "1D" not in to_add:
                 to_add.append("1D")
 
-        # 30Min use 1H.
+        # 30Min use 1H as the "doubled" trigger timeframe.
         elif timeframe == "30Min":
             if "1H" not in timeframes and "1H" not in to_add:
                 to_add.append("1H")
@@ -36,13 +44,11 @@ def required_timeframes(timeframes):
         else:
             num = int(''.join(filter(str.isdigit, timeframe)))
             code = re.findall("[a-zA-Z]+", timeframe)
-            print(str(num * 2) + code[0])
+            to_add.append((str(num * 2) + code[0]))
 
     for new_item in to_add:
         timeframes.append(new_item)
 
-
-print(timeframes)
 
 required_timeframes(timeframes)
 

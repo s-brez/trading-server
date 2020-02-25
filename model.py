@@ -10,6 +10,7 @@ Some rights reserved. See LICENSE.md, AUTHORS.md.
 """
 
 from abc import ABC, abstractmethod
+from features import Features as f
 
 
 class Model(ABC):
@@ -20,7 +21,7 @@ class Model(ABC):
     def __init__(self):
         super.__init__()
 
-    def timeframes(self):
+    def operating_timeframes(self):
         """
         Return list of operating timeframes.
         """
@@ -30,29 +31,150 @@ class Model(ABC):
     def lookback(self, timeframe: str):
         """
         Return model's required lookback (number of
-        previous bars to analyse)for a given timeframe string.
+        previous bars to analyse) for a given timeframe.
         """
 
         return self.lookback[timeframe]
 
+    def features(self):
+        """
+        Return dict of features in use by the model.
+        """
+
+        return self.timeframes
+
+    @abstractmethod
+    def required_timeframes(self, timeframes):
+        """
+        Given a list of operating timeframes, append additional required
+        timeframe strings to the list (amend in-place, no new list created).
+
+        To be overwritten in each model.
+
+        Args:
+            timeframes: list of current-period operating timeframes.
+
+        Returns:
+            None.
+
+        Raises:
+            None.
+        """
+
 
 class TrendFollowing(Model):
     """
-    Core trend-following model.
+    Core trend-following long-short model based on EMA's and MACD.
+
+    Rules:
+        1: Price must be trending on trigger timeframe.
+        2: Price must be trending on doubled trigger timeframe.
+        3. MACD swings convergent with trigger timeframe swings.
+        4. Price must have pulled back to the 10/20 EMA EQ.
+        5. Small reversal bar must be present in the 10/20 EMA EQ.
+        6. There is no old S/R level between entry and T1.
+
+    Supplementary factors (higher probability of success):
+        1: Price has pulled back into an old S/R level.
+        2: First pullback in a new trend.
+
+    Entry:
+        Raise order when price breaks the high/low of the trigger bar.
+
+    Stop-loss:
+        At swing high/low of the trigger bar.
+
+    Positon management:
+        T1: 1R, close 50% of position. Trade is now risk free.
+        T2: Stay in trade until stop-out. As price continues to trend, move
+            stop-loss to each new swing high/low.
     """
 
-    timeframes = [
-        "5m", "15m", "30m", "1h", "2h", "3h", "4h",
-        "6h", "8h", "12", "1d", "2d", "3d", "7d"]
+    operating_timeframes = [
+        "5Min", "15Min", "30Min", "1H", "2H", "3H", "4H",
+        "6H", "8H", "12H", "16H", "1D", "2D", "3D", "4D", "7D", "14D"]
 
-    # Will need to tune each timeframes ideal look back, 100 is placeholder.
+    # Need to tune each timeframes ideal lookback, 150 default for now.
     lookback = {
-        "5m": 100, "15m": 100, "30m": 100,
-        "1h": 100, "2h": 100, "3h": 100,
-        "4h": 100, "6h": 100, "8h": 100,
-        "12": 100, "1d": 100, "2d": 100,
-        "3d": 100, "7d": 100, "14d": 100}
+        "5Min": 150, "15Min": 150, "30Min": 150,
+        "1H": 150, "2H": 150, "3H": 150,
+        "4H": 150, "6H": 150, "8H": 150,
+        "12H": 150, "16H": 150 "1D": 150, "2D": 150,
+        "3D": 150, "4D": 150, "7D": 150, "14D": 150}
 
+    features = {
+        1: f.trending,
+        2: f.convergent,
+        3: f.EMA,
+        4: f.MACD,
+        5: f.j_curve,
+        6: f.sr_levels,
+        7: f.small_bar,
+        8: f.reversal_bar,
+        9. f.new_trend}
 
     def __init__(self):
         super()
+
+    def run(self):
+        """
+        Run the model.
+
+        Args:
+            None:
+
+        Returns:
+            SignalEvent if signal is produced, otherwise None.
+
+        Raises:
+            None.
+
+        """
+
+        pass
+
+    def required_timeframes(timeframes):
+        """
+        Add the equivalent doubled timeframe for each timeframe in
+        the given list of operating timeframes.
+
+        eg. if "1H" is present, add "2H" to the list.
+        """
+
+        to_add = []
+
+        for timeframe in timeframes:
+
+            # 1Min use 3Min as the "doubled" trigger timeframe.
+            if timeframe == "1Min":
+                if "3Min" not in timeframes and "3Min" not in to_add:
+                    to_add.append("3Min")
+
+            # 3Min use 5Min as the "doubled" trigger timeframe.
+            elif timeframe == "3Min":
+                if "5Min" not in timeframes and "5Min" not in to_add:
+                    to_add.append("5Min")
+
+            # 5Min use 15Min as the "doubled" trigger timeframe.
+            elif timeframe == "5Min":
+                if "15Min" not in timeframes and "15Min" not in to_add:
+                    to_add.append("15Min")
+
+            # 12H and 16H use 1D as the "doubled" trigger timeframe.
+            elif timeframe == "12H" or timeframe == "16H":
+                if "1D" not in timeframes and "1D" not in to_add:
+                    to_add.append("1D")
+
+            # 30Min use 1H as the "doubled" trigger timeframe.
+            elif timeframe == "30Min":
+                if "1H" not in timeframes and "1H" not in to_add:
+                    to_add.append("1H")
+
+            # All other timeframes just double the numeric value.
+            else:
+                num = int(''.join(filter(str.isdigit, timeframe)))
+                code = re.findall("[a-zA-Z]+", timeframe)
+                to_add.append((str(num * 2) + code[0]))
+
+        for new_item in to_add:
+            timeframes.append(new_item)
