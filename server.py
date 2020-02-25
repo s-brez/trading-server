@@ -116,19 +116,18 @@ class Server:
                     # Market data is ready, route events to worker classes.
                     self.clear_event_queue()
 
-                    # Run diagnostics at 4 and 8 mins to be very sure missed
+                    # Run diagnostics at 3 and 7 mins to be VERY sure missed
                     # bars are addressed before ongoing system operation.
-                    if (count == 4 or count == 8):
+                    if (count == 3 or count == 7):
                         thread = Thread(
                             target=lambda: self.data.run_data_diagnostics(0))
                         thread.daemon = True
                         thread.start()
-                        self.logger.debug("Started data diagnostics.")
 
                     # Check data integrity periodically thereafter.
                     if (count % self.DIAG_DELAY == 0):
                         thread = Thread(
-                            target=self.data.run_data_diagnostics(0))
+                            target=lambda: self.data.run_data_diagnostics(0))
                         thread.daemon = True
                         thread.start()
 
@@ -162,6 +161,7 @@ class Server:
                 self.logger.debug(
                     "Processed " + str(count) + " events in " +
                     str(duration) + " seconds.")
+
                 # Store new data now that time-critical work is complete
                 self.data.save_new_bars_to_db()
                 break
@@ -169,14 +169,23 @@ class Server:
             else:
                 if event is not None:
                     count += 1
+
+                    # Signal Event generation.
                     if event.type == "MARKET":
-                        self.strategy.parse_new_data(event)
+                        self.strategy.new_data(self.events, event)
+                        self.portfolio.update_price(self.events, event)
+
+                    # Order Event generation.
                     elif event.type == "SIGNAL":
-                        self.portfolio.update_signal(event)
+                        self.portfolio.new_signal(self.events, event)
+
+                    # Order placement and Fill Event generation.
                     elif event.type == "ORDER":
-                        self.broker.place_order(event)
+                        self.broker.new_order(self.events, event)
+
+                    # Final portolio update.
                     elif event.type == "FILL":
-                        self.portfolio.update_fill(event)
+                        self.portfolio.fill(self.events, event)
 
                 # finished all jobs in queue
                 self.events.task_done()
