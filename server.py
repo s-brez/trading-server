@@ -210,7 +210,8 @@ class Server:
         logger.setLevel(self.log_level)
         ch = logging.StreamHandler()
         formatter = logging.Formatter(
-            "%(asctime)s:%(levelname)s:%(module)s - %(message)s")
+            "%(asctime)s:%(levelname)s:%(module)s - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S")
         ch.setFormatter(formatter)
         logger.addHandler(ch)
 
