@@ -82,6 +82,7 @@ class Server:
         # Processing performance variables.
         self.start_processing = None
         self.end_processing = None
+        self.cycle_count = 0
 
         self.run()
 
@@ -98,7 +99,7 @@ class Server:
         if self.live_trading:
             self.data.run_data_diagnostics(1)
 
-        count = 0
+        self.cycle_count = 0
 
         sleep(self.seconds_til_next_minute())
 
@@ -107,7 +108,7 @@ class Server:
 
                 # Only update data after at least one minute of new data
                 # has been collected, plus datahandler and strategy ready.
-                if count >= 1 and self.data.ready:
+                if self.cycle_count >= 1 and self.data.ready:
                     self.start_processing = time.time()
 
                     # Parse and queue market data (new Market Events).
@@ -118,14 +119,14 @@ class Server:
 
                     # Run diagnostics at 3 and 7 mins to be VERY sure missed
                     # bars are addressed before ongoing system operation.
-                    if (count == 3 or count == 7):
+                    if (self.cycle_count == 2 or self.cycle_count == 5):
                         thread = Thread(
                             target=lambda: self.data.run_data_diagnostics(0))
                         thread.daemon = True
                         thread.start()
 
                     # Check data integrity periodically thereafter.
-                    if (count % self.DIAG_DELAY == 0):
+                    if (self.cycle_count % self.DIAG_DELAY == 0):
                         thread = Thread(
                             target=lambda: self.data.run_data_diagnostics(0))
                         thread.daemon = True
@@ -133,7 +134,7 @@ class Server:
 
                 # Sleep til the next minute begins.
                 sleep(self.seconds_til_next_minute())
-                count += 1
+                self.cycle_count += 1
 
             # Update data w/o delay when backtesting, no diagnostics.
             elif not self.live_trading:
@@ -172,7 +173,8 @@ class Server:
 
                     # Signal Event generation.
                     if event.type == "MARKET":
-                        self.strategy.new_data(self.events, event)
+                        self.strategy.new_data(
+                            self.events, event, self.cycle_count)
                         self.portfolio.update_price(self.events, event)
 
                     # Order Event generation.
