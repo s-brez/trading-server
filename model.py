@@ -111,7 +111,8 @@ class TrendFollowing(Model):
     instruments = {
         "BitMEX": {
             "XBTUSD": "XBTUSD",
-            "ETHUSD": "ETHUSD"
+            "ETHUSD": "ETHUSD",
+            "XRPUSD": "XRPUSD",
             },
 
         "Binance": {
@@ -134,11 +135,12 @@ class TrendFollowing(Model):
         "12H": 150, "16H": 150, "1D": 150, "2D": 150, "3D": 150, "4D": 150,
         "7D": 150, "14D": 150}
 
-    # Use EMA for testing, for now.
+    # Use only EMA for testing, for now.
     features = [
         # f.trending,
         # f.convergent,
-        f.EMA,
+        (f.EMA, 10)
+        # (f.EMA, 20)
         # f.MACD,
         # f.j_curve,
         # f.sr_levels,
