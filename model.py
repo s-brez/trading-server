@@ -94,7 +94,8 @@ class TrendFollowing(Model):
         2: First pullback in a new trend.
 
     Entry:
-        Raise order when price breaks the high/low of the trigger bar.
+        Buy when price breaks the high/low of the trigger bar.
+        Execute buyStop when reversal bar closes with 1 bar expiry.
 
     Stop-loss:
         At swing high/low of the trigger bar.
@@ -139,9 +140,9 @@ class TrendFollowing(Model):
     # Second tuple element is feature param.
     # Third tuple element is feature type.
     features = [
-        (f.EMA, "indicator", 10),
-        (f.EMA, "indicator", 20),
-        (f.MACD, "indicator", None)
+        ("indicator", f.EMA, 10),
+        ("indicator", f.EMA, 20),
+        ("indicator", f.MACD, None)
         # f.trending,
         # f.convergent,
         # f.j_curve,
