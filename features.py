@@ -191,6 +191,12 @@ class Features:
         macd = None
         return macd
 
+    def RSI(self,bars, timeperiod:int=14):
+    	"""Return RSI for given time series."""
+    	self.check_bars_type(bars)
+    	rsi = ta.RSI(bars['close'],timeperiod)
+    	return rsi
+
     def CCI(self, bars, period: int):
         """ Return CCI (Commodity Chanel Index) for n bars close price.
 ​
