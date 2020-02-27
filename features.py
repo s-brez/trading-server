@@ -3,12 +3,15 @@ trading-server is a multi-asset, multi-strategy, event-driven execution
 and backtesting platform (OEMS) for trading common markets.
 
 Copyright (C) 2020  Sam Breznikar <sam@sdbgroup.io>
+Copyright (C) 2020  Marc Goulding <gouldingmarc@gmail.com >
 
 Licensed under GNU General Public License 3.0 or later.
 
 Some rights reserved. See LICENSE.md, AUTHORS.md.
 """
 
+from scipy.signal import savgol_filter as smooth
+import matplotlib.pyplot as plt
 import talib as ta
 import pandas as pd
 import numpy as np
@@ -61,12 +64,68 @@ class Features:
 
         return convergent
 
-    def sr_levels(self, bars: list):
+    def sr_levels(bars, smoothing_factor, tolerance):
         """
-        Return levels of support and resistance in given period.
+        Return suport and resistance levels in a given period.
+
+        Args:
+            bars: series containing close prices.
+            smoothing_factor: smoothing factor. lower is more sensitive.
+            tolerance: acceptable variance between points to be considered
+               a level.
+
+        Returns:
+            support: list of support levels
+            resistance: list of resistance levels
+
+        Raises:
+            None.
+
         """
 
-        return levels
+        # Convert n to the next even number.
+        if smoothing_factor % 2 != 0:
+            smoothing_factor += 1
+
+        n_ltp = bars.shape[0]
+
+        # Smooth the data.
+        ltp_s = smooth(bars, (smoothing_factor + 1), 3)
+
+        # taking a simple derivative
+        ltp_d = np.zeros(n_ltp)
+        ltp_d[1:] = np.subtract(ltp_s[1:], ltp_s[:-1])
+
+        resistance = []
+        support = []
+
+        for i in range(n_ltp - n):
+            arr_sl = ltp_d[i:(i + n)]
+            first = arr_sl[:int((n / 2))]  # first half
+            # first = arr_sl[:4]  # first half
+            last = arr_sl[int((n / 2)):]  # second half
+
+            r_1 = np.sum(first > 0)
+            r_2 = np.sum(last < 0)
+
+            s_1 = np.sum(first < 0)
+            s_2 = np.sum(last > 0)
+
+            # local maxima detection
+            if (r_1 == (n / 2)) and (r_2 == (n / 2)):
+                resistance.append(ltp[i + (int((n / 2)) - 1)])
+
+            # local minima detection
+            if (s_1 == (n / 2)) and (s_2 == (n / 2)):
+                support.append(ltp[i + (int((n / 2)) - 1)])
+
+        levels = np.sort(np.append(support, resistance))
+        tmp_levels = levels
+        for i in range(1, len(levels)):
+            if levels[i]-levels[i-1] > tolerance * levels[i]:
+                tmp_levels = tmp_levels[tmp_levels != levels[i]]
+
+        return support, resistance
 
     def SMA(self, period: int, bars: int):
         """
