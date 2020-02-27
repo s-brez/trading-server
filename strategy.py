@@ -11,6 +11,7 @@ Some rights reserved. See LICENSE.md, AUTHORS.md.
 
 from datetime import date, datetime, timedelta
 from model import TrendFollowing
+from features import Features
 from dateutil import parser
 import pandas as pd
 import calendar
@@ -37,14 +38,14 @@ class Strategy:
         'close': 'last', 'volume': 'sum'}
 
     MINUTE_TIMEFRAMES = [1, 3, 5, 15, 30]
-    HOUR_TIMEFRAMES = [1, 2, 3, 4, 6, 8, 12]
+    HOUR_TIMEFRAMES = [1, 2, 3, 4, 6, 8, 12, 16]
     DAY_TIMEFRAMES = [1, 2, 3, 7, 14, 28]
 
     TF_MINS = {
         "1Min": 1, "3Min": 3, "5Min": 5, "15Min": 15, "30Min": 30, "1H": 60,
-        "2H": 120,
-        "3H": 180, "4H": 240, "6H": 360, "8H": 480, "12H": 720, "1D": 1440,
-        "2D": 2880, "3D": 4320, "7D": 10080, "14D": 20160, "28D": 40320}
+        "2H": 120, "3H": 180, "4H": 240, "6H": 360, "8H": 480, "12H": 720,
+        "16H": 960, "1D": 1440, "2D": 2880, "3D": 4320, "7D": 10080,
+        "14D": 20160, "28D": 40320}
 
     def __init__(self, exchanges, logger, db, db_client):
         self.exchanges = exchanges
@@ -56,7 +57,7 @@ class Strategy:
 
         # DataFrame container: data[exchange][symbol][timeframe].
         self.data = {}
-        self.init_dataframes()
+        self.init_dataframes(empty=True)
 
         # Strategy models.
         self.models = self.load_models(self.logger)
@@ -64,7 +65,10 @@ class Strategy:
         # Signal container: signals[exchange][symbol][timeframe].
         self.signals = {}
 
-    def new_data(self, events, event):
+        # persistent reference to features library.
+        self.feature_ref = Features()
+
+    def new_data(self, events, event, count):
         """
         Process incoming market data and update all models with new data.
 
@@ -79,25 +83,28 @@ class Strategy:
             None.
         """
 
-        # Get operating timeframes for the current period.
-        timestamp = event.get_bar()['timestamp']
-        timeframes = self.get_relevant_timeframes(timestamp)
+        # Wait for 3 mins of operation to clear up null bars.
+        if count >= 3:
 
-        # Get additional timeframes required by models.
-        op_timeframes = copy.deepcopy(timeframes)
-        for model in self.models:
-            model.get_required_timeframes(timeframes)
+            # Get operating timeframes for the current period.
+            timestamp = event.get_bar()['timestamp']
+            timeframes = self.get_relevant_timeframes(timestamp)
 
-        # Update datasets for all required timeframes.
-        self.update_dataframes(event, timeframes, op_timeframes)
+            # Get additional timeframes required by models.
+            op_timeframes = copy.deepcopy(timeframes)
+            for model in self.models:
+                model.get_required_timeframes(timeframes)
 
-        # Calculate new feauture values.
-        self.calculate_features(event, timeframes)
+            # Update datasets for all required timeframes.
+            self.update_dataframes(event, timeframes, op_timeframes)
 
-        # Run models with new data.
-        self.run_models(event, timeframes)
+            # Calculate new feauture values.
+            self.calculate_features(event, timeframes)
 
-        # TODO: put Signal Events in the event queue.
+            # Run models with new data.
+            self.run_models(event, timeframes)
+
+            # TODO: put Signal Events in the event queue.
 
     def update_dataframes(self, event, timeframes, op_timeframes):
         """
@@ -117,23 +124,44 @@ class Strategy:
         sym = event.get_bar()['symbol']
         bar = self.remove_element(event.get_bar(), "symbol")
         exc = event.get_exchange()
+        venue = exc.get_name()
 
         timestamp = datetime.utcfromtimestamp(bar['timestamp'])
-        # self.logger.debug(str(timestamp) + " " + str(event.get_bar()))
+        self.logger.debug(str(timestamp) + " " + str(event.get_bar()))
 
         # Update each relevant dataframe.
         for tf in timeframes:
-            self.data[exc.get_name()][sym][tf] = self.build_dataframe(
-                exc.get_name(), sym, tf, bar)
 
-            # Log df head, sanity check.
-            # self.logger.debug(tf + ":")
-            # print(self.data[exc.get_name()][sym][tf].head(3), "\n")
+            size = len(self.data[venue][sym][tf].index)
+
+            # If dataframe is empty, populate a new one.
+            if size == 0:
+                self.data[venue][sym][tf] = self.build_dataframe(
+                    venue, sym, tf, bar)
+
+            # If dataframe already populated, append the new bar.
+            elif size > 0:
+
+                new_row = self.single_bar_resample(
+                        venue, sym, tf, bar)
+
+                # Append.
+                self.data[venue][sym][tf] = self.data[venue][sym][tf].append(
+                    new_row)
+
+                print("Appended row:")
+                print(new_row)
+
+            # TODO: df.append() is slow and copies the whole dataframe. Later
+            # we need to use a data structure other than a dataframe for live
+            # data addition. Like an in-memory csv, or list of dicts, etc.
 
         # Log model and timeframe details.
         for model in self.models:
+
             venue = exc.get_name()
             inst = model.get_instruments()[venue][sym]
+
             if inst == sym:
                 self.logger.debug(
                     model.get_name() + ": " + venue + ": " + inst + ": ")
@@ -157,17 +185,57 @@ class Strategy:
         sym = event.get_bar()['symbol']
         exc = event.get_exchange()
 
+        # Calculate feature data for each model/feature/timeframe.
         for model in self.models:
+
+            lb = model.get_lookback()
             venue = exc.get_name()
             inst = model.get_instruments()[venue][sym]
-            features = model.get_features().values()
-            for tf in timeframes:
-                for feature in features:
-                    if inst == sym:
-                        print(
-                            "Calculating", feature, "in", model.get_name(),
-                            "for", sym, tf)
-                    # feature_data = featureself.data[exc.get_name()][sym][tf]
+            op_tfs = model.get_operating_timeframes()
+
+            # Check if model is applicable to the event.
+            if inst == sym:
+                for tf in timeframes:
+                    if tf in op_tfs:
+
+                        features = model.get_features()
+                        data = self.data[venue][sym][tf]
+
+                        # Calculate feature data.
+                        for feature in features:
+
+                            # f[0] is feature function
+                            # f[1] is feature type
+                            # f[2] is feature param
+                            f = feature[0](
+                                    self.feature_ref,
+                                    feature[2],
+                                    data)
+
+                            # Handle indicator and time-series feature data.
+                            if (
+                                f[1] == "indicator" or
+                                (type(f) == pd.core.series.Series) or
+                                    (type(f) == pd.Series)):
+
+                                # Use feature param as dataframe col name.
+                                if feature[2] is None:
+                                    ID = ""
+                                else:
+                                    ID = str(feature[2])
+
+                                # Round and append to dataframe.
+                                self.data[venue][sym][tf][
+                                    feature[0].__name__ +
+                                    ID] = f.round(6)
+
+                            # Handle boolean feature data.
+                            elif f[1] == "boolean":
+                                pass
+
+                        # Debug.
+                        self.logger.debug(tf + ":")
+                        print(self.data[venue][sym][tf], "\n")
 
     def run_models(self, event, timeframes):
         """
@@ -214,7 +282,12 @@ class Strategy:
         """
 
         # Find the total number of 1min bars needed using TFM dict.
-        size = self.TF_MINS[tf] * lookback
+        if lookback > 1:
+            # Increase the size of lookback by 50 to account for feature lag.
+            size = int(self.TF_MINS[tf] * (lookback + 50))
+        else:
+            # Dont adjust lookback for single bar requests.
+            size = self.TF_MINS[tf] * (lookback)
 
         # Create Dataframe using current_bar and stored bars.
         if current_bar:
@@ -233,34 +306,27 @@ class Strategy:
             for doc in result:
                 rows.append(doc)
 
-            # Pass list to dataframe constructor.
-            df = pd.DataFrame(rows)
-
-            # Format time column.
-            df['timestamp'] = df['timestamp'].apply(
-                lambda x: datetime.utcfromtimestamp(x))
-
-            # Set index.
-            df.set_index("timestamp", inplace=True)
-
         # Create Dataframe using only stored bars
         if not current_bar:
 
             # Use a projection to remove mongo "_id" field and symbol.
-            result = self.db_collections[exc].find(
+            rows = self.db_collections[exc].find(
                 {"symbol": sym}, {
                     "_id": 0, "symbol": 0}).limit(
                         size).sort([("timestamp", -1)])
 
-            # Pass cursor to DataFrame constructor.
-            df = pd.DataFrame(result)
+        # Pass cursor to DataFrame constructor.
+        df = pd.DataFrame(rows)
 
-            # Format time column.
-            df['timestamp'] = df['timestamp'].apply(
-                lambda x: datetime.utcfromtimestamp(x))
+        # Format time column.
+        df['timestamp'] = df['timestamp'].apply(
+            lambda x: datetime.utcfromtimestamp(x))
 
-            # Set index.
-            df.set_index("timestamp", inplace=True)
+        # Set index.
+        df.set_index("timestamp", inplace=True)
+
+        # Pad any null bars forward.
+        df.fillna(method="pad", limit=5)
 
         # Downsample 1 min data to target timeframe
         resampled_df = pd.DataFrame()
@@ -269,40 +335,71 @@ class Strategy:
         except Exception as exc:
             print("Resampling error", exc)
 
-        return resampled_df.sort_values(by="timestamp", ascending=False)
+        return resampled_df.sort_values(by="timestamp", ascending=True)
 
-    def load_local_data(self, exchange):
-
+    def single_bar_resample(self, venue, sym, tf, bar):
         """
-        Create and return a dictionary of dataframes for all symbols and
-        timeframes for the given exchange.
+        Return a pd.Series containing a single bar of timeframe "tf" for
+        the given venue and symbol.
 
         Args:
-            exchange: exchange object.
+            venue: exchange name (string).
+            sym: instrument ticker code (string)
+            tf: timeframe code (string).
+            bar: newest 1-min bar.
 
-        Returns:
-            dicts: tree containing a dataframe for all symbols and
-            timeframes for the given exchange.
+        Returns: new_row: pd.Series containing a single bar of timeframe "tf"
+        for the given venue and symbol.
 
         Raises:
-            None.
+            Resampling error.
         """
 
-        # Return dataframes with data.
-        # dicts = {}
-        # for symbol in exchange.get_symbols():
-        #     dicts[symbol] = {
-        #         tf: self.build_dataframe(
-        #             exchange, symbol, tf) for tf in self.ALL_TIMEFRAMES}
-        # return dicts
+        # Find the total number of 1min bars needed using TFM dict.
+        if tf == size
+        # TODO: Dont resample 1 min bars
 
-        # Return empty dataframes.
-        dicts = {}
-        for symbol in exchange.get_symbols():
-            dicts[symbol] = {
-                tf: pd.DataFrame() for tf in self.ALL_TIMEFRAMES}
+        size = self.TF_MINS[tf] - 1
 
-        return dicts
+        # Use a projection to remove mongo "_id" field and symbol.
+        result = self.db_collections[venue].find(
+            {"symbol": sym}, {
+                "_id": 0, "symbol": 0}).limit(
+                    size).sort([("timestamp", -1)])
+
+        # Add current_bar and DB results to a list.
+        rows = [bar]
+        for doc in result:
+            rows.append(doc)
+
+        # Pass cursor to DataFrame constructor.
+        df = pd.DataFrame(rows)
+
+        # Format time column.
+        df['timestamp'] = df['timestamp'].apply(
+            lambda x: datetime.utcfromtimestamp(x))
+
+        # Set index.
+        df.set_index("timestamp", inplace=True)
+
+        # Pad any null bars forward.
+        df.fillna(method="pad", limit=5)
+
+        # Downsample 1 min data to target timeframe.
+        resampled = pd.DataFrame()
+        try:
+            resampled = (df.resample(tf).agg(self.RESAMPLE_KEY))
+        except Exception as exc:
+            print("Resampling error", exc)
+
+        resampled.sort_values(by="timestamp", ascending=False)
+        print("resampled df:")
+        print(resampled)
+
+        new_row = resampled.iloc[0]
+        print(new_row)
+
+        return new_row
 
     def remove_element(self, dictionary, element):
         """
@@ -313,7 +410,7 @@ class Strategy:
             element: element to be removed.
 
         Returns:
-            new_dic
+            new_dict: copy of dictionary less element.
 
         Raises:
 
@@ -343,7 +440,7 @@ class Strategy:
         self.logger.debug("Initialised models.")
         return models
 
-    def init_dataframes(self):
+    def init_dataframes(self, empty=False):
         """
         Create working datasets (self.data dict).
 
@@ -351,15 +448,18 @@ class Strategy:
             None.
 
         Returns:
-            None.
+            empty: boolean flag. If True, will return empty dataframes.
 
         Raises:
             None.
         """
 
         start = time.time()
+
         self.data = {
-            i.get_name(): self.load_local_data(i) for i in self.exchanges}
+            i.get_name(): self.load_local_data(
+                i, empty) for i in self.exchanges}
+
         end = time.time()
         duration = round(end - start, 5)
 
@@ -367,9 +467,46 @@ class Strategy:
         for i in self.exchanges:
             symbolcount += len(i.get_symbols())
 
-        self.logger.debug(
-            "Initialised " + str(symbolcount * len(self.ALL_TIMEFRAMES)) +
-            " timeframe datasets in " + str(duration) + " seconds.")
+        # Only log output if data is loaded.
+        if not empty:
+            self.logger.debug(
+                "Initialised " + str(symbolcount * len(self.ALL_TIMEFRAMES)) +
+                " timeframe datasets in " + str(duration) + " seconds.")
+
+    def load_local_data(self, exchange, empty=False):
+
+        """
+        Create and return a dictionary of dataframes for all symbols and
+        timeframes for the given venue.
+
+        Args:
+            exchange: exchange object.
+            empty: boolean flag. If True, will return empty dataframes.
+
+        Returns:
+            dicts: tree containing a dataframe for all symbols and
+            timeframes for the given exchange. If "empty" is true,
+            dont load any data.
+
+        Raises:
+            None.
+        """
+
+        dicts = {}
+        for symbol in exchange.get_symbols():
+
+            # Return empty dataframes.
+            if empty:
+                dicts[symbol] = {
+                    tf: pd.DataFrame() for tf in self.ALL_TIMEFRAMES}
+
+            # Return dataframes with data.
+            elif not empty:
+                dicts[symbol] = {
+                    tf: self.build_dataframe(
+                        exchange, symbol, tf) for tf in self.ALL_TIMEFRAMES}
+
+        return dicts
 
     def get_relevant_timeframes(self, time):
         """

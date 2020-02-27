@@ -651,4 +651,3 @@ class Datahandler:
                     exchange.get_name() + "-" + symbol)
 
         return instruments
-

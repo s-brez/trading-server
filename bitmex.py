@@ -34,7 +34,7 @@ class Bitmex(Exchange):
         super()
         self.logger = logger
         self.name = "BitMEX"
-        self.symbols = ["XBTUSD", "ETHUSD", "XRPUSD"]
+        self.symbols = ["XBTUSD"]  # "ETHUSD", "XRPUSD"
         self.channels = ["trade"]  # , "orderBookL2"
 
         self.origin_tss = {

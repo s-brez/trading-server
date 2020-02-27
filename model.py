@@ -111,8 +111,8 @@ class TrendFollowing(Model):
     instruments = {
         "BitMEX": {
             "XBTUSD": "XBTUSD",
-            "ETHUSD": "ETHUSD",
-            "XRPUSD": "XRPUSD",
+            # "ETHUSD": "ETHUSD",
+            # "XRPUSD": "XRPUSD",
             },
 
         "Binance": {
@@ -125,7 +125,7 @@ class TrendFollowing(Model):
 
     # Timeframes that the strategy runs on.
     operating_timeframes = [
-        "5Min", "15Min", "30Min", "1H", "2H", "3H", "4H",
+        "1Min", "5Min", "15Min", "30Min", "1H", "2H", "3H", "4H",
         "6H", "8H", "12H", "16H", "1D", "2D", "3D", "4D", "7D", "14D"]
 
     # Need to tune each timeframes ideal lookback, 150 default for now.
@@ -135,13 +135,15 @@ class TrendFollowing(Model):
         "12H": 150, "16H": 150, "1D": 150, "2D": 150, "3D": 150, "4D": 150,
         "7D": 150, "14D": 150}
 
-    # Use only EMA for testing, for now.
+    # First tuple element in tuple is feature function.
+    # Second tuple element is feature param.
+    # Third tuple element is feature type.
     features = [
+        (f.EMA, "indicator", 10),
+        (f.EMA, "indicator", 20),
+        (f.MACD, "indicator", None)
         # f.trending,
         # f.convergent,
-        (f.EMA, 10)
-        # (f.EMA, 20)
-        # f.MACD,
         # f.j_curve,
         # f.sr_levels,
         # f.small_bar,
