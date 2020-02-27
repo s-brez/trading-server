@@ -12,8 +12,25 @@ class Features:
         uptrend."""
         self.check_bars_type(bars)
 
+        fractals = self.fractals(bars[lookback_period:],window=window)
+        highs = np.multiply(bars.high.values,fractals)
+        highs = highs[highs>0]
+        lows = np.multiply(bars.low.values,fractals)
+        lows = lows[lows<0]*(-1)
+
         trending = False
-        direction = None
+        direction = 0
+
+        if highs[-1]>highs[-2] and highs[-2]>highs[-3] and lows[-1]>lows[-2] and lows[-2]>lows[-3]:
+        	trending = True
+        	direction = 1
+        elif highs[-1]<highs[-2] and highs[-2]<highs[-3] and lows[-1]<lows[-2] and lows[-2]<lows[-3]:
+        	trending = True
+        	direction = -1
+        else:
+        	trending=False
+        	direction=0
+
         return trending, direction
 
     def convergent(self, bars, lookback_period: int, indicator: list):
