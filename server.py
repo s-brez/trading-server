@@ -163,8 +163,10 @@ class Server:
                     "Processed " + str(count) + " events in " +
                     str(duration) + " seconds.")
 
-                # Store new data now that time-critical work is complete
+                # Do non-time critical work now.
                 self.data.save_new_bars_to_db()
+                self.strategy.trim_datasets()
+
                 break
 
             else:
