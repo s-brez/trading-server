@@ -47,6 +47,12 @@ class Strategy:
         "16H": 960, "1D": 1440, "2D": 2880, "3D": 4320, "7D": 10080,
         "14D": 20160, "28D": 40320}
 
+    # Extra bars to include in resample requests to account for indicator lag.
+    LOOKBACK_PAD = 50
+
+    # Maximum lookback in use by any strategy.
+    MAX_LOOKBACK = 150
+
     def __init__(self, exchanges, logger, db, db_client):
         self.exchanges = exchanges
         self.logger = logger
@@ -143,7 +149,7 @@ class Strategy:
             elif size > 0:
 
                 new_row = self.single_bar_resample(
-                        venue, sym, tf, bar)
+                        venue, sym, tf, bar, timestamp)
 
                 # Append.
                 self.data[venue][sym][tf] = self.data[venue][sym][tf].append(
@@ -204,17 +210,17 @@ class Strategy:
                         # Calculate feature data.
                         for feature in features:
 
-                            # f[0] is feature function
-                            # f[1] is feature type
+                            # f[0] is feature type
+                            # f[1] is feature function
                             # f[2] is feature param
-                            f = feature[0](
+                            f = feature[1](
                                     self.feature_ref,
                                     feature[2],
                                     data)
 
                             # Handle indicator and time-series feature data.
                             if (
-                                f[1] == "indicator" or
+                                f[0] == "indicator" or
                                 (type(f) == pd.core.series.Series) or
                                     (type(f) == pd.Series)):
 
@@ -226,11 +232,11 @@ class Strategy:
 
                                 # Round and append to dataframe.
                                 self.data[venue][sym][tf][
-                                    feature[0].__name__ +
+                                    feature[1].__name__ +
                                     ID] = f.round(6)
 
                             # Handle boolean feature data.
-                            elif f[1] == "boolean":
+                            elif f[0] == "boolean":
                                 pass
 
                         # Debug.
@@ -284,7 +290,7 @@ class Strategy:
         # Find the total number of 1min bars needed using TFM dict.
         if lookback > 1:
             # Increase the size of lookback by 50 to account for feature lag.
-            size = int(self.TF_MINS[tf] * (lookback + 50))
+            size = int(self.TF_MINS[tf] * (lookback + self.LOOKBACK_PAD))
         else:
             # Dont adjust lookback for single bar requests.
             size = self.TF_MINS[tf] * (lookback)
@@ -337,7 +343,7 @@ class Strategy:
 
         return resampled_df.sort_values(by="timestamp", ascending=True)
 
-    def single_bar_resample(self, venue, sym, tf, bar):
+    def single_bar_resample(self, venue, sym, tf, bar, timestamp):
         """
         Return a pd.Series containing a single bar of timeframe "tf" for
         the given venue and symbol.
@@ -355,22 +361,23 @@ class Strategy:
             Resampling error.
         """
 
-        # Find the total number of 1min bars needed using TFM dict.
-        if tf == size
-        # TODO: Dont resample 1 min bars
+        # Find the total number of 1min bars needed..
+        if tf == "1Min":
+            rows == [bar]
+        else:
+            # Determine how many bars to fetch for resampling.
+            size = self.TF_MINS[tf] - 1
 
-        size = self.TF_MINS[tf] - 1
+            # Use a projection to remove mongo "_id" field and symbol.
+            result = self.db_collections[venue].find(
+                {"symbol": sym}, {
+                    "_id": 0, "symbol": 0}).limit(
+                        size).sort([("timestamp", -1)])
 
-        # Use a projection to remove mongo "_id" field and symbol.
-        result = self.db_collections[venue].find(
-            {"symbol": sym}, {
-                "_id": 0, "symbol": 0}).limit(
-                    size).sort([("timestamp", -1)])
-
-        # Add current_bar and DB results to a list.
-        rows = [bar]
-        for doc in result:
-            rows.append(doc)
+            # Add current_bar and DB results to a list.
+            rows = [bar]
+            for doc in result:
+                rows.append(doc)
 
         # Pass cursor to DataFrame constructor.
         df = pd.DataFrame(rows)
@@ -383,7 +390,7 @@ class Strategy:
         df.set_index("timestamp", inplace=True)
 
         # Pad any null bars forward.
-        df.fillna(method="pad", limit=5)
+        df.fillna(method="pad")
 
         # Downsample 1 min data to target timeframe.
         resampled = pd.DataFrame()
