@@ -515,6 +515,20 @@ class Strategy:
 
         return dicts
 
+    def trim_datasets(self):
+        """
+        Reduce size of datasets if length > MAX_LOOKBACK + LOOKBACK_PAD.
+        Args:
+           None.
+
+        Returns:
+           None.
+
+        Raises:
+           None.
+        """
+        pass
+
     def get_relevant_timeframes(self, time):
         """
         Return a list of timeframes relevant to the just-elapsed period.
