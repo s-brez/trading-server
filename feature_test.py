@@ -135,20 +135,25 @@ def sr_levels(bars, n=8, t=0.02, s=3, f=3):
 
         # Detect local maxima. If two points match, its a level.
         if r_1 == (n / 2) and r_2 == (n / 2):
-            resistance.append(bars.close.values[i + (int((n / 2)) - 1)])
+            try:
+                resistance.append(bars.close.values[i + (int((n / 2)) - 1)])
+            # Catch empty list error if no levels are present.
+            except Exception as ex:
+                pass
 
         # Detect local minima. If two points match, its a level.
         if s_1 == (n / 2) and s_2 == (n / 2):
-            support.append(bars.close.values[i + (int((n / 2)) - 1)])
+            try:
+                support.append(bars.close.values[i + (int((n / 2)) - 1)])
+            # Catch empty list error if no levels are present.
+            except Exception as ex:
+                pass
 
     # Filter levels f times.
     levels = np.sort(np.append(support, resistance))
     filtered_levels = cluster_filter(levels, t, multipass=True)
     for i in range(f - 1):
         filtered_levels = cluster_filter(filtered_levels, t, multipass=True)
-
-    # Run a final single-pass filter to smooth out final levels.
-    filtered_levels = cluster_filter(filtered_levels, t, multipass=False)
 
     return filtered_levels
 
