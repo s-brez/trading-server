@@ -145,8 +145,10 @@ class Strategy:
                 self.data[venue][sym][tf] = self.build_dataframe(
                     venue, sym, tf, bar)
 
-            # If dataframe already populated, append the new bar.
-            elif size > 0:
+            # If dataframe already populated, append the new bar. Only update
+            # op_timeframes if appending, as required timeframes will still be
+            # mid-bar.
+            elif size > 0 and tf in op_timeframes:
 
                 new_row = self.single_bar_resample(
                         venue, sym, tf, bar, timestamp)
@@ -361,9 +363,10 @@ class Strategy:
             Resampling error.
         """
 
-        # Find the total number of 1min bars needed..
         if tf == "1Min":
-            rows == [bar]
+            # Don't need to do any resampling for 1 min bars.
+            rows = [bar]
+
         else:
             # Determine how many bars to fetch for resampling.
             size = self.TF_MINS[tf] - 1
@@ -399,12 +402,12 @@ class Strategy:
         except Exception as exc:
             print("Resampling error", exc)
 
-        resampled.sort_values(by="timestamp", ascending=False)
-        print("resampled df:")
+        # Must be ascending=True to grab the first value with iloc[].
+        resampled.sort_values(by="timestamp", ascending=False, inplace=True)
+        print("resampled", tf, " df:")
         print(resampled)
 
         new_row = resampled.iloc[0]
-        print(new_row)
 
         return new_row
 
