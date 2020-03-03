@@ -93,8 +93,12 @@ class Strategy:
         if count >= 3:
 
             # Get operating timeframes for the current period.
+
             timestamp = event.get_bar()['timestamp']
             timeframes = self.get_relevant_timeframes(timestamp)
+
+            self.logger.debug("Event timestamp just in: " + str(
+                datetime.utcfromtimestamp(timestamp)))
 
             # Get additional timeframes required by models.
             op_timeframes = copy.deepcopy(timeframes)
@@ -133,7 +137,6 @@ class Strategy:
         venue = exc.get_name()
 
         timestamp = datetime.utcfromtimestamp(bar['timestamp'])
-        self.logger.debug(str(timestamp) + " " + str(event.get_bar()))
 
         # Update each relevant dataframe.
         for tf in timeframes:
@@ -145,8 +148,12 @@ class Strategy:
                 self.data[venue][sym][tf] = self.build_dataframe(
                     venue, sym, tf, bar)
 
-            # If dataframe already populated, append the new bar.
-            elif size > 0:
+                self.logger.debug("Created new df for " + str(tf) + " .")
+
+            # If dataframe already populated, append the new bar. Only update
+            # op_timeframes if appending, as required timeframes will still be
+            # mid-bar.
+            elif size > 0 and tf in op_timeframes:
 
                 new_row = self.single_bar_resample(
                         venue, sym, tf, bar, timestamp)
@@ -154,13 +161,11 @@ class Strategy:
                 # Append.
                 self.data[venue][sym][tf] = self.data[venue][sym][tf].append(
                     new_row)
-
-                print("Appended row:")
-                print(new_row)
+                self.logger.debug("Appended new row to " + str(tf) + " .")
 
             # TODO: df.append() is slow and copies the whole dataframe. Later
             # we need to use a data structure other than a dataframe for live
-            # data addition. Like an in-memory csv, or list of dicts, etc.
+            # data addition. Like an in-memory csv/DB, or list of dicts, etc.
 
         # Log model and timeframe details.
         for model in self.models:
@@ -202,46 +207,46 @@ class Strategy:
             # Check if model is applicable to the event.
             if inst == sym:
                 for tf in timeframes:
-                    if tf in op_tfs:
+                    # if tf in op_tfs:
 
-                        features = model.get_features()
-                        data = self.data[venue][sym][tf]
+                    features = model.get_features()
+                    data = self.data[venue][sym][tf]
 
-                        # Calculate feature data.
-                        for feature in features:
+                    # Calculate feature data.
+                    for feature in features:
 
-                            # f[0] is feature type
-                            # f[1] is feature function
-                            # f[2] is feature param
-                            f = feature[1](
-                                    self.feature_ref,
-                                    feature[2],
-                                    data)
+                        # f[0] is feature type
+                        # f[1] is feature function
+                        # f[2] is feature param
+                        f = feature[1](
+                                self.feature_ref,
+                                feature[2],
+                                data)
 
-                            # Handle indicator and time-series feature data.
-                            if (
-                                f[0] == "indicator" or
-                                (type(f) == pd.core.series.Series) or
-                                    (type(f) == pd.Series)):
+                        # Handle indicator and time-series feature data.
+                        if (
+                            f[0] == "indicator" or
+                            (type(f) == pd.core.series.Series) or
+                                (type(f) == pd.Series)):
 
-                                # Use feature param as dataframe col name.
-                                if feature[2] is None:
-                                    ID = ""
-                                else:
-                                    ID = str(feature[2])
+                            # Use feature param as dataframe col name.
+                            if feature[2] is None:
+                                ID = ""
+                            else:
+                                ID = str(feature[2])
 
-                                # Round and append to dataframe.
-                                self.data[venue][sym][tf][
-                                    feature[1].__name__ +
-                                    ID] = f.round(6)
+                            # Round and append to dataframe.
+                            self.data[venue][sym][tf][
+                                feature[1].__name__ +
+                                ID] = f.round(6)
 
-                            # Handle boolean feature data.
-                            elif f[0] == "boolean":
-                                pass
+                        # Handle boolean feature data.
+                        elif f[0] == "boolean":
+                            pass
 
                         # Debug.
-                        self.logger.debug(tf + ":")
-                        print(self.data[venue][sym][tf], "\n")
+                        # self.logger.debug(tf + ":")
+                        # print(self.data[venue][sym][tf], "\n")
 
     def run_models(self, event, timeframes):
         """
@@ -361,9 +366,10 @@ class Strategy:
             Resampling error.
         """
 
-        # Find the total number of 1min bars needed..
         if tf == "1Min":
-            rows == [bar]
+            # Don't need to do any resampling for 1 min bars.
+            rows = [bar]
+
         else:
             # Determine how many bars to fetch for resampling.
             size = self.TF_MINS[tf] - 1
@@ -399,12 +405,10 @@ class Strategy:
         except Exception as exc:
             print("Resampling error", exc)
 
-        resampled.sort_values(by="timestamp", ascending=False)
-        print("resampled df:")
-        print(resampled)
+        # Must be ascending=True to grab the first value with iloc[].
+        resampled.sort_values(by="timestamp", ascending=False, inplace=True)
 
         new_row = resampled.iloc[0]
-        print(new_row)
 
         return new_row
 
@@ -527,7 +531,27 @@ class Strategy:
         Raises:
            None.
         """
-        pass
+
+        for exc in self.exchanges:
+
+            e = exc.get_name()
+
+            for s in exc.get_symbols():
+                for tf in self.ALL_TIMEFRAMES:
+
+                    size = len(self.data[e][s][tf].index)
+
+                    if size > self.MAX_LOOKBACK + self.LOOKBACK_PAD:
+                        diff = size - (self.MAX_LOOKBACK + self.LOOKBACK_PAD)
+
+                        # Get list of indicies to drop.
+                        to_drop = [i for i in range(diff)]
+
+                        # Drop rows by index in-place.
+                        self.data[e][s][tf].drop(
+                            self.data[e][s][tf].index[[to_drop]], inplace=True)
+
+                        print("Timeframe:", tf, " \n", self.data[e][s][tf])
 
     def get_relevant_timeframes(self, time):
         """
@@ -553,6 +577,8 @@ class Strategy:
 
         timestamp = time - timedelta(hours=0, minutes=1)
         timeframes = []
+
+        self.logger.debug("Timestamp just elapsed: " + str(timestamp))
 
         for i in self.MINUTE_TIMEFRAMES:
             self.minute_timeframe(i, timestamp, timeframes)
