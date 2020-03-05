@@ -59,7 +59,13 @@ class Model(ABC):
         return self.instruments
 
     @abstractmethod
-    def get_required_timeframes(self, timeframes):
+    def run(self):
+        """
+        Run model with given data.
+        """
+
+    @abstractmethod
+    def get_required_timeframes(self, timeframes, result=False):
         """
         Given a list of operating timeframes, append additional required
         timeframe strings to the list (amend in-place, no new list created).
@@ -155,9 +161,9 @@ class TrendFollowing(Model):
     def __init__(self):
         super()
 
-    def run(self):
+    def run(self, op_data, req_data: list, timeframe: str):
         """
-        Run the model.
+        Run the model with the given data.
 
         Args:
             None:
@@ -172,7 +178,7 @@ class TrendFollowing(Model):
 
         pass
 
-    def get_required_timeframes(self, timeframes):
+    def get_required_timeframes(self, timeframes, result=False):
         """
         Add the equivalent doubled timeframe for each timeframe in
         the given list of operating timeframes.
@@ -215,5 +221,11 @@ class TrendFollowing(Model):
                 code = re.findall("[a-zA-Z]+", timeframe)
                 to_add.append((str(num * 2) + code[0]))
 
-        for new_item in to_add:
-            timeframes.append(new_item)
+        # Amend original list in-place, will contain op + req timeframes.
+        if not result:
+            for new_item in to_add:
+                req_timeframes.append(new_item)
+
+        # Return a new list containing only req timeframes.
+        elif result:
+            return [i for i in to_add]
