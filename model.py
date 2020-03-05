@@ -106,7 +106,7 @@ class TrendFollowing(Model):
             stop-loss to each new swing high/low.
     """
 
-    name = "10/20 EMA EQ Trend-following"
+    name = "10/20 EMA Trend-following"
 
     # Instruments and venues the model runs on.
     instruments = {
@@ -136,16 +136,16 @@ class TrendFollowing(Model):
         "12H": 150, "16H": 150, "1D": 150, "2D": 150, "3D": 150, "4D": 150,
         "7D": 150, "14D": 150}
 
-    # First tuple element in tuple is feature function.
-    # Second tuple element is feature param.
-    # Third tuple element is feature type.
+    # First tuple element in tuple is feature type.
+    # Second tuple element is feature function.
+    # Third tuple element is feature param.
     features = [
         ("indicator", f.EMA, 10),
         ("indicator", f.EMA, 20),
-        ("indicator", f.MACD, None)
-        # f.trending,
-        # f.convergent,
-        # f.j_curve,
+        ("indicator", f.MACD, None),
+        # ("boolean", f.trending, None),
+        # ("boolean", f.convergent, f.MACD)
+        # ("boolean", f.j_curve, None)
         # f.sr_levels,
         # f.small_bar,
         # f.reversal_bar,

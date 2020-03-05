@@ -53,7 +53,7 @@ class Server:
 
     def __init__(self):
 
-        # Set False for backtesting
+        # Set False for backtesting.
         self.live_trading = True
 
         self.log_level = logging.DEBUG
@@ -191,7 +191,7 @@ class Server:
                     elif event.type == "FILL":
                         self.portfolio.fill(self.events, event)
 
-                # finished all jobs in queue
+                # Finished all jobs in queue.
                 self.events.task_done()
 
     def setup_logger(self):
@@ -287,3 +287,6 @@ class Server:
                 "Failed to connect to " + self.DB_NAME + " at " +
                 self.DB_URL + ".")
             raise Exception()
+
+        # TODO: Create indexing if not present.
+
