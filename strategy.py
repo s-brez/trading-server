@@ -39,13 +39,13 @@ class Strategy:
 
     MINUTE_TIMEFRAMES = [1, 3, 5, 15, 30]
     HOUR_TIMEFRAMES = [1, 2, 3, 4, 6, 8, 12, 16]
-    DAY_TIMEFRAMES = [1, 2, 3, 7, 14, 28]
+    DAY_TIMEFRAMES = [1, 2, 3, 4, 7, 14, 28]
 
     TF_MINS = {
         "1Min": 1, "3Min": 3, "5Min": 5, "15Min": 15, "30Min": 30, "1H": 60,
         "2H": 120, "3H": 180, "4H": 240, "6H": 360, "8H": 480, "12H": 720,
-        "16H": 960, "1D": 1440, "2D": 2880, "3D": 4320, "7D": 10080,
-        "14D": 20160, "28D": 40320}
+        "16H": 960, "1D": 1440, "2D": 2880, "3D": 4320, "4D": 5760,
+        "7D": 10080, "14D": 20160, "28D": 40320}
 
     # Extra bars to include in resample requests to account for indicator lag.
     LOOKBACK_PAD = 50
@@ -143,17 +143,10 @@ class Strategy:
 
             size = len(self.data[venue][sym][tf].index)
 
-            # If dataframe is empty, populate a new one.
-            if size == 0:
-                self.data[venue][sym][tf] = self.build_dataframe(
-                    venue, sym, tf, bar)
-
-                self.logger.debug("Created new df for " + str(tf) + " .")
-
             # If dataframe already populated, append the new bar. Only update
             # op_timeframes if appending, as required timeframes will still be
             # mid-bar.
-            elif size > 0 and tf in op_timeframes:
+            if size > 0 and tf in op_timeframes:
 
                 new_row = self.single_bar_resample(
                         venue, sym, tf, bar, timestamp)
@@ -161,7 +154,16 @@ class Strategy:
                 # Append.
                 self.data[venue][sym][tf] = self.data[venue][sym][tf].append(
                     new_row)
-                self.logger.debug("Appended new row to " + str(tf) + " .")
+                self.logger.debug(
+                    "Appended new row to " + str(tf) + " dataset.")
+
+            # If dataframe is empty, populate a new one.
+            elif size == 0:
+                self.data[venue][sym][tf] = self.build_dataframe(
+                    venue, sym, tf, bar)
+
+                self.logger.debug(
+                    "Created new df for " + str(tf) + " dataset.")
 
             # TODO: df.append() is slow and copies the whole dataframe. Later
             # we need to use a data structure other than a dataframe for live
@@ -207,7 +209,6 @@ class Strategy:
             # Check if model is applicable to the event.
             if inst == sym:
                 for tf in timeframes:
-                    # if tf in op_tfs:
 
                     features = model.get_features()
                     data = self.data[venue][sym][tf]
