@@ -11,11 +11,12 @@ Some rights reserved. See LICENSE.md, AUTHORS.md.
 
 from dateutil import parser
 from datetime import datetime
+from typing import Callable, List, Tuple
 
 
 class Event(object):
     """
-    Base class for various system events.
+    Base class for system events.
     """
 
 
@@ -25,6 +26,7 @@ class MarketEvent(Event):
     produce Signal events.
     """
 
+    # Datetime object format string
     DTFMT = '%Y-%m-%d %H:%M'
 
     def __init__(self, exchange, bar):
@@ -50,14 +52,25 @@ class MarketEvent(Event):
 
 class SignalEvent(Event):
     """
-    A trade signal. Consumed by Portfolio to produce Order events.
+    Trade signal. Consumed by Portfolio to produce Order events.
     """
 
-    def __init__(self, symbol, datetime, signal_type):
+    def __init__(self, symbol: str, datetime, direction: str,
+                 entry_price: float, entry_cond: Callable,
+                 targets: List[Tuple[float, int]], stop_price: float,
+                 void_price: float, void_cond: Callable):
+
         self.type = 'SIGNAL'
-        self.symbol = symbol            # Ticker code.
         self.datetime = datetime
-        self.signal_type = signal_type  # LONG, SHORT.
+        self.symbol = symbol            # Ticker code.
+        self.direction = direction      # LONG or SHORT.
+        self.entry_price = entry_price  # Trade entry price.
+        self.entry_type = entry_type    # Order type for entry.
+        self.entry_cond = entry_cond    # Conditions to validate entry.
+        self.targets = targets          # Profit targets and %'s.
+        self.stop_price = stop_price    # Stop-loss order price.
+        self.void_price = void_price    # Invalidation price.
+        self.void_cond = void_cond      # Any conditions that void the trade.
 
 
 class OrderEvent(Event):

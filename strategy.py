@@ -89,7 +89,7 @@ class Strategy:
             None.
         """
 
-        # Wait for 3 mins of operation to clear up null bars.
+        # Wait for 3 mins of operation to clear up any null bars.
         if count >= 3:
 
             # Get operating timeframes for the current period.
@@ -100,19 +100,22 @@ class Strategy:
             self.logger.debug("Event timestamp just in: " + str(
                 datetime.utcfromtimestamp(timestamp)))
 
-            # Get additional timeframes required by models.
+            # Store trigger timeframes (operating timeframes).
             op_timeframes = copy.deepcopy(timeframes)
+
+            # Get additional timeframes required by models.
             for model in self.models:
                 model.get_required_timeframes(timeframes)
 
             # Update datasets for all required timeframes.
             self.update_dataframes(event, timeframes, op_timeframes)
 
-            # Calculate new feauture values.
+            # Calculate new feature values.
             self.calculate_features(event, timeframes)
 
             # Run models with new data.
-            self.run_models(event, timeframes)
+            # Models put new SignalEvents in queue, if event produced.
+            self.run_models(event, op_timeframes, events)
 
             # TODO: put Signal Events in the event queue.
 
@@ -144,16 +147,20 @@ class Strategy:
             size = len(self.data[venue][sym][tf].index)
 
             # If dataframe already populated, append the new bar. Only update
-            # op_timeframes if appending, as required timeframes will still be
-            # mid-bar.
+            # op_timeframes if appending, as required tf data will be mid-bar.
             if size > 0 and tf in op_timeframes:
 
                 new_row = self.single_bar_resample(
                         venue, sym, tf, bar, timestamp)
 
+                # If timestamps out of order, rebuild the dataset.
+
+                # if existing row timestamp not tf period from current, rebuild
+
                 # Append.
                 self.data[venue][sym][tf] = self.data[venue][sym][tf].append(
                     new_row)
+
                 self.logger.debug(
                     "Appended new row to " + str(tf) + " dataset.")
 
@@ -161,12 +168,14 @@ class Strategy:
             elif size == 0:
                 self.data[venue][sym][tf] = self.build_dataframe(
                     venue, sym, tf, bar)
-
                 self.logger.debug(
                     "Created new df for " + str(tf) + " dataset.")
 
+            # Final pad in case of null bars.
+            self.data[venue][sym][tf].fillna(method="pad", inplace=True)
+
             # TODO: df.append() is slow and copies the whole dataframe. Later
-            # we need to use a data structure other than a dataframe for live
+            # need to swap to a data structure other than a dataframe for live
             # data addition. Like an in-memory csv/DB, or list of dicts, etc.
 
         # Log model and timeframe details.
@@ -204,7 +213,6 @@ class Strategy:
             lb = model.get_lookback()
             venue = exc.get_name()
             inst = model.get_instruments()[venue][sym]
-            op_tfs = model.get_operating_timeframes()
 
             # Check if model is applicable to the event.
             if inst == sym:
@@ -249,7 +257,7 @@ class Strategy:
                         # self.logger.debug(tf + ":")
                         # print(self.data[venue][sym][tf], "\n")
 
-    def run_models(self, event, timeframes):
+    def run_models(self, event, op_timeframes, events):
         """
         Run strategy models according to the just-elpased period.
 
@@ -264,6 +272,28 @@ class Strategy:
             None.
 
         """
+        sym = event.get_bar()['symbol']
+        exc = event.get_exchange()
+
+        for model in self.models:
+
+            venue = exc.get_name()
+            inst = model.get_instruments()[venue][sym]
+
+            if inst == sym:
+                for tf in op_timeframes:
+
+                    # Get non-trigger timeframe(s).
+                    req_tf = model.get_required_timeframes([tf], result=True)
+
+                    # Get non-trigger dataset(s) as list of {tf : dataframe}.
+                    req_data = [
+                        {i: self.data[venue][sym][i]} for i in req_tf]
+
+                    # Get trigger timeframe dataset.
+                    op_data = self.data[venue][sym]
+
+                    result = model.run(op_data, req_data, tf, events)
 
     def build_dataframe(self, exc, sym, tf, current_bar=None, lookback=150):
         """
@@ -338,7 +368,7 @@ class Strategy:
         df.set_index("timestamp", inplace=True)
 
         # Pad any null bars forward.
-        df.fillna(method="pad", limit=5)
+        df.fillna(method="pad", inplace=True)
 
         # Downsample 1 min data to target timeframe
         resampled_df = pd.DataFrame()
@@ -397,7 +427,7 @@ class Strategy:
         df.set_index("timestamp", inplace=True)
 
         # Pad any null bars forward.
-        df.fillna(method="pad")
+        df.fillna(method="pad", inplace=True)
 
         # Downsample 1 min data to target timeframe.
         resampled = pd.DataFrame()
@@ -448,7 +478,7 @@ class Strategy:
         """
 
         models = []
-        models.append(TrendFollowing())
+        models.append(TrendFollowing(logger))
         self.logger.debug("Initialised models.")
         return models
 
