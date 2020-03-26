@@ -6,13 +6,15 @@ Trade crypto, FX, traditional markets with unified risk allocations at any API-a
 
 Event-driven backtesting.
 
-Execution simulation (paper trading).
+Execution simulation (paper trading/forward testing).
 
-Live execution.
+Walk forward testing and optimisation (walk forward analysis).
+
+Live trade execution and logging.
 
 Dynamic, allocation-based risk management.
 
-Discrete feature library.
+Discrete strategy feature library.
 
 Strategy sandbox.
 
@@ -24,9 +26,7 @@ Order-splitting across venues.
 
 Back office: accounting and compliance reports.
 
-Walk forward testing and optimisation.
-
-IPFS/blockhcain signal publishing.
+Blockchain signal auditing.
 
 ## Venue support
 
