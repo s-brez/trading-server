@@ -10,13 +10,11 @@ Execution simulation (paper trading).
 
 Live execution.
 
-Dynamic risk management.
+Dynamic, allocation-based risk management.
 
 Discrete feature library.
 
 Strategy sandbox.
-
-Walk forward testing and optimisation.
 
 Browser frontend.
 
@@ -25,6 +23,10 @@ Account multicasting.
 Order-splitting across venues.
 
 Back office: accounting and compliance reports.
+
+Walk forward testing and optimisation.
+
+IPFS/blockhcain signal publishing.
 
 ## Venue support
 
