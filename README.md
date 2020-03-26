@@ -2,7 +2,7 @@
 An event-driven execution and backtesting platform for trading common markets.
 
 ## Planned Features
-Trade crypto, FX, traditional markets etc at any API-accessible venue.
+Trade crypto, FX, traditional markets with unified risk allocations at any API-accessible venue.
 
 Event-driven backtesting.
 
@@ -15,6 +15,8 @@ Dynamic risk management.
 Discrete feature library.
 
 Strategy sandbox.
+
+Walk forward testing and optimisation.
 
 Browser frontend.
 
