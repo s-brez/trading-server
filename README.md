@@ -36,6 +36,9 @@ BitMEX | Complete | Crypto derivatives
 IC Markets | WIP | FX, equity, commodity & index CFD's
 FTX | NA | Crypto spot, options & derivatives
 Binance | NA | Crypto spot
+IG Markets | NA | FX, equity, commodity & index CFD's
+Interactive Brokers | NA | FX, equity, commodity & index CFD's
+Deribit | NA | Crypto derivatives & options
 Bitfinex | NA | Crypto spot
 OKEx | NA | Crypto spot
 Huobi Global | NA | Crypto spot
@@ -48,9 +51,6 @@ Kucoin | NA | Crypto spot
 Bittrex | NA | Crypto spot
 Poloniex| NA | Crypto spot
 Bitflyer | NA | Crypto spot
-IG Markets | NA | FX, equity, commodity & index CFD's
-Interactive Brokers | NA | FX, equity, commodity & index CFD's
-Deribit | NA | Crypto derivatives & options
 
 ## Market data storage
 1 minute resolution OHLCV bars for all watched instruments are stored with MongoDB. 
