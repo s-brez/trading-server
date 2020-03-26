@@ -10,7 +10,7 @@ Some rights reserved. See LICENSE.md, AUTHORS.md.
 """
 
 from datetime import date, datetime, timedelta
-from model import TrendFollowing
+from model import EMACrossTestingOnly
 from features import Features
 from dateutil import parser
 import pandas as pd
@@ -114,8 +114,7 @@ class Strategy:
             self.calculate_features(event, timeframes)
 
             # Run models with new data.
-            # Models put new SignalEvents in queue, if event produced.
-            self.run_models(event, op_timeframes, events)
+            self.run_models(event, op_timeframes)
 
             # TODO: put Signal Events in the event queue.
 
@@ -257,7 +256,7 @@ class Strategy:
                         # self.logger.debug(tf + ":")
                         # print(self.data[venue][sym][tf], "\n")
 
-    def run_models(self, event, op_timeframes, events):
+    def run_models(self, event, op_timeframes):
         """
         Run strategy models according to the just-elpased period.
 
@@ -290,10 +289,14 @@ class Strategy:
                     req_data = [
                         {i: self.data[venue][sym][i]} for i in req_tf]
 
-                    # Get trigger timeframe dataset.
+                    # Get trigger timeframe data.
                     op_data = self.data[venue][sym]
 
-                    result = model.run(op_data, req_data, tf, events)
+                    # Run the model.
+                    result = model.run(op_data, req_data, tf)
+
+                    # Place generated signal in queue, if signal produced.
+                    
 
     def build_dataframe(self, exc, sym, tf, current_bar=None, lookback=150):
         """
@@ -478,7 +481,7 @@ class Strategy:
         """
 
         models = []
-        models.append(TrendFollowing(logger))
+        models.append(EMACrossTestingOnly(logger))
         self.logger.debug("Initialised models.")
         return models
 

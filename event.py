@@ -52,16 +52,17 @@ class MarketEvent(Event):
 
 class SignalEvent(Event):
     """
-    Trade signal. Consumed by Portfolio to produce Order events.
+    Entry signal. Consumed by Portfolio to produce Order events.
     """
 
-    def __init__(self, symbol: str, datetime, direction: str,
+    def __init__(self, symbol: str, entry_ts, direction: str, timeframe: str,
                  entry_price: float, entry_cond: Callable,
                  targets: List[Tuple[float, int]], stop_price: float,
                  void_price: float, void_cond: Callable):
 
         self.type = 'SIGNAL'
-        self.datetime = datetime
+        self.entry_ts = entry_ts        # Entry bar timestamp.
+        self.timeframe = timeframe      # Signal timeframe.
         self.symbol = symbol            # Ticker code.
         self.direction = direction      # LONG or SHORT.
         self.entry_price = entry_price  # Trade entry price.

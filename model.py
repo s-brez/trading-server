@@ -11,6 +11,7 @@ Some rights reserved. See LICENSE.md, AUTHORS.md.
 
 from abc import ABC, abstractmethod
 from features import Features as f
+from event import SignalEvent
 import re
 
 
@@ -20,7 +21,7 @@ class Model(ABC):
     """
 
     def __init__(self):
-        super.__init__()
+        super().__init__()
 
     def get_operating_timeframes(self):
         """
@@ -74,6 +75,8 @@ class Model(ABC):
 
         Args:
             timeframes: list of current-period operating timeframes.
+            result: boolean, if True, return a new list. Othewise append req
+                    timeframes to the list passed in (timeframes).
 
         Returns:
             None.
@@ -83,28 +86,21 @@ class Model(ABC):
         """
 
 
-class TrendFollowing(Model):
+class EMACrossTestingOnly(Model):
     """
-    Long-short trend-following model based on EMA's and MACD.
+    For testing use only.
 
     Rules:
-        1: Price must be trending on trigger timeframe.
-        2: Price must be trending on doubled trigger timeframe.
-        3. MACD swings convergent with trigger timeframe swings.
-        4. Price must have pulled back to the 10/20 EMA EQ.
-        5. Small reversal bar must be present in the 10/20 EMA EQ.
-        6. There is no old S/R level between entry and T1.
+        1. When EMA values cross, enter with market order.
 
     Supplementary factors (higher probability of success):
-        1: Price has pulled back into an old S/R level.
-        2: First pullback in a new trend.
+        1. N/A
 
     Entry:
-        Buy when price breaks the high/low of the trigger bar.
-        Execute buyStop when reversal bar closes with 1 bar expiry.
+        1. Market entry when rules all
 
     Stop-loss:
-        At swing high/low of the trigger bar.
+        At previous swing high/low.
 
     Positon management:
         T1: 1R, close 50% of position. Trade is now risk free.
@@ -112,9 +108,8 @@ class TrendFollowing(Model):
             stop-loss to each new swing high/low.
     """
 
-    name = "10/20 EMA Trend-following"
+    name = "EMA Cross Testing-only"
 
-    # Instruments and venues the model runs on.
     instruments = {
         "BitMEX": {
             "XBTUSD": "XBTUSD",
@@ -147,21 +142,14 @@ class TrendFollowing(Model):
     # Third tuple element is feature param.
     features = [
         ("indicator", f.EMA, 10),
-        ("indicator", f.EMA, 20),
-        ("indicator", f.MACD, None),
-        # ("boolean", f.trending, None),
-        # ("boolean", f.convergent, f.MACD)
-        # ("boolean", f.j_curve, None)
-        # f.sr_levels,
-        # f.small_bar,
-        # f.reversal_bar,
-        # f.new_trend
-        ]
+        ("indicator", f.EMA, 20)]
 
-    def __init__(self):
+    def __init__(self, logger):
         super()
 
-    def run(self, op_data, req_data: list, timeframe: str):
+        self.logger = logger
+
+    def run(self, op_data, req_data: list, timeframe: str ,):
         """
         Run the model with the given data.
 
@@ -176,56 +164,24 @@ class TrendFollowing(Model):
 
         """
 
-        pass
+        self.logger.debug(
+            "Running " + str(timeframe) + " " + self.get_name() + ".")
 
-    def get_required_timeframes(self, timeframes, result=False):
+        print(op_data)
+
+        # if signal:
+        #     return SignalEvent(symbol, datetime, direction)
+        # else:
+        #     return None
+
+        return None
+
+    def get_required_timeframes(self, timeframes: list, result=False):
         """
-        Add the equivalent doubled timeframe for each timeframe in
-        the given list of operating timeframes.
-
-        eg. if "1H" is present, add "2H" to the list.
+        No additional (other than current) timeframes required for this model.
         """
 
-        to_add = []
-
-        for timeframe in timeframes:
-
-            # 1Min use 3Min as the "doubled" trigger timeframe.
-            if timeframe == "1Min":
-                if "3Min" not in timeframes and "3Min" not in to_add:
-                    to_add.append("3Min")
-
-            # 3Min use 5Min as the "doubled" trigger timeframe.
-            elif timeframe == "3Min":
-                if "5Min" not in timeframes and "5Min" not in to_add:
-                    to_add.append("5Min")
-
-            # 5Min use 15Min as the "doubled" trigger timeframe.
-            elif timeframe == "5Min":
-                if "15Min" not in timeframes and "15Min" not in to_add:
-                    to_add.append("15Min")
-
-            # 12H and 16H use 1D as the "doubled" trigger timeframe.
-            elif timeframe == "12H" or timeframe == "16H":
-                if "1D" not in timeframes and "1D" not in to_add:
-                    to_add.append("1D")
-
-            # 30Min use 1H as the "doubled" trigger timeframe.
-            elif timeframe == "30Min":
-                if "1H" not in timeframes and "1H" not in to_add:
-                    to_add.append("1H")
-
-            # All other timeframes just double the numeric value.
-            else:
-                num = int(''.join(filter(str.isdigit, timeframe)))
-                code = re.findall("[a-zA-Z]+", timeframe)
-                to_add.append((str(num * 2) + code[0]))
-
-        # Amend original list in-place, will contain op + req timeframes.
-        if not result:
-            for new_item in to_add:
-                req_timeframes.append(new_item)
-
-        # Return a new list containing only req timeframes.
-        elif result:
-            return [i for i in to_add]
+        if result:
+            return timeframes
+        else:
+            pass
