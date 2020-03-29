@@ -256,13 +256,13 @@ class Strategy:
                         # self.logger.debug(tf + ":")
                         # print(self.data[venue][sym][tf], "\n")
 
-    def run_models(self, event, op_timeframes):
+    def run_models(self, event, op_timeframes: list):
         """
-        Run strategy models according to the just-elpased period.
+        Run models for the just-elpased period.
 
         Args:
             event: new market event.
-            timeframes: list of relevant timeframes to the just-elapsed period.
+            op_timeframes: relevant timeframes to the just-elapsed period.
 
         Returns:
             None.
@@ -282,21 +282,18 @@ class Strategy:
             if inst == sym:
                 for tf in op_timeframes:
 
-                    # Get non-trigger timeframe(s).
+                    # Get non-op, but still required timeframe codes.
                     req_tf = model.get_required_timeframes([tf], result=True)
 
                     # Get non-trigger dataset(s) as list of {tf : dataframe}.
                     req_data = [
                         {i: self.data[venue][sym][i]} for i in req_tf]
 
-                    # Get trigger timeframe data.
-                    op_data = self.data[venue][sym]
-
                     # Run the model.
-                    result = model.run(op_data, req_data, tf)
+                    result = model.run(self.data[venue][sym], req_data, tf,
+                                       sym, exc)
 
                     # Place generated signal in queue, if signal produced.
-                    
 
     def build_dataframe(self, exc, sym, tf, current_bar=None, lookback=150):
         """
@@ -585,7 +582,7 @@ class Strategy:
                         self.data[e][s][tf].drop(
                             self.data[e][s][tf].index[[to_drop]], inplace=True)
 
-                        print("Timeframe:", tf, " \n", self.data[e][s][tf])
+                        # print("Timeframe:", tf, " \n", self.data[e][s][tf])
 
     def get_relevant_timeframes(self, time):
         """

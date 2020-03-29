@@ -12,6 +12,9 @@ Some rights reserved. See LICENSE.md, AUTHORS.md.
 from abc import ABC, abstractmethod
 from features import Features as f
 from event import SignalEvent
+import matplotlib.pyplot as plt
+import plotly.graph_objects as go
+import numpy as np
 import re
 
 
@@ -149,7 +152,8 @@ class EMACrossTestingOnly(Model):
 
         self.logger = logger
 
-    def run(self, op_data, req_data: list, timeframe: str ,):
+    def run(self, op_data: dict, req_data: list, timeframe: str, symbol: str,
+            exchange):
         """
         Run the model with the given data.
 
@@ -167,7 +171,45 @@ class EMACrossTestingOnly(Model):
         self.logger.debug(
             "Running " + str(timeframe) + " " + self.get_name() + ".")
 
-        print(op_data)
+        print("Timeframe:", timeframe, " \n", op_data[timeframe])
+
+        if timeframe == "1Min":
+            chart = go.Figure(
+
+                # Bars.
+                data=[go.Ohlc(
+                    x=op_data[timeframe].index,
+                    open=op_data[timeframe]['open'],
+                    high=op_data[timeframe]['high'],
+                    low=op_data[timeframe]['low'],
+                    close=op_data[timeframe]['close']),
+
+                    # EMA's.
+                    go.Scatter(
+                    x=op_data[timeframe].index,
+                    y=op_data[timeframe].EMA10,
+                    line=dict(color='orange', width=1)),
+                    go.Scatter(
+                    x=op_data[timeframe].index,
+                    y=op_data[timeframe].EMA20,
+                    line=dict(color='blue', width=1))])
+
+            title = timeframe + " " + symbol + " " + exchange.get_name()
+
+            chart.update_layout(
+                title_text=title,
+                title={
+                    'y': 0.9,
+                    'x': 0.5,
+                    'xanchor': 'center',
+                    'yanchor': 'top'},
+                xaxis_rangeslider_visible=False,
+                xaxis_title="Time",
+                yaxis_title="Price (USD)")
+
+            chart.show()
+
+        # TODO: model logic
 
         # if signal:
         #     return SignalEvent(symbol, datetime, direction)
