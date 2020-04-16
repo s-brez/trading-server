@@ -35,7 +35,7 @@ class MarketEvent(Event):
         self.bar = bar
 
     def __str__(self):
-        return "MarketEvent - Exchange: %s, Symbol: %s, TS: %s, Close: %s" % (
+        return "Market Event - Exchange: %s, Symbol: %s, TS: %s, Close: %s" % (
             self.exchange.get_name(), self.bar['symbol'],
             self.get_datetime(), self.bar['close'])
 
@@ -56,7 +56,7 @@ class SignalEvent(Event):
     """
 
     def __init__(self, symbol: str, entry_ts, direction: str, timeframe: str,
-                 strategy: str, venue: str, entry_price: float,
+                 strategy: str, venue, entry_price: float,
                  entry_cond: Callable, targets: List[Tuple[float, int]],
                  stop_price: float, void_price: float, void_cond: Callable,
                  note: str):
@@ -76,6 +76,14 @@ class SignalEvent(Event):
         self.void_price = void_price    # Invalidation price.
         self.void_cond = void_cond      # Any conditions that void the trade.
         self.note = note                # Signal notes.
+
+    def __str__(self):
+        return "Signal Event - Direction: %s, Symbol: %s, Entry price: %s",
+        "Entry TS: %s, Timeframe: %s, Strategy: %s, Venue: %s Order type: %s",
+        "Note: %s" % (
+            self.direction, self.symbol, self.entry_price, self.entry_ts,
+            self.timeframe, self.strategy, self.venue.get_name(),
+            self.entry_type, self.note)
 
 
 class OrderEvent(Event):
