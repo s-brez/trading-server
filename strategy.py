@@ -232,16 +232,12 @@ class Strategy:
                                 data)
 
                         # Handle indicator and time-series feature data.
-                        if (
-                            f[0] == "indicator" or
+                        if (f[0] == "indicator" or
                             (type(f) == pd.core.series.Series) or
                                 (type(f) == pd.Series)):
 
                             # Use feature param as dataframe col name.
-                            if feature[2] is None:
-                                ID = ""
-                            else:
-                                ID = str(feature[2])
+                            ID = "" if feature[2] is None else str(feature[2])
 
                             # Round and append to dataframe.
                             self.data[venue][sym][tf][
