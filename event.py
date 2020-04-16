@@ -56,14 +56,17 @@ class SignalEvent(Event):
     """
 
     def __init__(self, symbol: str, entry_ts, direction: str, timeframe: str,
-                 entry_price: float, entry_cond: Callable,
-                 targets: List[Tuple[float, int]], stop_price: float,
-                 void_price: float, void_cond: Callable):
+                 strategy: str, venue: str, entry_price: float,
+                 entry_cond: Callable, targets: List[Tuple[float, int]],
+                 stop_price: float, void_price: float, void_cond: Callable,
+                 note: str):
 
         self.type = 'SIGNAL'
         self.entry_ts = entry_ts        # Entry bar timestamp.
         self.timeframe = timeframe      # Signal timeframe.
-        self.symbol = symbol            # Ticker code.
+        self.strategy = strategy        # Signal strategy name.
+        self.venue = venue              # Signal venue name.
+        self.symbol = symbol            # Ticker code for instrument.
         self.direction = direction      # LONG or SHORT.
         self.entry_price = entry_price  # Trade entry price.
         self.entry_type = entry_type    # Order type for entry.
@@ -72,6 +75,7 @@ class SignalEvent(Event):
         self.stop_price = stop_price    # Stop-loss order price.
         self.void_price = void_price    # Invalidation price.
         self.void_cond = void_cond      # Any conditions that void the trade.
+        self.note = note                # Signal notes.
 
 
 class OrderEvent(Event):
