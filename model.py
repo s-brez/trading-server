@@ -94,21 +94,18 @@ class EMACrossTestingOnly(Model):
     For testing use only.
 
     Rules:
-        1. When EMA values cross, enter with market order.
-
-    Supplementary factors (higher probability of success):
-        1. N/A
+        1. When EMA values cross for a minimum period time
 
     Entry:
-        1. Market entry when rules all
+        1. Market entry when rules all true.
 
     Stop-loss:
         At previous swing high/low.
 
     Positon management:
         T1: 1R, close 50% of position. Trade is now risk free.
-        T2: Stay in trade until stop-out. As price continues to trend, move
-            stop-loss to each new swing high/low.
+        T2: 2R, close 50 of remaining position. Stay in trade until stop-out.
+        T3: 3R, close position completely.
     """
 
     name = "EMA Cross Testing-only"
@@ -128,10 +125,9 @@ class EMACrossTestingOnly(Model):
 
             }}
 
-    # Timeframes that the strategy runs on.
+    # Timeframes the strategy runs on.
     operating_timeframes = [
-        "1Min", "5Min", "15Min", "30Min", "1H", "2H", "3H", "4H",
-        "6H", "8H", "12H", "16H", "1D", "2D", "3D", "4D", "7D", "14D"]
+        "5Min"]
 
     # Need to tune each timeframes ideal lookback, 150 default for now.
     lookback = {
@@ -171,43 +167,106 @@ class EMACrossTestingOnly(Model):
         self.logger.debug(
             "Running " + str(timeframe) + " " + self.get_name() + ".")
 
-        print("Timeframe:", timeframe, " \n", op_data[timeframe])
+        if timeframe in self.operating_timeframes:
 
-        if timeframe == "1Min":
-            chart = go.Figure(
+            # Check for EMA crosses.
+            emas = list(zip(op_data[timeframe].index, op_data[timeframe]['open'],
+                        op_data[timeframe].EMA10, op_data[timeframe].EMA20))
 
-                # Bars.
-                data=[go.Ohlc(
-                    x=op_data[timeframe].index,
-                    open=op_data[timeframe]['open'],
-                    high=op_data[timeframe]['high'],
-                    low=op_data[timeframe]['low'],
-                    close=op_data[timeframe]['close']),
+            longs = {'price': [], 'time': []}
+            shorts = {'price': [], 'time': []}
 
-                    # EMA's.
-                    go.Scatter(
-                    x=op_data[timeframe].index,
-                    y=op_data[timeframe].EMA10,
-                    line=dict(color='orange', width=1)),
-                    go.Scatter(
-                    x=op_data[timeframe].index,
-                    y=op_data[timeframe].EMA20,
-                    line=dict(color='blue', width=1))])
+            # Compare current values with two previous values.
+            for i in range(len(op_data[timeframe].index)):
+                fast = emas[i][2]
+                slow = emas[i][3]
+                fast_minus_1 = emas[i - 1][2]
+                slow_minus_1 = emas[i - 1][3]
+                fast_minus_2 = emas[i - 2][2]
+                slow_minus_2 = emas[i - 2][3]
 
-            title = timeframe + " " + symbol + " " + exchange.get_name()
+                if fast is not None and slow is not None:
 
-            chart.update_layout(
-                title_text=title,
-                title={
-                    'y': 0.9,
-                    'x': 0.5,
-                    'xanchor': 'center',
-                    'yanchor': 'top'},
-                xaxis_rangeslider_visible=False,
-                xaxis_title="Time",
-                yaxis_title="Price (USD)")
+                    # If current bar crosses short.
+                    if slow > fast:
+                        if slow_minus_1 < fast_minus_1 and slow_minus_2 < fast_minus_2:
+                            shorts['price'].append(emas[i][1])
+                            shorts['time'].append(emas[i][0])
+                            print('short', emas[i][0], emas[i][1])
 
-            chart.show()
+                    # If current bar crosses long.
+                    elif slow < fast:
+                        if slow_minus_1 > fast_minus_1 and slow_minus_2 > fast_minus_2:
+                            longs['price'].append(emas[i][1])
+                            longs['time'].append(emas[i][0])
+                            print('long', emas[i][0], emas[i][1])
+
+            # Plot data if trades exist.
+            if longs or shorts:
+                chart = go.Figure(
+                    data=[
+
+                        # Bars.
+                        go.Ohlc(
+                            x=op_data[timeframe].index,
+                            open=op_data[timeframe]['open'],
+                            high=op_data[timeframe]['high'],
+                            low=op_data[timeframe]['low'],
+                            close=op_data[timeframe]['close'],
+                            name="Bars",
+                            increasing_line_color='black',
+                            decreasing_line_color='black'),
+
+                        # EMA10.
+                        go.Scatter(
+                            x=op_data[timeframe].index,
+                            y=op_data[timeframe].EMA10,
+                            line=dict(color='orange', width=1),
+                            name="EMA10"),
+
+                        # EMA20.
+                        go.Scatter(
+                            x=op_data[timeframe].index,
+                            y=op_data[timeframe].EMA20,
+                            line=dict(color='blue', width=1),
+                            name="EMA20"),
+
+                        # Longs.
+                        go.Scatter(
+                            x=longs['time'],
+                            y=longs['price'],
+                            mode='markers',
+                            name="Longs",
+                            marker_color="green",
+                            marker_size=20),
+
+                        # Shorts.
+                        go.Scatter(
+                            x=shorts['time'],
+                            y=shorts['price'],
+                            mode='markers',
+                            name="Shorts",
+                            marker_color="red",
+                            marker_size=20)])
+
+                title = timeframe + " " + symbol + " " + exchange.get_name()
+
+                chart.update_layout(
+                    title_text=title,
+                    title={
+                        'y': 0.9,
+                        'x': 0.5,
+                        'xanchor': 'center',
+                        'yanchor': 'top'},
+                    xaxis_rangeslider_visible=False,
+                    xaxis_title="Time",
+                    yaxis_title="Price (USD)",
+                    paper_bgcolor='white',
+                    plot_bgcolor='white',
+                    xaxis_showgrid=True,
+                    yaxis_showgrid=True)
+
+                chart.show()
 
         # TODO: model logic
 
