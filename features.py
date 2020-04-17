@@ -3,18 +3,11 @@ trading-server is a multi-asset, multi-strategy, event-driven execution
 and backtesting platform (OEMS) for trading common markets.
 
 Copyright (C) 2020  Sam Breznikar <sam@sdbgroup.io>
-Copyright (C) 2020  Marc Goulding <gouldingmarc@gmail.com >
 
 Licensed under GNU General Public License 3.0 or later.
 
 Some rights reserved. See LICENSE.md, AUTHORS.md.
 """
-
-from scipy.signal import savgol_filter as smooth
-import matplotlib.pyplot as plt
-import talib as ta
-import pandas as pd
-import numpy as np
 
 
 class Features:
@@ -32,7 +25,7 @@ class Features:
 
     def new_trend(self, bars: list):
         """
-        Return True if price has formed a new trend, False if not.
+        Return True if price has formed a new trend, False if not
         """
 
         return new_trend
@@ -64,78 +57,19 @@ class Features:
 
         return convergent
 
-    def sr_levels(bars, smoothing_factor, tolerance):
+    def sr_levels(self, bars: list):
         """
-        Return suport and resistance levels in a given period.
-
-        Args:
-            bars: series containing close prices.
-            smoothing_factor: smoothing factor. lower is more sensitive.
-            tolerance: acceptable variance between points to be considered
-               a level.
-
-        Returns:
-            support: list of support levels
-            resistance: list of resistance levels
-
-        Raises:
-            None.
-
+        Return levels of support and resistance in given period.
         """
 
-        # Convert n to the next even number.
-        if smoothing_factor % 2 != 0:
-            smoothing_factor += 1
+        return levels
 
-        n_ltp = bars.shape[0]
-
-        # Smooth the data.
-        ltp_s = smooth(bars, (smoothing_factor + 1), 3)
-
-        # taking a simple derivative
-        ltp_d = np.zeros(n_ltp)
-        ltp_d[1:] = np.subtract(ltp_s[1:], ltp_s[:-1])
-
-        resistance = []
-        support = []
-
-        for i in range(n_ltp - n):
-            arr_sl = ltp_d[i:(i + n)]
-            first = arr_sl[:int((n / 2))]  # first half
-            # first = arr_sl[:4]  # first half
-            last = arr_sl[int((n / 2)):]  # second half
-
-            r_1 = np.sum(first > 0)
-            r_2 = np.sum(last < 0)
-
-            s_1 = np.sum(first < 0)
-            s_2 = np.sum(last > 0)
-
-            # local maxima detection
-            if (r_1 == (n / 2)) and (r_2 == (n / 2)):
-                resistance.append(ltp[i + (int((n / 2)) - 1)])
-
-            # local minima detection
-            if (s_1 == (n / 2)) and (s_2 == (n / 2)):
-                support.append(ltp[i + (int((n / 2)) - 1)])
-
-        levels = np.sort(np.append(support, resistance))
-        tmp_levels = levels
-        for i in range(1, len(levels)):
-            if levels[i]-levels[i-1] > tolerance * levels[i]:
-                tmp_levels = tmp_levels[tmp_levels != levels[i]]
-
-        return support, resistance
-
-    def SMA(self, period: int, bars: int):
+    def MA(self, period: int, bars: int):
         """
         Simple moving average of previous n bars close price.
 
         SMA = (sum of all closes in period) / period.
         """
-        self.check_bars_type(bars)
-
-        ma = ta.MA(bars['close'], timeperiod=period, matype=0)
 
         return ma
 
@@ -152,26 +86,15 @@ class Features:
             k = 2 / (N + 1) (weight factor)
         """
 
-        self.check_bars_type(bars)
-
-        ema = ta.EMA(bars['close'], timeperiod=period)
-
         return ema
 
-    def MACD(self, name,  bars: list):
+    def MACD(self, bars: list):
         """
         Return MACD for given time series. Bars list must be 26 bars
         in length (last 26 bars for period).
 
         MACD = EMA(12) - EMA(26)
-
-        Note we only use the MACD, not signal or histogram.
         """
-
-        self.check_bars_type(bars)
-
-        macd, signal, hist = ta.MACD(
-            bars['close'], fastperiod=12, slowperiod=26, signalperiod=9)
 
         return macd
 
@@ -188,76 +111,5 @@ class Features:
             Mean Deviation=(∑P | Typical Price - MA |) / P
         """
 
-        self.check_bars_type(bars)
-
-        cci = ta.CCI(
-            bars['high'], bars['low'], bars['close'], timeperiod=period)
-
         return cci
 
-    def BB(self, bars, period: int):
-        """
-        Return top, bottom and mid Bollinger Bands for n bars close price.
-        It is assumed that:
-        -- Bollinger Bands are desired at 2 standard deviation's from the mean.
-        -- moving average used is a simple moving average
-        """
-
-        self.check_bars_type(bars)
-
-        upperband, middleband, lowerband = ta.BBANDS(
-            close, timeperiod=period, nbdevup=2, nbdevdn=2, matype=0)
-
-        return upperband, middleband, lowerband
-
-    def fractals(self, bars, window: int = 5):
-        """
-        Returns a list of size len(bars) containing a value for each bar.
-        The value will state whether its corresponding bar is a top
-        fractal or a bottom fractal. Returns 1 for top fractals, 0 for
-        non-fractals, -1 for bottom fractals.
-
-        The Formulas for Fractals Are:
-            Bearish Fractal (-1)=
-            High(N)>High(N−2) and
-            High(N)>High(N−1) and
-            High(N)>High(N+1) and
-            High(N)>High(N+2)
-
-            ﻿Bullish Fractal (1) =
-            Low(N)<Low(N−2) and
-            Low(N)<Low(N−1) and
-            Low(N)<Low(N+1) and
-            Low(N)<Low(N+2)
-
-        where N is center bar in window and (N+-1) (N+-2) are bars on either
-        side of the center bar.
-​
-        """
-        self.check_bars_type(bars)
-
-        # df.shape[0] is more logical but has a slower runtime, so I went with
-        # len(df.index) instead:
-        bars_length = len(bars.index)
-        frac = np.zeros(bars_length).flatten()
-
-        for bar in range(2, bars_length - 2):
-            if (bars['high'][bar] > bars['high'][bar-2]
-                    and bars['high'][bar] > bars['high'][bar-1]
-                    and bars['high'][bar] > bars['high'][bar+1]
-                    and bars['high'][bar] > bars['high'][bar+2]):
-
-                frac[bar] = 1
-
-            elif (bars['low'][bar] < bars['low'][bar-2]
-                    and bars['low'][bar] < bars['low'][bar-1]
-                    and bars['low'][bar] < bars['low'][bar+1]
-                    and bars['low'][bar] < bars['low'][bar+2]):
-
-                frac[bar] = -1
-
-        return frac
-
-    def check_bars_type(self, bars):
-
-        assert isinstance(bars, pd.DataFrame)

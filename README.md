@@ -2,17 +2,19 @@
 An event-driven execution and backtesting platform for trading common markets.
 
 ## Planned Features
-Trade crypto, FX, traditional markets etc at any API-accessible venue.
+Trade crypto, FX, traditional markets with unified risk allocations at any API-accessible venue.
 
 Event-driven backtesting.
 
-Execution simulation (paper trading).
+Execution simulation (paper trading/forward testing).
 
-Live execution.
+Walk forward testing and optimisation (walk forward analysis).
 
-Dynamic risk management.
+Live trade execution and logging.
 
-Discrete feature library.
+Dynamic, allocation-based risk management.
+
+Discrete strategy feature library.
 
 Strategy sandbox.
 
@@ -24,6 +26,8 @@ Order-splitting across venues.
 
 Back office: accounting and compliance reports.
 
+Blockchain signal auditing.
+
 ## Venue support
 
 Exchange |  Status   | Asset classes
@@ -32,6 +36,9 @@ BitMEX | Complete | Crypto derivatives
 IC Markets | WIP | FX, equity, commodity & index CFD's
 FTX | NA | Crypto spot, options & derivatives
 Binance | NA | Crypto spot
+IG Markets | NA | FX, equity, commodity & index CFD's
+Interactive Brokers | NA | FX, equity, commodity & index CFD's
+Deribit | NA | Crypto derivatives & options
 Bitfinex | NA | Crypto spot
 OKEx | NA | Crypto spot
 Huobi Global | NA | Crypto spot
@@ -44,9 +51,6 @@ Kucoin | NA | Crypto spot
 Bittrex | NA | Crypto spot
 Poloniex| NA | Crypto spot
 Bitflyer | NA | Crypto spot
-IG Markets | NA | FX, equity, commodity & index CFD's
-Interactive Brokers | NA | FX, equity, commodity & index CFD's
-Deribit | NA | Crypto derivatives & options
 
 ## Market data storage
 1 minute resolution OHLCV bars for all watched instruments are stored with MongoDB. 
