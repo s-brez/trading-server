@@ -11,7 +11,6 @@ Some rights reserved. See LICENSE.md, AUTHORS.md.
 
 from event import MarketEvent
 from itertools import groupby, count
-
 from pymongo import MongoClient, errors
 from itertools import groupby, count
 from event import MarketEvent
@@ -110,7 +109,7 @@ class Datahandler:
             for symbol in exchange.get_symbols():
 
                 for bar in bars[symbol]:
-                    event = MarketEvent(exchange.get_name(), bar)
+                    event = MarketEvent(exchange, bar)
                     new_market_events.append(event)
 
                     # Add bars to save-to-db-later queue.
@@ -174,7 +173,6 @@ class Datahandler:
         self.logger.debug("Started data diagnostics.")
         for exchange in self.exchanges:
             for symbol in exchange.get_symbols():
-                time.sleep(0.5)
                 reports.append(self.data_status_report(
                     exchange, symbol, output))
 
@@ -182,11 +180,10 @@ class Datahandler:
         self.logger.debug("Resolving missing data.")
 
         for report in reports:
-            time.sleep(0.5)
             self.backfill_gaps(report)
             self.replace_null_bars(report)
 
-        self.logger.debug("Data up to date.")
+        self.logger.debug("Data diagnostics complete.")
         self.ready = True
 
     def save_new_bars_to_db(self):
@@ -218,8 +215,8 @@ class Datahandler:
                     count += 1
                     # store bar in relevant db collection
                     try:
-                        self.db_collections[bar.exchange].insert_one(
-                            bar.get_bar())
+                        self.db_collections[
+                            bar.exchange.get_name()].insert_one(bar.get_bar())
 
                     # Skip duplicates if they exist.
                     except pymongo.errors.DuplicateKeyError:
@@ -385,7 +382,7 @@ class Datahandler:
                 poll_count += 1
 
             # Sanity check, check that the retreived bars match gaps.
-            self.logger.debug("Verifying new data...")
+            # self.logger.debug("Verifying new data...")
             timestamps = [i['timestamp'] for i in bars_to_store]
             timestamps = sorted(timestamps)
             bars = sorted(report['gaps'])
@@ -395,7 +392,7 @@ class Datahandler:
                 doc_count_before = (
                     self.db_collections[report[
                         'exchange'].get_name()].count_documents(query))
-                self.logger.debug("Storing new data...")
+                # self.logger.debug("Storing new data...")
 
                 for bar in bars_to_store:
                     try:
@@ -653,4 +650,3 @@ class Datahandler:
                     exchange.get_name() + "-" + symbol)
 
         return instruments
-

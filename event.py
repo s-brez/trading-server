@@ -11,11 +11,12 @@ Some rights reserved. See LICENSE.md, AUTHORS.md.
 
 from dateutil import parser
 from datetime import datetime
+from typing import Callable, List, Tuple
 
 
 class Event(object):
     """
-    Base class for various system events.
+    Base class for system events.
     """
 
 
@@ -25,8 +26,7 @@ class MarketEvent(Event):
     produce Signal events.
     """
 
-    DTFMT = '%Y-%m-%d %H:%M'
-
+    # Datetime object format string
     DTFMT = '%Y-%m-%d %H:%M'
 
     def __init__(self, exchange, bar):
@@ -35,9 +35,9 @@ class MarketEvent(Event):
         self.bar = bar
 
     def __str__(self):
-        return "MarketEvent - Exchange: %s, Symbol: %s, TS: %s, Close: %s" % (
-            self.exchange, self.bar['symbol'],
-            self.get_datetime(), self.bar['close'])
+        return str("MarketEvent - Exchange: " + self.exchange.get_name() +
+                   " Symbol: " + self.bar['symbol'] + " TS: " +
+                   self.get_datetime() + " Close: " + self.bar['close'])
 
     def get_bar(self):
         return self.bar
@@ -52,14 +52,37 @@ class MarketEvent(Event):
 
 class SignalEvent(Event):
     """
-    A trade signal. Consumed by Portfolio to produce Order events.
+    Entry signal. Consumed by Portfolio to produce Order events.
     """
 
-    def __init__(self, symbol, datetime, signal_type):
+    def __init__(self, symbol: str, entry_ts, direction: str, timeframe: str,
+                 strategy: str, venue, entry_price: float, entry_type: str,
+                 entry_cond: Callable, targets: list, stop_price: float,
+                 void_price: float, void_cond: Callable, note: str):
+
         self.type = 'SIGNAL'
-        self.symbol = symbol            # Ticker code.
-        self.datetime = datetime
-        self.signal_type = signal_type  # LONG, SHORT.
+        self.entry_ts = entry_ts        # Entry bar timestamp.
+        self.timeframe = timeframe      # Signal timeframe.
+        self.strategy = strategy        # Signal strategy name.
+        self.venue = venue              # Signal venue name.
+        self.symbol = symbol            # Ticker code for instrument.
+        self.direction = direction      # LONG or SHORT.
+        self.entry_price = entry_price  # Trade entry price.
+        self.entry_type = entry_type    # Order type for entry.
+        self.entry_cond = entry_cond    # Conditions to validate entry.
+        self.targets = targets          # Profit targets and %'s.
+        self.stop_price = stop_price    # Stop-loss order price.
+        self.void_price = void_price    # Invalidation price.
+        self.void_cond = void_cond      # Any conditions that void the trade.
+        self.note = note                # Signal notes.
+
+    def __str__(self):
+        return str("SignalEvent - Direction: " + self.direction + " Symbol: " +
+                   self.symbol + " Entry price: " + str(self.entry_price) +
+                   "Entry TS: " + str(self.entry_ts) + " Timeframe: " +
+                   self.timeframe + " Strategy: " + self.strategy +
+                   " Venue: " + self.venue.get_name() + " Order type: " +
+                   self.entry_type + " Note: " + self.note)
 
 
 class OrderEvent(Event):

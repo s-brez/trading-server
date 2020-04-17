@@ -53,7 +53,7 @@ class Server:
 
     def __init__(self):
 
-        # Set False for backtesting
+        # Set False for backtesting.
         self.live_trading = True
 
         self.log_level = logging.DEBUG
@@ -82,6 +82,7 @@ class Server:
         # Processing performance variables.
         self.start_processing = None
         self.end_processing = None
+        self.cycle_count = 0
 
         self.run()
 
@@ -98,48 +99,45 @@ class Server:
         if self.live_trading:
             self.data.run_data_diagnostics(1)
 
-        count = 0
+        self.cycle_count = 0
 
         sleep(self.seconds_til_next_minute())
 
         while True:
-
             if self.live_trading:
 
                 # Only update data after at least one minute of new data
-                # has been collected, datahandler and strategy ready.
-                if count >= 1 and self.data.ready:
+                # has been collected, plus datahandler and strategy ready.
+                if self.cycle_count >= 1 and self.data.ready:
                     self.start_processing = time.time()
 
                     # Parse and queue market data (new Market Events).
                     self.events = self.data.update_market_data(self.events)
 
-                    # Data is ready, route events to worker classes.
-                    self.logger.debug("clear_event_queue() called.")
+                    # Market data is ready, route events to worker classes.
                     self.clear_event_queue()
 
-                    # Run diagnostics at 4 and 8 mins to be very sure missed
+                    # Run diagnostics at 3 and 7 mins to be VERY sure missed
                     # bars are addressed before ongoing system operation.
-                    if (count == 4 or count == 8):
+                    if (self.cycle_count == 2 or self.cycle_count == 5):
                         thread = Thread(
                             target=lambda: self.data.run_data_diagnostics(0))
                         thread.daemon = True
                         thread.start()
-                        self.logger.debug("Started preliminary diagnostics.")
 
                     # Check data integrity periodically thereafter.
-                    if (count % self.DIAG_DELAY == 0):
+                    if (self.cycle_count % self.DIAG_DELAY == 0):
                         thread = Thread(
-                            target=self.data.run_data_diagnostics(0))
+                            target=lambda: self.data.run_data_diagnostics(0))
                         thread.daemon = True
                         thread.start()
 
                 # Sleep til the next minute begins.
                 sleep(self.seconds_til_next_minute())
-                count += 1
+                self.cycle_count += 1
 
+            # Update data w/o delay when backtesting, no diagnostics.
             elif not self.live_trading:
-                # Update data w/o delay when backtesting, no diagnostics.
                 self.events = self.data.update_market_data(self.events)
                 self.clear_event_queue()
 
@@ -154,7 +152,6 @@ class Server:
 
             try:
                 # Get events from queue
-                self.logger.debug("About to get events from queue.")
                 event = self.events.get(False)
 
             except queue.Empty:
@@ -165,23 +162,37 @@ class Server:
                 self.logger.debug(
                     "Processed " + str(count) + " events in " +
                     str(duration) + " seconds.")
-                # Store new data now that time-critical work is complete
+
+                # Do non-time critical work now.
                 self.data.save_new_bars_to_db()
+                self.strategy.trim_datasets()
+
                 break
 
             else:
                 if event is not None:
                     count += 1
-                    if event.type == "MARKET":
-                        self.strategy.parse_new_data(event)
-                    elif event.type == "SIGNAL":
-                        self.portfolio.update_signal(event)
-                    elif event.type == "ORDER":
-                        self.broker.place_order(event)
-                    elif event.type == "FILL":
-                        self.portfolio.update_fill(event)
 
-                # finished all jobs in queue
+                    # Signal Event generation.
+                    if event.type == "MARKET":
+                        self.strategy.new_data(
+                            self.events, event, self.cycle_count)
+                        self.portfolio.update_price(self.events, event)
+
+                    # Order Event generation.
+                    elif event.type == "SIGNAL":
+                        self.logger.debug("Processing signals.")
+                        self.portfolio.new_signal(self.events, event)
+
+                    # Order placement and Fill Event generation.
+                    elif event.type == "ORDER":
+                        self.broker.new_order(self.events, event)
+
+                    # Final portolio update.
+                    elif event.type == "FILL":
+                        self.portfolio.fill(self.events, event)
+
+                # Finished all jobs in queue.
                 self.events.task_done()
 
     def setup_logger(self):
@@ -202,7 +213,8 @@ class Server:
         logger.setLevel(self.log_level)
         ch = logging.StreamHandler()
         formatter = logging.Formatter(
-            "%(asctime)s:%(levelname)s:%(module)s - %(message)s")
+            "%(asctime)s:%(levelname)s:%(module)s - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S")
         ch.setFormatter(formatter)
         logger.addHandler(ch)
 
@@ -276,3 +288,6 @@ class Server:
                 "Failed to connect to " + self.DB_NAME + " at " +
                 self.DB_URL + ".")
             raise Exception()
+
+        # TODO: Create indexing if not present.
+

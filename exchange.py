@@ -25,10 +25,10 @@ class Exchange(ABC):
         """
         Args:
             None.
-        
+
         Returns:
             self.bars[symbol] tree (dict).
-        
+
         Raises:
             None.
         """
@@ -39,10 +39,10 @@ class Exchange(ABC):
         """
         Args:
             None.
-        
+
         Returns:
             Max amount of items returned per REST poll for http api (int).
-        
+
         Raises:
             None.
         """
@@ -53,10 +53,10 @@ class Exchange(ABC):
         """
         Args:
             None.
-        
+
         Returns:
             List of all symbols ticker code strings.
-        
+
         Raises:
             None.
         """
@@ -67,10 +67,10 @@ class Exchange(ABC):
         """
         Args:
             None.
-        
+
         Returns:
             Venue name string.
-        
+
         Raises:
             None.
         """
@@ -81,10 +81,10 @@ class Exchange(ABC):
         """
         Args:
             None.
-            
+
         Returns:
             Previous minute epoch timestamp (int).
-            
+
         Raises:
             None.
         """
@@ -108,7 +108,7 @@ class Exchange(ABC):
         """
         Args:
             None.
-        
+
         Returns:
             Number of second to next minute (int).
 
@@ -136,10 +136,10 @@ class Exchange(ABC):
             offset: number of second to advance timestamps by. Some venues
                 timestamp their bars differently. Tradingview bars are
                 timestamped 1 minute behind bitmex, for example.
-        
+
         Returns:
             A 1 min OHLCV bar (dict).
-        
+
         Raises:
             Tick data timestamp mismatch error.
 
@@ -220,7 +220,7 @@ class Exchange(ABC):
         Returns:
             List of historic 1min OHLCV bars for specified period. Returns
             specified amount of 1 min bars starting from start_time.
-        
+
         Raises:
             None.
         """
@@ -235,7 +235,7 @@ class Exchange(ABC):
 
         Returns:
             List of n recent 1-min bars of specified timeframe and symbol.
-        
+
         Raises:
             None.
         """
@@ -272,11 +272,11 @@ class Exchange(ABC):
         """
         Args:
             None.
-        
+
         Returns:
             Converts streamed websocket tick data into a 1-min OHLCV bars, then
             appends new bars to the exchange object self.bars[symbol] tree.
-        
+
         Raises:
             None.
         """

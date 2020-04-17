@@ -34,9 +34,14 @@ class Bitmex(Exchange):
         super()
         self.logger = logger
         self.name = "BitMEX"
-        self.symbols = ["XBTUSD", "ETHUSD"]
+        self.symbols = ["XBTUSD"]  # "ETHUSD", "XRPUSD"
         self.channels = ["trade"]  # , "orderBookL2"
-        self.origin_tss = {"XBTUSD": 1483228800, "ETHUSD": 1533200520}
+
+        self.origin_tss = {
+            "XBTUSD": 1483228800,
+            "ETHUSD": 1533200520,
+            "XRPUSD": 1580875200}
+
         self.api_key = None
         self.api_secret = None
 
@@ -224,4 +229,3 @@ class Bitmex(Exchange):
                 i['timestamp']).minute == match_dt.minute]
 
         return final_ticks
-

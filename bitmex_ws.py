@@ -79,7 +79,7 @@ class Bitmex_WS:
     def on_message(self, ws, msg):
         """
         Handles incoming websocket messages.
-        
+
         Args:
             ws: WebSocketApp object
             msg: message object
@@ -148,7 +148,7 @@ class Bitmex_WS:
     def on_open(self, ws):
         """
         Invoked when websocket starts. Used to subscribe to channels.
-        
+
         Args:
             ws: WebSocketApp object
 

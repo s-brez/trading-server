@@ -20,3 +20,20 @@ class Broker:
         self.exchanges = exchanges
         self.logger = logger
         self.live_trading = False
+
+    def new_order(self, events, event):
+        """
+        Process incoming order event, place orders with venues and generate
+        a fill event post-execution.
+
+        Args:
+            events: event queue object.
+            event: new market event.
+
+        Returns:
+           None.
+
+        Raises:
+            None.
+        """
+        pass
