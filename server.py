@@ -181,6 +181,7 @@ class Server:
 
                     # Order Event generation.
                     elif event.type == "SIGNAL":
+                        self.logger.debug("Processing signals.")
                         self.portfolio.new_signal(self.events, event)
 
                     # Order placement and Fill Event generation.
