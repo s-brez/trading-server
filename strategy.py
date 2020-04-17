@@ -114,7 +114,7 @@ class Strategy:
             self.calculate_features(event, timeframes)
 
             # Run models with new data.
-            self.run_models(event, op_timeframes)
+            self.run_models(event, op_timeframes, events)
 
             # TODO: put Signal Events in the event queue.
 
@@ -185,7 +185,7 @@ class Strategy:
 
             if inst == sym:
                 self.logger.debug(
-                    model.get_name() + ": " + venue + ": " + inst + ": ")
+                    model.get_name() + ": " + venue + ": " + inst)
                 self.logger.debug(
                     "Operating timeframes: " + str(op_timeframes))
                 self.logger.debug(
@@ -248,11 +248,9 @@ class Strategy:
                         elif f[0] == "boolean":
                             pass
 
-                        # Debug.
-                        # self.logger.debug(tf + ":")
-                        # print(self.data[venue][sym][tf], "\n")
+                        # TODO
 
-    def run_models(self, event, op_timeframes: list):
+    def run_models(self, event, op_timeframes: list, events):
         """
         Run models for the just-elpased period.
 
@@ -277,19 +275,24 @@ class Strategy:
 
             if inst == sym:
                 for tf in op_timeframes:
+                    if tf in model.get_operating_timeframes():
 
-                    # Get non-op, but still required timeframe codes.
-                    req_tf = model.get_required_timeframes([tf], result=True)
+                        # Get non-op, but still required timeframe codes.
+                        req_tf = model.get_required_timeframes(
+                            [tf], result=True)
 
-                    # Get non-trigger dataset(s) as list of {tf : dataframe}.
-                    req_data = [
-                        {i: self.data[venue][sym][i]} for i in req_tf]
+                        # Get non-trigger data as list of {tf : dataframe}.
+                        req_data = [
+                            {i: self.data[venue][sym][i]} for i in req_tf]
 
-                    # Run the model.
-                    result = model.run(self.data[venue][sym], req_data, tf,
-                                       sym, exc)
+                        # Run model.
+                        result = model.run(self.data[venue][sym], req_data, tf,
+                                           sym, exc)
 
-                    # Place generated signal in queue, if signal produced.
+                        # Place generated signal in the event queue.
+                        if result:
+                            print(result)
+                            events.put(result)
 
     def build_dataframe(self, exc, sym, tf, current_bar=None, lookback=150):
         """
