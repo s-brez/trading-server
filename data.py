@@ -11,7 +11,6 @@ Some rights reserved. See LICENSE.md, AUTHORS.md.
 
 from event import MarketEvent
 from itertools import groupby, count
-
 from pymongo import MongoClient, errors
 from itertools import groupby, count
 from event import MarketEvent

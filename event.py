@@ -35,9 +35,9 @@ class MarketEvent(Event):
         self.bar = bar
 
     def __str__(self):
-        return "Market Event - Exchange: %s, Symbol: %s, TS: %s, Close: %s" % (
-            self.exchange.get_name(), self.bar['symbol'],
-            self.get_datetime(), self.bar['close'])
+        return str("MarketEvent - Exchange: " + self.exchange.get_name() +
+                   " Symbol: " + self.bar['symbol'] + " TS: " +
+                   self.get_datetime() + " Close: " + self.bar['close'])
 
     def get_bar(self):
         return self.bar
@@ -56,10 +56,9 @@ class SignalEvent(Event):
     """
 
     def __init__(self, symbol: str, entry_ts, direction: str, timeframe: str,
-                 strategy: str, venue, entry_price: float,
-                 entry_cond: Callable, targets: List[Tuple[float, int]],
-                 stop_price: float, void_price: float, void_cond: Callable,
-                 note: str):
+                 strategy: str, venue, entry_price: float, entry_type: str,
+                 entry_cond: Callable, targets: list, stop_price: float,
+                 void_price: float, void_cond: Callable, note: str):
 
         self.type = 'SIGNAL'
         self.entry_ts = entry_ts        # Entry bar timestamp.
@@ -78,12 +77,12 @@ class SignalEvent(Event):
         self.note = note                # Signal notes.
 
     def __str__(self):
-        return "Signal Event - Direction: %s, Symbol: %s, Entry price: %s",
-        "Entry TS: %s, Timeframe: %s, Strategy: %s, Venue: %s Order type: %s",
-        "Note: %s" % (
-            self.direction, self.symbol, self.entry_price, self.entry_ts,
-            self.timeframe, self.strategy, self.venue.get_name(),
-            self.entry_type, self.note)
+        return str("SignalEvent - Direction: " + self.direction + " Symbol: " +
+                   self.symbol + " Entry price: " + str(self.entry_price) +
+                   "Entry TS: " + str(self.entry_ts) + " Timeframe: " +
+                   self.timeframe + " Strategy: " + self.strategy +
+                   " Venue: " + self.venue.get_name() + " Order type: " +
+                   self.entry_type + " Note: " + self.note)
 
 
 class OrderEvent(Event):
