@@ -6,13 +6,13 @@ Trade crypto, FX, CFD's, traditional markets etc with unified portfolio manageme
 
 Allocation-based risk management (allocate x% market exposure to specific strategies).
 
-Discrete strategy feature library.
+Discrete strategy feature library - quickly assemble and test new strategies.
 
 Account multicasting - trade as many accounts on as many platforms as desired.
 
-Trade consent message via Telegram - Accept or veta snapshots of trade setup about to trigger.
+Trade consent via Telegram - Accept, veto or tweak trade setups prior to triggering.
 
-Blockchain signal auditing - publish trade signals to IPFS and Ethereum to emperically prove a models win rate
+Blockchain signal auditing - publish trade signals to IPFS and Ethereum to emperically prove a models win rate over time.
 
 Order-splitting same-asset trades across venues for large account sizes.
 
@@ -22,7 +22,7 @@ Execution simulation (paper trading/forward testing).
 
 Walk forward optimisation (walk forward analysis).
 
-Back office: accounting and compliance reporting
+Back office: accounting and compliance reporting.
 
 Browser frontend.
 
@@ -51,17 +51,20 @@ Poloniex| NA | Crypto spot
 Bitflyer | NA | Crypto spot
 
 ## Market data
-1 minute resolution OHLCV bars for all watched instruments are stored with MongoDB.
+1 minute resolution OHLCV bars for all watched instruments are stored with MongoDB. 
 
-Parses tick data where a source is available, but doesn't store ticks locally. So tick-based models can be used.
+Parses tick data where live tick data is available, but doesn't store ticks locally. Tick-based models can be used, but the system is designed for 1Min+ resolution strategies.
 
 ## Strategy modelling
-Strategy model implementations are not included. A simeple moving average cross model class is included as a guide. 
+Strategy implementations are not included. A simple moving average cross model is included as a guide only. 
 
-Custom model implementations or any other enquiries: sam@sdbgroup.io.
+Custom strategy implementations or any other enquiries: sam@sdbgroup.io.
+
+## External libraries
+TA-LIB - https://mrjbq7.github.io/ta-lib/.
 
 ## Acknowledgements
-Based on architecture described at QuantStart.com (QSTrader), and the writings of E. Chan and M. Lopez de Prado. Thanks all.
+Based on architecture described by Michael Halls-Moore at QuantStart.com (qsTrader), with inspiration from the writings of E. Chan and M. Lopez de Prado. Thanks all.
 
 ## License
 GNU GPLv3
