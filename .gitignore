@@ -10,4 +10,6 @@ df.csv
 log.log
 strategy_test.py
 terminals.bat
-notes.txt
+
+*.marc
+test.py
