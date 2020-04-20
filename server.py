@@ -117,8 +117,8 @@ class Server:
                     # Market data is ready, route events to worker classes.
                     self.clear_event_queue()
 
-                    # Run diagnostics at 3 and 7 mins to be VERY sure missed
-                    # bars are addressed before ongoing system operation.
+                    # Run diagnostics at 3 and 7 mins to be sure missed
+                    # bars are rectified before ongoing system operation.
                     if (self.cycle_count == 2 or self.cycle_count == 5):
                         thread = Thread(
                             target=lambda: self.data.run_data_diagnostics(0))
@@ -163,9 +163,10 @@ class Server:
                     "Processed " + str(count) + " events in " +
                     str(duration) + " seconds.")
 
-                # Do non-time critical work now.
+                # Do non-time critical work now that events are processed.
                 self.data.save_new_bars_to_db()
                 self.strategy.trim_datasets()
+                self.strategy.save_new_signals_to_db()
 
                 break
 
@@ -290,4 +291,3 @@ class Server:
             raise Exception()
 
         # TODO: Create indexing if not present.
-
