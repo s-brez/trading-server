@@ -281,9 +281,10 @@ class EMACrossTestingOnly(Model):
 
                     chart.show()
 
-                    return SignalEvent(symbol, entry_ts, direction, timeframe,
-                                       self.name, exchange, entry_price,
-                                       "Market", None, None, None, " ")
+                    return SignalEvent(symbol, int(entry_ts.timestamp()),
+                                       direction, timeframe, self.name,
+                                       exchange, entry_price, "Market", None,
+                                       None, None, None)
                 else:
                     return None
 
