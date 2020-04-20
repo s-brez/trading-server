@@ -86,7 +86,7 @@ class Server:
                                  self.db_other, self.db_client)
 
         self.portfolio = Portfolio(self.exchanges, self.logger, self.db_other,
-                                   self.db_client)
+                                   self.db_client, self.strategy.models)
 
         self.broker = Broker(self.exchanges, self.logger, self.db_other,
                              self.db_client, self.live_trading)
