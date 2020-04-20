@@ -576,12 +576,12 @@ class Strategy:
 
         for exc in self.exchanges:
 
-            e = exc.get_name()
+            venue = exc.get_name()
 
-            for s in exc.get_symbols():
+            for sym in exc.get_symbols():
                 for tf in self.ALL_TIMEFRAMES:
 
-                    size = len(self.data[e][s][tf].index)
+                    size = len(self.data[venue][sym][tf].index)
 
                     if size > self.MAX_LOOKBACK + self.LOOKBACK_PAD:
                         diff = size - (self.MAX_LOOKBACK + self.LOOKBACK_PAD)
@@ -590,8 +590,9 @@ class Strategy:
                         to_drop = [i for i in range(diff)]
 
                         # Drop rows by index in-place.
-                        self.data[e][s][tf].drop(
-                            self.data[e][s][tf].index[[to_drop]], inplace=True)
+                        self.data[venue][sym][tf].drop(
+                            self.data[venue][sym][tf].index[[to_drop]],
+                            inplace=True)
 
                         # print("Timeframe:", tf, " \n", self.data[e][s][tf])
 
