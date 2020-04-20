@@ -118,25 +118,6 @@ class Datahandler:
 
         return new_market_events
 
-    def get_historic_data(self):
-        """
-        Return a list of market events (historic bars) from
-        locally stored data. Used when backtesting.
-
-        Args:
-            None.
-        Returns:
-            historic_market_events: list containing historic market events.
-        Raises:
-            None.
-        """
-
-        historic_market_events = []
-
-        # TODO: Needs completing.
-
-        return historic_market_events
-
     def track_tick_processing_performance(self, duration):
         """
         Track tick processing time statistics.

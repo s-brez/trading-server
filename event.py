@@ -57,8 +57,8 @@ class SignalEvent(Event):
 
     def __init__(self, symbol: str, entry_ts, direction: str, timeframe: str,
                  strategy: str, venue, entry_price: float, entry_type: str,
-                 entry_cond: Callable, targets: list, stop_price: float,
-                 void_price: float, void_cond: Callable, note: str):
+                 targets: list, stop_price: float, void_price: float,
+                 note: str):
 
         self.type = 'SIGNAL'
         self.entry_ts = entry_ts        # Entry bar timestamp.
@@ -69,20 +69,32 @@ class SignalEvent(Event):
         self.direction = direction      # LONG or SHORT.
         self.entry_price = entry_price  # Trade entry price.
         self.entry_type = entry_type    # Order type for entry.
-        self.entry_cond = entry_cond    # Conditions to validate entry.
         self.targets = targets          # Profit targets and %'s.
         self.stop_price = stop_price    # Stop-loss order price.
         self.void_price = void_price    # Invalidation price.
-        self.void_cond = void_cond      # Any conditions that void the trade.
         self.note = note                # Signal notes.
 
     def __str__(self):
         return str("SignalEvent - Direction: " + self.direction + " Symbol: " +
                    self.symbol + " Entry price: " + str(self.entry_price) +
-                   "Entry TS: " + str(self.entry_ts) + " Timeframe: " +
+                   " Entry timestamp: " + str(self.entry_ts) + " Timeframe: " +
                    self.timeframe + " Strategy: " + self.strategy +
                    " Venue: " + self.venue.get_name() + " Order type: " +
                    self.entry_type + " Note: " + self.note)
+
+    def get_signal(self):
+        return {
+            'strategy': self.strategy,
+            'venue': self.venue.get_name(),
+            'symbol': self.symbol,
+            'entry_timestamp': self.entry_ts,
+            'direction': self.direction,
+            'entry_price': self.entry_price,
+            'entry_type': self.entry_type,
+            'targets': self.targets,
+            'stop_price': self.stop_price,
+            'void_price': self.void_price,
+            'note': self.note}
 
 
 class OrderEvent(Event):

@@ -45,7 +45,8 @@ class Server:
        12. Sleep until current minute elapses."""
 
     DB_URL = 'mongodb://127.0.0.1:27017/'
-    DB_NAME = 'asset_price_master'
+    DB_PRICES = 'asset_price_master'
+    DB_OTHER = 'holdings_trades_signals_master'
     DB_TIMEOUT_MS = 10
 
     # Mins between recurring data diagnostics.
@@ -53,33 +54,44 @@ class Server:
 
     def __init__(self):
 
-        # Set False for backtesting.
+        # Set False for forward testing.
         self.live_trading = True
 
         self.log_level = logging.DEBUG
         self.logger = self.setup_logger()
 
-        # Don't connect to live data feeds if backtesting.
-        if self.live_trading:
-            self.exchanges = self.load_exchanges(self.logger)
+        self.exchanges = self.load_exchanges(self.logger)
 
         # Database.
         self.db_client = MongoClient(
             self.DB_URL,
             serverSelectionTimeoutMS=self.DB_TIMEOUT_MS)
-        self.db = self.db_client[self.DB_NAME]
+
+        # Price data database.
+        self.db_prices = self.db_client[self.DB_PRICES]
+
+        # Non-price data database.
+        self.db_other = self.db_client[self.DB_OTHER]
+
         self.check_db_connection()
 
-        # Event queue and producer/consumer worker classes.
+        # Main event queue.
         self.events = queue.Queue(0)
-        self.data = Datahandler(
-            self.exchanges, self.logger, self.db, self.db_client)
-        self.strategy = Strategy(
-            self.exchanges, self.logger, self.db, self.db_client)
-        self.portfolio = Portfolio(self.logger)
-        self.broker = Broker(self.exchanges, self.logger)
 
-        # Processing performance variables.
+        # Producer/consumer worker classes.
+        self.data = Datahandler(self.exchanges, self.logger, self.db_prices,
+                                self.db_client)
+
+        self.strategy = Strategy(self.exchanges, self.logger, self.db_prices,
+                                 self.db_other, self.db_client)
+
+        self.portfolio = Portfolio(self.exchanges, self.logger, self.db_other,
+                                   self.db_client, self.strategy.models)
+
+        self.broker = Broker(self.exchanges, self.logger, self.db_other,
+                             self.db_client, self.live_trading)
+
+        # Processing performance tracking variables.
         self.start_processing = None
         self.end_processing = None
         self.cycle_count = 0
@@ -117,8 +129,8 @@ class Server:
                     # Market data is ready, route events to worker classes.
                     self.clear_event_queue()
 
-                    # Run diagnostics at 3 and 7 mins to be VERY sure missed
-                    # bars are addressed before ongoing system operation.
+                    # Run diagnostics at 3 and 7 mins to be sure missed
+                    # bars are rectified before ongoing system operation.
                     if (self.cycle_count == 2 or self.cycle_count == 5):
                         thread = Thread(
                             target=lambda: self.data.run_data_diagnostics(0))
@@ -163,9 +175,10 @@ class Server:
                     "Processed " + str(count) + " events in " +
                     str(duration) + " seconds.")
 
-                # Do non-time critical work now.
+                # Do non-time critical work now that events are processed.
                 self.data.save_new_bars_to_db()
                 self.strategy.trim_datasets()
+                self.strategy.save_new_signals_to_db()
 
                 break
 
@@ -190,7 +203,7 @@ class Server:
 
                     # Final portolio update.
                     elif event.type == "FILL":
-                        self.portfolio.fill(self.events, event)
+                        self.portfolio.new_fill(self.events, event)
 
                 # Finished all jobs in queue.
                 self.events.task_done()
@@ -281,13 +294,12 @@ class Server:
             time.sleep(self.DB_TIMEOUT_MS)
             self.db_client.server_info()
             self.logger.debug(
-                "Connected to " + self.DB_NAME + " at " +
+                "Connected to " + self.DB_PRICES + " at " +
                 self.DB_URL + ".")
         except errors.ServerSelectionTimeoutError as e:
             self.logger.debug(
-                "Failed to connect to " + self.DB_NAME + " at " +
+                "Failed to connect to " + self.DB_PRICES + " at " +
                 self.DB_URL + ".")
             raise Exception()
 
         # TODO: Create indexing if not present.
-

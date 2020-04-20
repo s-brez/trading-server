@@ -103,7 +103,7 @@ class EMACrossTestingOnly(Model):
         Close trade and re-open in opposite direction on opposing signal.
     """
 
-    name = "5Min EMA Cross - Testing only"
+    name = "EMA Cross - Testing only"
 
     instruments = {
         "BitMEX": {
@@ -122,7 +122,7 @@ class EMACrossTestingOnly(Model):
 
     # Timeframes the strategy runs on.
     operating_timeframes = [
-        "5Min"]
+        "1Min"]
 
     # Need to tune each timeframes ideal lookback, 150 default for now.
     lookback = {
@@ -249,7 +249,7 @@ class EMACrossTestingOnly(Model):
                                 mode='markers',
                                 name="Long",
                                 marker_color="green",
-                                marker_size=20),
+                                marker_size=10),
 
                             # Shorts.
                             go.Scatter(
@@ -258,9 +258,11 @@ class EMACrossTestingOnly(Model):
                                 mode='markers',
                                 name="Short",
                                 marker_color="red",
-                                marker_size=20)])
+                                marker_size=10)])
 
-                    title = self.get_name() + " " + symbol + " " + exchange.get_name()
+                    title = str(
+                        timeframe + " " + self.get_name() + " " +
+                        symbol + " " + exchange.get_name())
 
                     chart.update_layout(
                         title_text=title,
@@ -281,8 +283,7 @@ class EMACrossTestingOnly(Model):
 
                     return SignalEvent(symbol, entry_ts, direction, timeframe,
                                        self.name, exchange, entry_price,
-                                       "Market", None, None, None, None, None,
-                                       " ")
+                                       "Market", None, None, None, " ")
                 else:
                     return None
 

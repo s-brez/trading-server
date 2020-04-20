@@ -11,10 +11,13 @@ Some rights reserved. See LICENSE.md, AUTHORS.md.
 
 from datetime import date, datetime, timedelta
 from model import EMACrossTestingOnly
+from pymongo import MongoClient, errors
 from features import Features
 from dateutil import parser
 import pandas as pd
 import calendar
+import pymongo
+import queue
 import time
 import copy
 
@@ -24,6 +27,9 @@ class Strategy:
     Ccontrol layer for all individual strategy models. Consumes
     market events from the event queue, updates strategy models with new data
     and generating Signal events.
+
+    Signal events are pushed to the main event-handling queue, and also put
+    into a save-later queue for db storage, after time-intensive work is done.
     """
 
     # For reampling with pandas.
@@ -53,13 +59,17 @@ class Strategy:
     # Maximum lookback in use by any strategy.
     MAX_LOOKBACK = 150
 
-    def __init__(self, exchanges, logger, db, db_client):
+    def __init__(self, exchanges, logger, db_prices, db_other, db_client):
         self.exchanges = exchanges
         self.logger = logger
-        self.db = db
+        self.db_prices = db_prices
+        self.db_other = db_other
         self.db_client = db_client
-        self.db_collections = {
-            i.get_name(): db[i.get_name()] for i in self.exchanges}
+        self.db_collections_price = {
+            i.get_name(): db_prices[i.get_name()] for i in self.exchanges}
+
+        # Save-later queue.
+        self.signals_save_to_db = queue.Queue(0)
 
         # DataFrame container: data[exchange][symbol][timeframe].
         self.data = {}
@@ -115,8 +125,6 @@ class Strategy:
 
             # Run models with new data.
             self.run_models(event, op_timeframes, events)
-
-            # TODO: put Signal Events in the event queue.
 
     def update_dataframes(self, event, timeframes, op_timeframes):
         """
@@ -289,10 +297,14 @@ class Strategy:
                         result = model.run(self.data[venue][sym], req_data, tf,
                                            sym, exc)
 
-                        # Place generated signal in the event queue.
+                        # Put generated signal in the main event queue.
                         if result:
-                            print(result)
                             events.put(result)
+
+                            # Put signal in separate save-later queue.
+                            self.signals_save_to_db.put(result)
+
+                            self.logger.debug(result.get_signal())
 
     def build_dataframe(self, exc, sym, tf, current_bar=None, lookback=150):
         """
@@ -337,7 +349,7 @@ class Strategy:
             size = size - 1
 
             # Use a projection to remove mongo "_id" field and symbol.
-            result = self.db_collections[exc].find(
+            result = self.db_collections_price[exc].find(
                 {"symbol": sym}, {
                     "_id": 0, "symbol": 0}).limit(
                         size).sort([("timestamp", -1)])
@@ -351,7 +363,7 @@ class Strategy:
         if not current_bar:
 
             # Use a projection to remove mongo "_id" field and symbol.
-            rows = self.db_collections[exc].find(
+            rows = self.db_collections_price[exc].find(
                 {"symbol": sym}, {
                     "_id": 0, "symbol": 0}).limit(
                         size).sort([("timestamp", -1)])
@@ -405,7 +417,7 @@ class Strategy:
             size = self.TF_MINS[tf] - 1
 
             # Use a projection to remove mongo "_id" field and symbol.
-            result = self.db_collections[venue].find(
+            result = self.db_collections_price[venue].find(
                 {"symbol": sym}, {
                     "_id": 0, "symbol": 0}).limit(
                         size).sort([("timestamp", -1)])
@@ -564,12 +576,12 @@ class Strategy:
 
         for exc in self.exchanges:
 
-            e = exc.get_name()
+            venue = exc.get_name()
 
-            for s in exc.get_symbols():
+            for sym in exc.get_symbols():
                 for tf in self.ALL_TIMEFRAMES:
 
-                    size = len(self.data[e][s][tf].index)
+                    size = len(self.data[venue][sym][tf].index)
 
                     if size > self.MAX_LOOKBACK + self.LOOKBACK_PAD:
                         diff = size - (self.MAX_LOOKBACK + self.LOOKBACK_PAD)
@@ -578,8 +590,9 @@ class Strategy:
                         to_drop = [i for i in range(diff)]
 
                         # Drop rows by index in-place.
-                        self.data[e][s][tf].drop(
-                            self.data[e][s][tf].index[[to_drop]], inplace=True)
+                        self.data[venue][sym][tf].drop(
+                            self.data[venue][sym][tf].index[[to_drop]],
+                            inplace=True)
 
                         # print("Timeframe:", tf, " \n", self.data[e][s][tf])
 
@@ -651,3 +664,41 @@ class Strategy:
         if (timestamp.minute == 0 and timestamp.hour == 0 and
                 timestamp.day % days == 0):
             timeframes.append(f"{days}D")
+
+    def save_new_signals_to_db(self):
+        """
+        Save signals in save-later queue to database.
+
+        Args:
+            None.
+        Returns:
+            None.
+        Raises:
+            pymongo.errors.DuplicateKeyError.
+        """
+
+        count = 0
+        while True:
+
+            try:
+                signal = self.signals_save_to_db.get(False)
+
+            except queue.Empty:
+                if count:
+                    self.logger.debug(
+                        "Wrote " + str(count) + " new signals to database " +
+                        str(self.db_other.name) + ".")
+                break
+
+            else:
+                if signal is not None:
+                    count += 1
+                    # Store signal in relevant db collection.
+                    try:
+                        self.db_other['signals'].insert_one(signal.get_signal())
+
+                    # Skip duplicates if they exist.
+                    except pymongo.errors.DuplicateKeyError:
+                        continue
+
+                self.signals_save_to_db.task_done()
