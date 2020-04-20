@@ -1,32 +1,30 @@
 # trading-server
-An event-driven execution and backtesting platform for trading common markets.
+Multi-asset, multi-strategy, event-driven trade execution and management platform (OEMS) for trading common markets.
 
-## Planned Features
-Trade crypto, FX, traditional markets with unified risk allocations at any API-accessible venue.
+## Planned features
+Trade crypto, FX, CFD's, traditional markets etc with unified portfolio management at any API-accessible venue.
+
+Allocation-based risk management (allocate x% market exposure to specific strategies).
+
+Discrete strategy feature library - quickly assemble and test new strategies.
+
+Account multicasting - trade as many accounts on as many platforms as desired.
+
+Trade consent via Telegram - Accept, veto or tweak trade setups prior to triggering.
+
+Blockchain signal auditing - publish trade signals to IPFS and Ethereum to emperically prove a models win rate over time.
+
+Order-splitting same-asset trades across venues for large account sizes.
 
 Event-driven backtesting.
 
 Execution simulation (paper trading/forward testing).
 
-Walk forward testing and optimisation (walk forward analysis).
+Walk forward optimisation (walk forward analysis).
 
-Live trade execution and logging.
-
-Dynamic, allocation-based risk management.
-
-Discrete strategy feature library.
-
-Strategy sandbox.
+Back office: accounting and compliance reporting.
 
 Browser frontend.
-
-Account multicasting.
-
-Order-splitting across venues.
-
-Back office: accounting and compliance reports.
-
-Blockchain signal auditing.
 
 ## Venue support
 
@@ -52,18 +50,21 @@ Bittrex | NA | Crypto spot
 Poloniex| NA | Crypto spot
 Bitflyer | NA | Crypto spot
 
-## Market data storage
+## Market data
 1 minute resolution OHLCV bars for all watched instruments are stored with MongoDB. 
 
-Parses tick data where a source is available, but doesn't store ticks locally. So tick-based models can be used.
+Parses tick data where live tick data is available, but doesn't store ticks locally. Tick-based models can be used, but the system is designed for 1Min+ resolution strategies.
 
 ## Strategy modelling
-Strategy model implementations are not included. A template model class is included as a guide. 
+Strategy implementations are not included. A simple moving average cross model is included as a guide only. 
 
-Custom model implementations or any other enquiries: sam@sdbgroup.io 
+Custom strategy implementations or any other enquiries: sam@sdbgroup.io.
+
+## External libraries
+TA-LIB - https://mrjbq7.github.io/ta-lib/.
 
 ## Acknowledgements
-Based on architecture described at QuantStart.com (QSTrader), and the writings of E. Chan and M. Lopez de Prado. Thanks all.
+Based on architecture described by Michael Halls-Moore at QuantStart.com (qsTrader), with inspiration from the writings of E. Chan and M. Lopez de Prado. Thanks all.
 
 ## License
 GNU GPLv3
