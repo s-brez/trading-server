@@ -10,6 +10,7 @@ Some rights reserved. See LICENSE.md, AUTHORS.md.
 """
 
 from event import OrderEvent, FillEvent
+import time
 
 
 class Portfolio:
@@ -21,8 +22,10 @@ class Portfolio:
     Capital allocations to strategies and risk parameters are defined here.
     """
 
-    PERCENT_RISK_PER_TRADE = 2
-    MAX_CORRELATED_TRADES = 2
+    RISK_PER_TRADE = 1                  # percentage as integer OR 'kelly'
+    MAX_CORRELATED_TRADES = 1
+    MAX_ACCEPTED_DRAWDOWN = 15          # percentage as integer
+    MAX_SIMULTANEOUS_POSITIONS = 20
 
     def __init__(self, exchanges, logger, db_other, db_client, models):
         self.exchanges = exchanges
@@ -83,9 +86,23 @@ class Portfolio:
 
     def load_portfolio(self, ID=0):
         """
-        Load portfolio matching id parameter from database.
+        Load portfolio matching ID from database.
         """
 
-        portfolio = {}
+        portfolio = coll.find_one({"id": ID}, {"_id": 0})
 
-        return portfolio
+        if portfolio:
+            return portfolio
+        else:
+            return {
+                'id': ID,
+                'start_date': time.time(),
+                'initial_funds': 10000,
+                'current_value': 10000,
+                'positions': [],
+                'model_allocations': {
+                    "EMA Cross - Testing only": 100},
+                'risk_per_trade': self.RISK_PER_TRADE,
+                'max_correlated_trades': self.MAX_CORRELATED_TRADES,
+                'max_accepted_drawdown': self.MAX_ACCEPTED_DRAWDOWN,
+                'max_simultaneous_positions': self.MAX_SIMULTANEOUS_POSITIONS}
