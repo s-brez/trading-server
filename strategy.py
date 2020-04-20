@@ -59,13 +59,14 @@ class Strategy:
     # Maximum lookback in use by any strategy.
     MAX_LOOKBACK = 150
 
-    def __init__(self, exchanges, logger, db, db_client):
+    def __init__(self, exchanges, logger, db_prices, db_other, db_client):
         self.exchanges = exchanges
         self.logger = logger
-        self.db = db
+        self.db_prices = db_prices
+        self.db_other = db_other
         self.db_client = db_client
-        self.db_collections = {
-            i.get_name(): db[i.get_name()] for i in self.exchanges}
+        self.db_collections_price = {
+            i.get_name(): db_prices[i.get_name()] for i in self.exchanges}
 
         # Save-later queue.
         self.signals_save_to_db = queue.Queue(0)
@@ -348,7 +349,7 @@ class Strategy:
             size = size - 1
 
             # Use a projection to remove mongo "_id" field and symbol.
-            result = self.db_collections[exc].find(
+            result = self.db_collections_price[exc].find(
                 {"symbol": sym}, {
                     "_id": 0, "symbol": 0}).limit(
                         size).sort([("timestamp", -1)])
@@ -362,7 +363,7 @@ class Strategy:
         if not current_bar:
 
             # Use a projection to remove mongo "_id" field and symbol.
-            rows = self.db_collections[exc].find(
+            rows = self.db_collections_price[exc].find(
                 {"symbol": sym}, {
                     "_id": 0, "symbol": 0}).limit(
                         size).sort([("timestamp", -1)])
@@ -416,7 +417,7 @@ class Strategy:
             size = self.TF_MINS[tf] - 1
 
             # Use a projection to remove mongo "_id" field and symbol.
-            result = self.db_collections[venue].find(
+            result = self.db_collections_price[venue].find(
                 {"symbol": sym}, {
                     "_id": 0, "symbol": 0}).limit(
                         size).sort([("timestamp", -1)])
@@ -685,7 +686,7 @@ class Strategy:
                 if count:
                     self.logger.debug(
                         "Wrote " + str(count) + " new signals to database " +
-                        str(self.db.name) + ".")
+                        str(self.db_other.name) + ".")
                 break
 
             else:
@@ -693,7 +694,7 @@ class Strategy:
                     count += 1
                     # Store signal in relevant db collection.
                     try:
-                        self.db['signals'].insert_one(signal.get_signal())
+                        self.db_other['signals'].insert_one(signal.get_signal())
 
                     # Skip duplicates if they exist.
                     except pymongo.errors.DuplicateKeyError:

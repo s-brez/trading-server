@@ -9,14 +9,21 @@ Licensed under GNU General Public License 3.0 or later.
 Some rights reserved. See LICENSE.md, AUTHORS.md.
 """
 
+from event import OrderEvent, FillEvent
+
 
 class Portfolio:
     """
-
+    Portfolio manages the net holdings for all models, issuing order events
+    and reacting to fill events to open and close positions and strategies
+    dictate.
     """
 
-    def __init__(self, logger):
+    def __init__(self, exchanges, logger, db_other, db_client):
+        self.exchanges = exchanges
         self.logger = logger
+        self.db_other = db_other
+        self.db_client = db_client
 
     def update_price(self, events, event):
         """
@@ -36,7 +43,7 @@ class Portfolio:
 
     def new_signal(self, events, event):
         """
-        Process incoming signal event and generate
+        Process incoming signal event and adjust portfolio accordingly.
 
         Args:
             events: event queue object.
@@ -50,7 +57,7 @@ class Portfolio:
         """
         pass
 
-    def fill(self, events, event):
+    def new_fill(self, events, event):
         """
         Process incoming fill event and update position records accordingly.
 

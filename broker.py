@@ -16,10 +16,12 @@ class Broker:
     Fill events in the event queue post-transaction.
     """
 
-    def __init__(self, exchanges, logger):
+    def __init__(self, exchanges, logger, db_other, db_client, live_trading):
         self.exchanges = exchanges
         self.logger = logger
-        self.live_trading = False
+        self.db_other = db_other
+        self.db_client = db_client
+        self.live_trading = live_trading
 
     def new_order(self, events, event):
         """
