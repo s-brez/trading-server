@@ -17,13 +17,21 @@ class Portfolio:
     Portfolio manages the net holdings for all models, issuing order events
     and reacting to fill events to open and close positions and strategies
     dictate.
+
+    Capital allocations to strategies and risk parameters are defined here.
     """
 
-    def __init__(self, exchanges, logger, db_other, db_client):
+    PERCENT_RISK_PER_TRADE = 2
+    MAX_CORRELATED_TRADES = 2
+
+    def __init__(self, exchanges, logger, db_other, db_client, models):
         self.exchanges = exchanges
         self.logger = logger
         self.db_other = db_other
         self.db_client = db_client
+        self.models = models
+
+        self.pf = self.load_portfolio()
 
     def update_price(self, events, event):
         """
@@ -43,7 +51,7 @@ class Portfolio:
 
     def new_signal(self, events, event):
         """
-        Process incoming signal event and adjust portfolio accordingly.
+        Process incoming signal event and adjust postiions accordingly.
 
         Args:
             events: event queue object.
@@ -72,3 +80,12 @@ class Portfolio:
             None.
         """
         pass
+
+    def load_portfolio(self, ID=0):
+        """
+        Load portfolio matching id parameter from database.
+        """
+
+        portfolio = {}
+
+        return portfolio
