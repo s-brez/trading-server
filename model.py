@@ -11,7 +11,7 @@ Some rights reserved. See LICENSE.md, AUTHORS.md.
 
 from abc import ABC, abstractmethod
 from features import Features as f
-from event import SignalEvent
+from event_types import SignalEvent
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 import numpy as np
