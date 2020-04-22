@@ -99,13 +99,14 @@ class Portfolio:
         if portfolio:
             return portfolio
         else:
-            # Return a default, empty portfolio if none exists.
+            # Return a default, empty portfolio if no portfolio exists.
             return {
                 'id': ID,
                 'start_date': int(time.time()),
                 'initial_funds': 0,
                 'current_value': 0,
                 'positions': [],
+                'orders': [],
                 'model_allocations': {
                     i: (100 / len(self.models)) for i in self.models},
                 'risk_per_trade': self.RISK_PER_TRADE,
