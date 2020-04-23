@@ -35,28 +35,27 @@ class Bitmex(Exchange):
         self.logger = logger
         self.name = "BitMEX"
         self.symbols = ["XBTUSD"]  # "ETHUSD", "XRPUSD"
-        self.channels = ["trade"]  # , "orderBookL2"
+        self.channels = ["trade"]
 
         self.origin_tss = {
             "XBTUSD": 1483228800,
             "ETHUSD": 1533200520,
             "XRPUSD": 1580875200}
 
-        self.api_key = None
-        self.api_secret = None
+        self.api_key, self.api_secret = self.load_api_keys()
 
         # Non persistent datastores.
         self.bars = {}
         self.ticks = {}
 
-        # Connect to trade websocket
+        # Connect to trade websocket.
         self.ws = Bitmex_WS(
             self.logger, self.symbols, self.channels, self.WS_URL,
             self.api_key, self.api_secret)
         if not self.ws.ws.sock.connected:
             self.logger.debug("Failed to to connect to BitMEX websocket.")
 
-        # Note, for future channel subs, create assitional Bitmex_WS.
+        # Note, for future channel subs, create new Bitmex_WS in new process.
 
     def parse_ticks(self):
 
