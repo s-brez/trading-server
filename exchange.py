@@ -309,3 +309,16 @@ class Exchange(ABC):
         Raises:
             None.
         """
+
+    @abstractmethod
+    def get_positions(self):
+        """
+        Args:
+            None.
+
+        Returns:
+            List containing open positions.
+
+        Raises:
+            None.
+        """
