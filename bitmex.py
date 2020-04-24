@@ -29,16 +29,15 @@ class Bitmex(Exchange):
     """
 
     MAX_BARS_PER_REQUEST = 750
+    TIMESTAMP_FORMAT = '%Y-%m-%d%H:%M:%S.%f'
 
     BASE_URL = "https://www.bitmex.com/api/v1"
+    BASE_URL_TESTNET = "https://www.testnet.bitmex.com/api/v1"
+    WS_URL = "wss://www.bitmex.com/realtime"
     BARS_URL = "/trade/bucketed?binSize="
     TICKS_URL = "/trade?symbol="
-    # WS_URL = "wss://testnet.bitmex.com/realtime"
-    WS_URL = "wss://www.bitmex.com/realtime"
-    POSITIONS_URL = "https://testnet.bitmex.com/api/v1/position?filter=%7B%22symbol%22%3A%20%22XBTUSD%22%7D"
-    # POSITIONS_URL = "https://bitmex.com/api/v1/position?filter=%7B%22symbol%22%3A%20%22XBTUSD%22%7D"
-
-    TIMESTAMP_FORMAT = '%Y-%m-%d%H:%M:%S.%f'
+    POSITIONS_URL = "/position"
+    ORDERS_URL = "/order"
 
     def __init__(self, logger):
         super()
@@ -241,12 +240,27 @@ class Bitmex(Exchange):
 
     def get_positions(self):
         s = Session()
-        prepared_request = Request('GET', self.POSITIONS_URL,
-                                   params='').prepare()
+        prepared_request = Request(
+            'GET',
+            self.BASE_URL_TESTNET + self.POSITIONS_URL,
+            params='').prepare()
         request = self.generate_request_headers(prepared_request, api_key,
                                                 api_secret)
-        response = s.send(request)
-        return response.text
+        response = s.send(request).json()
+
+        return response
+
+    def get_orders(self):
+        s = Session()
+        prepared_request = Request(
+            'GET',
+            self.BASE_URL_TESTNET + self.ORDERS_URL,
+            params='').prepare()
+        request = self.generate_request_headers(prepared_request, api_key,
+                                                api_secret)
+        response = s.send(request).json()
+
+        return response
 
     def generate_request_signature(self, secret, request_type, url, nonce,
                                    data):
