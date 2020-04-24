@@ -322,3 +322,16 @@ class Exchange(ABC):
         Raises:
             None.
         """
+
+    @abstractmethod
+    def get_orders(self):
+        """
+        Args:
+            None.
+
+        Returns:
+            List containing all orders, both active and inactive.
+
+        Raises:
+            None.
+        """
