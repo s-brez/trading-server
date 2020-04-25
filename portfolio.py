@@ -10,7 +10,7 @@ Some rights reserved. See LICENSE.md, AUTHORS.md.
 """
 
 from event_types import OrderEvent, FillEvent
-from other_types import Position
+from trade_types import Position, SingleAssetTrade, Order
 import time
 
 
