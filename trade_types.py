@@ -36,7 +36,7 @@ class Trade(ABC):
         self.fees = 0                   # Total fees/commisions paid.
         self.exposure = None            # Percentage of capital at risk.
 
-    def set_id(self):
+    def set_id(self, db):
         pass
 
     @abstractmethod
@@ -58,6 +58,7 @@ class SingleInstrumentTrade(Trade):
 
     def __init__(self):
         self.logger = logger
+        self.type = "SingleInstrumentTrade"
         self.venue_count = 1
         self.instrument_count = 1
         self.venue                      # Exchange or broker traded with.
@@ -72,10 +73,8 @@ class Position:
     Models a single active position, as part of a parent trade.
     """
 
-    def __init__(self, logger, model, venue, trade_id, symbol, direction,
-                 leverage, liquidation, size, value, entry_price, entry_type,
-                 targets, t_ids, stop_price, stop_trail, s_id, r_pnl, u_pnl,
-                 fees):
+    def __init__(self, logger, trade_id, symbol, direction, leverage,
+                 liquidation, size, value, entry_price):
         self.logger = logger
         self.trade_id = trade_id        # Parent trade ID.
         self.direction = direction      # Long or short.
@@ -91,8 +90,8 @@ class Order:
     Models a single active, untriggered order, as part of parent trade.
     """
 
-    def __init__(self, logger, model, venue, order_id, p_id, direction, size,
-                 value, price, order_type, void_price, trail):
+    def __init__(self, logger, trade_id, position_id, order_id, direction,
+                 size, value, price, order_type, void_price, trail):
         self.logger = logger
         self.trade_id = trade_id        # Parent trade ID.
         self.position_id = p_id         # Related position ID.
