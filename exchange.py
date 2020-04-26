@@ -233,9 +233,6 @@ class Exchange(ABC):
         key = os.environ[venue_name + '_API_KEY']
         secret = os.environ[venue_name + '_API_SECRET']
 
-        if key is not None and secret is not None:
-            print("Loaded keys for " + venue_name + ".")
-
         return key, secret
 
     @abstractmethod
