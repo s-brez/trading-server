@@ -30,7 +30,7 @@ class Portfolio:
     DEFAULT_STOP = 3                    # % stop distance if none provided.
 
     def __init__(self, exchanges, logger, db_other, db_client, models):
-        self.exchanges = exchanges
+        self.exchanges = {i.get_name(): i for i in exchanges}
         self.logger = logger
         self.db_other = db_other
         self.db_client = db_client
@@ -90,23 +90,25 @@ class Portfolio:
 
     def load_portfolio(self, ID=0):
         """
-        Load portfolio matching ID from database or return an empty default.
+        Load portfolio matching ID from database or return empty portfolio.
         """
 
         portfolio = self.db_other['portfolio'].find_one({"id": ID}, {"_id": 0})
 
         if portfolio:
             self.verify_portfolio(portfolio)
+
             return portfolio
+
         else:
-            return {
+            empty_portfolio = {
                 'id': ID,
                 'start_date': int(time.time()),
                 'initial_funds': 0,
                 'current_value': 0,
                 'current_drawdown': 0,
                 'trades': [],
-                'model_allocations': {  # Equal allocation as default.
+                'model_allocations': {  # Equal allocation by default.
                     i.get_name(): (100 / len(self.models)) for i in self.models},
                 'risk_per_trade': self.RISK_PER_TRADE,
                 'max_correlated_trades': self.MAX_CORRELATED_TRADES,
@@ -114,29 +116,45 @@ class Portfolio:
                 'max_simultaneous_positions': self.MAX_SIMULTANEOUS_POSITIONS,
                 'default_stop': self.DEFAULT_STOP}
 
+            self.save_porfolio(empty_portfolio)
+            self.logger.debug("Empty portfolio created.")
+
+            return empty_portfolio
+
     def verify_portfolio(self, portfolio):
         """
-        Check stored portfolio data matches actual positions.
+        Check stored portfolio data matches actual positions and orders.
         """
 
-        # If trades marked active exist (in DB), check their orders and
-        # positions match actual state of trade, update portfoiio if disparate.
         trades = self.db_other['trades'].find({"active": "True"}, {"_id": 0})
+
+        # If trades marked active exist (in DB), check their orders and
+        # positions match actual trade state, update portfoilio if disparate.
         if trades:
+            for venue in [trade['venue'] for trade in trades]:
 
-            venues = [trade['venue'] for trade in trades]
+                positions = self.exchanges[venue].get_positions()
+                orders = self.exchanges[venue].get_orders()
 
-            for venue in venues:
-                
+                # TODO: state checking.
 
-        else:
-            return portfolio
+        self.save_porfolio(portfolio)
+        self.logger.debug(str(
+            "Portfolio", portfolio['ID'], "verification complete."))
+
+        return portfolio
 
     def save_porfolio(self, portfolio):
         """
         Save portfolio state to DB.
         """
-        pass
+
+        result = self.db_other['portfolio'].replace_one({"id": ID}, portfolio)
+
+        if result['modifiedCount'] == 1:
+            self.logger.debug("Portfolio update successful.")
+        else:
+            self.logger.debug("Portfolio update unsuccessful.")
 
     def within_risk_limits(self, signal):
         """
