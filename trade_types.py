@@ -115,18 +115,18 @@ class Order:
     """
 
     def __init__(self, logger, trade_id, position_id, order_id, direction,
-                 size, value, price, order_type, void_price, trail,
+                 size, price, order_type, void_price, trail,
                  reduce_only, post_only, status="UNFILLED"):
         self.logger = logger
         self.trade_id = trade_id        # Parent trade ID.
         self.position_id = p_id         # Related position ID.
         self.order_id = order_id        # Order ID as used by venue.
-        self.price = price              # Order price.
+        self.direction = direction      # Long or short.
         self.size = size                # Size in local asset/contract.
+        self.price = price              # Order price.
         self.order_type = order_type    # LIMIT MARKET STOP_LIMIT STOP_MARKET.
         self.void_price = void_price    # Order invalidation price.
         self.trail = trail              # True or False, only for stops.
-        self.direction = direction      # Long or short.
         self.reduce_only = reduce_only  # True or False.
         self.post_only = post_only      # True of False.
         self.status = status            # FILLED, UNFILLED, PARTIAL.
