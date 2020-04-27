@@ -644,7 +644,7 @@ class Strategy:
 
         for i in range(0, 60, minutes):
             if timestamp.minute == i:
-                timeframes.append(minutes + "Min")
+                timeframes.append(str(minutes) + "Min")
 
     def hour_timeframe(self, hours, timestamp, timeframes):
         """
@@ -653,7 +653,7 @@ class Strategy:
         """
 
         if timestamp.minute == 0 and timestamp.hour % hours == 0:
-            timeframes.append(hours + "H")
+            timeframes.append(str(hours) + "H")
 
     def day_timeframe(self, days, timestamp, timeframes):
         """
@@ -663,7 +663,7 @@ class Strategy:
 
         if (timestamp.minute == 0 and timestamp.hour == 0 and
                 timestamp.day % days == 0):
-            timeframes.append(days + "D")
+            timeframes.append(str(days) + "D")
 
     def save_new_signals_to_db(self):
         """
