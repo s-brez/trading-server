@@ -58,7 +58,7 @@ class SignalEvent(Event):
     def __init__(self, symbol: str, entry_ts, direction: str, timeframe: str,
                  strategy: str, venue, entry_price: float, entry_type: str,
                  targets: list, stop_price: float, void_price: float,
-                 ic: int, note: str):
+                 ic: int, trail: bool, note: str):
 
         self.type = 'SIGNAL'
         self.entry_ts = entry_ts        # Entry bar timestamp.
@@ -69,14 +69,15 @@ class SignalEvent(Event):
         self.direction = direction      # LONG or SHORT.
         self.entry_price = entry_price  # Trade entry price.
         self.entry_type = entry_type    # Order type for entry.
-        self.targets = targets          # Profit targets and %'s.
+        self.targets = targets          # [(price target, int % to close)]
         self.stop_price = stop_price    # Stop-loss order price.
         self.void_price = void_price    # Invalidation price.
         self.instrument_count = ic      # # of instruments for the signal.
+        self.trail = trail              # True or False for trailing stop.
         self.note = note                # Signal notes.
 
     def __str__(self):
-        return str("SignalEvent - Direction: " + self.direction + " Symbol: " +
+        return str("Signal Event: " + self.direction + " Symbol: " +
                    self.symbol + " Entry price: " + str(self.entry_price) +
                    " Entry timestamp: " + str(self.entry_ts) + " Timeframe: " +
                    self.timeframe + " Strategy: " + self.strategy +
@@ -97,10 +98,16 @@ class SignalEvent(Event):
             'void_price': self.void_price,
             'note': self.note}
 
+    def inverse_direction(self):
+        if self.direction.upper() == "LONG":
+            return "SHORT"
+        if self.direction.upper() == "SHORT":
+            return "LONG"
+
 
 class OrderEvent(Event):
     """
-    Contains order details to be sent to a broker/exchange.
+    Contains trade details to be sent to a broker/exchange.
     """
 
     def __init__(self, symbol, exchange, order_type, quantity):
