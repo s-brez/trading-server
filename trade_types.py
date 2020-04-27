@@ -26,7 +26,7 @@ class Trade(ABC):
 
     def __init__(self):
         super.__init__()
-        self.trade_id = self.set_id(pymongo_db_object)
+        self.trade_id = None            # Must be set before saving to DB.
         self.active = False             # True/False.
         self.venue_count = 0            # Number of venues in use.
         self.instrument_count = 0       # Number of instruments in use.
@@ -37,15 +37,21 @@ class Trade(ABC):
         self.exposure = None            # Percentage of capital at risk.
 
     def set_id(self, db):
-        pass
+        """
+        Set ID as the next-highest integer not in use by existing trades.
+        """
+
+        result = list(db['trades'].find({}).sort([("trade_id", -1)]))
+        trade_id = (int(result[0]['trade_id']) + 1) if result else 1
+        self.trade_id = trade_id
+
+        return trade_id
 
     @abstractmethod
-    def calculate_exposure(self):
-        pass
-
-    @abstractmethod
-    def calculate_fees(self):
-        pass
+    def get_trade(self):
+        """
+        Return all trade variables as a dict for DB storage.
+        """
 
 
 class SingleInstrumentTrade(Trade):
@@ -56,16 +62,34 @@ class SingleInstrumentTrade(Trade):
     and stop loss orders.
     """
 
-    def __init__(self):
+    def __init__(self, logger, venue, symbol, position=None, open_orders=None,
+                 filled_orders=None):
         self.logger = logger
-        self.type = "SingleInstrumentTrade"
+        self.type = "SINGLE_INSTRUMENT"
         self.venue_count = 1
         self.instrument_count = 1
-        self.venue                      # Exchange or broker traded with.
-        self.symbol                     # Instrument ticker code.
-        self.position                   # Position object, if positioned.
-        self.open_orders                # List of active orders.
-        self.filled_orders              # List of filled orders.
+        self.venue = venue                  # Exchange or broker traded with.
+        self.symbol = symbol                # Instrument ticker code.
+        self.position = position            # Position object, if positioned.
+        self.open_orders = open_orders      # List of active orders.
+        self.filled_orders = filled_orders  # List of filled orders.
+
+    def get_trade(self):
+        return {
+            'trade_id': self.trade_id,
+            'type': self.type,
+            'active': self.active,
+            'venue_count': self.venue_count,
+            'instrument_count': self.instrument_count,
+            'model': self.model,
+            'u_pnl': self.u_pnl,
+            'r_pnl': self.r_pnl,
+            'fees': self.fees,
+            'exposure': self.exposure,
+            'venue': self.venue,
+            'symbol': self.symbol,
+            'open_orders': self.open_orders,
+            'filled_orders': self.filled}
 
 
 class Position:
@@ -91,15 +115,18 @@ class Order:
     """
 
     def __init__(self, logger, trade_id, position_id, order_id, direction,
-                 size, value, price, order_type, void_price, trail):
+                 size, value, price, order_type, void_price, trail,
+                 reduce_only, post_only, status="UNFILLED"):
         self.logger = logger
         self.trade_id = trade_id        # Parent trade ID.
         self.position_id = p_id         # Related position ID.
         self.order_id = order_id        # Order ID as used by venue.
-        self.direction = direction      # Long or short.
-        self.size = size                # Size in local asset/contract.
-        self.value = value              # USD value (size * USD xchange rate).
         self.price = price              # Order price.
-        self.order_type = order_type    # Limit, market, stop-limit/market, etc
+        self.size = size                # Size in local asset/contract.
+        self.order_type = order_type    # LIMIT MARKET STOP_LIMIT STOP_MARKET.
         self.void_price = void_price    # Order invalidation price.
         self.trail = trail              # True or False, only for stops.
+        self.direction = direction      # Long or short.
+        self.reduce_only = reduce_only  # True or False.
+        self.post_only = post_only      # True of False.
+        self.status = status            # FILLED, UNFILLED, PARTIAL.
