@@ -58,7 +58,7 @@ class SignalEvent(Event):
     def __init__(self, symbol: str, entry_ts, direction: str, timeframe: str,
                  strategy: str, venue, entry_price: float, entry_type: str,
                  targets: list, stop_price: float, void_price: float,
-                 ic: int, trail: bool, note: str):
+                 trail: bool, note: str, ic=1):
 
         self.type = 'SIGNAL'
         self.entry_ts = entry_ts        # Entry bar timestamp.
@@ -96,6 +96,7 @@ class SignalEvent(Event):
             'targets': self.targets,
             'stop_price': self.stop_price,
             'void_price': self.void_price,
+            'instrument_count': self.instrument_count,
             'note': self.note}
 
     def inverse_direction(self):
