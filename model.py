@@ -182,13 +182,13 @@ class EMACrossTestingOnly(Model):
 
                 if fast is not None and slow is not None:
 
-                    # Short cross
+                    # Short cross.
                     if slow > fast:
                         if slow_minus_1 < fast_minus_1 and slow_minus_2 < fast_minus_2:
                             shorts['price'].append(features[i][1])
                             shorts['time'].append(features[i][0])
 
-                    # Long cross
+                    # Long cross.
                     elif slow < fast:
                         if slow_minus_1 > fast_minus_1 and slow_minus_2 > fast_minus_2:
                             longs['price'].append(features[i][1])
@@ -200,13 +200,13 @@ class EMACrossTestingOnly(Model):
 
                 # Generate trade signal if current bar has an entry.
                 if features[-1][0] == longs['time'][-1]:
-                    direction = "long"
+                    direction = "LONG"
                     entry_price = longs['price'][-1]
                     entry_ts = longs['time'][-1]
                     signal = True
 
                 elif features[-1][0] == shorts['time'][-1]:
-                    direction = "short"
+                    direction = "SHORT"
                     entry_price = shorts['price'][-1]
                     entry_ts = shorts['time'][-1]
                     signal = True
@@ -284,7 +284,7 @@ class EMACrossTestingOnly(Model):
                     return SignalEvent(symbol, int(entry_ts.timestamp()),
                                        direction, timeframe, self.name,
                                        exchange, entry_price, "Market", None,
-                                       None, None, 1, None)
+                                       None, None, False, None)
                 else:
                     return None
 
