@@ -12,6 +12,7 @@ Some rights reserved. See LICENSE.md, AUTHORS.md.
 from trade_types import SingleInstrumentTrade, Order, Position
 from event_types import OrderEvent, FillEvent
 import time
+import queue
 
 
 class Portfolio:
@@ -38,6 +39,8 @@ class Portfolio:
 
         self.pf = self.load_portfolio()
 
+        self.trades_save_to_db = queue.Queue(0)
+
     def update_price(self, events, event):
         """
         Check price and time updates gainst existing positions.
@@ -56,7 +59,7 @@ class Portfolio:
 
     def new_signal(self, events, event):
         """
-        Process incoming signal event and adjust postiions accordingly.
+        Interpret incoming signal events to produce Order Events.
 
         Args:
             events: event queue object.
@@ -69,8 +72,84 @@ class Portfolio:
             None.
         """
 
-        if self.within_risk_limits(event):
-            pass
+        signal = event.get_signal()
+
+        if self.within_risk_limits(signal):
+            orders = []
+
+            # Prepare orders for single-instrument signals:
+            if signal['instrument_count'] == 1:
+
+                stop = self.calculate_stop_price(signal),
+                size = self.calculate_position_size(stop, signal['entry_price'])
+
+                # Entry.
+                orders.append(Order(
+                    self.logger,
+                    None,                   # Parent trade ID.
+                    None,                   # Related position ID.
+                    None,                   # Order ID as used by venue.
+                    signal['entry_price'],  # Order price.
+                    size,                   # Size in native denomination.
+                    signal['entry_type'],   # LIMIT MARKET STOP_LIMITMARKET.
+                    stop,                   # Order invalidation price.
+                    False,                  # Trail.
+                    signal['direction'],    # LONG or SHORT.
+                    False,                  # Reduce-only order.
+                    False))                 # Post-only order.
+
+                # Stop.
+                orders.append(Order(
+                    self.logger,
+                    None,
+                    None,
+                    None,
+                    stop,
+                    size,
+                    "STOP_MARKET",
+                    None,
+                    signal['trail'],
+                    signal.inverse_direction(),
+                    True,
+                    False))
+
+                # Take profit order(s).
+                if signal['targets']:
+                    for target in signal['targets']:
+                        tp_size = (size / 100) * target[1]
+                        orders.append(Order(
+                            self.logger,
+                            None,
+                            None,
+                            None,
+                            target[0],
+                            tp_size,
+                            "LIMIT",
+                            stop,
+                            False,
+                            signal.inverse_direction(),
+                            True,
+                            False))
+
+                # Parent trade object:
+                trade = SingleInstrumentTrade(
+                    self.logger,
+                    signal['venue'],        # Exchange or broker traded with.
+                    signal['symbol'],       # Instrument ticker code.
+                    None,                   # Position object.
+                    orders,                 # List of open order objects.
+                    None)                   # List of filled order objects.
+
+                # Queue the trade for storage and update portfolio state.
+                self.trades_save_to_db.put(trade)
+                self.pf['trades'].append(trade)
+                self.save_porfolio(self.pf)
+
+            # TODO: Other trade types (multi-instrument, multi-venue etc).
+
+            # Queue orders for execution.
+            for order in orders:
+                events.put(order)
 
     def new_fill(self, events, event):
         """
@@ -88,7 +167,7 @@ class Portfolio:
         """
         pass
 
-    def load_portfolio(self, ID=0):
+    def load_portfolio(self, ID=1):
         """
         Load portfolio matching ID from database or return empty portfolio.
         """
@@ -96,8 +175,7 @@ class Portfolio:
         portfolio = self.db_other['portfolio'].find_one({"id": ID}, {"_id": 0})
 
         if portfolio:
-            self.verify_portfolio(portfolio)
-
+            self.verify_portfolio_state(portfolio)
             return portfolio
 
         else:
@@ -117,11 +195,9 @@ class Portfolio:
                 'default_stop': self.DEFAULT_STOP}
 
             self.save_porfolio(empty_portfolio)
-            self.logger.debug("Empty portfolio created.")
-
             return empty_portfolio
 
-    def verify_portfolio(self, portfolio):
+    def verify_portfolio_state(self, portfolio):
         """
         Check stored portfolio data matches actual positions and orders.
         """
@@ -131,16 +207,17 @@ class Portfolio:
         # If trades marked active exist (in DB), check their orders and
         # positions match actual trade state, update portfoilio if disparate.
         if trades:
+            self.logger.debug("Verifying trade records match trade state.")
             for venue in [trade['venue'] for trade in trades]:
 
+                print("Fetched positions and orders.")
                 positions = self.exchanges[venue].get_positions()
                 orders = self.exchanges[venue].get_orders()
 
                 # TODO: state checking.
 
         self.save_porfolio(portfolio)
-        self.logger.debug(str(
-            "Portfolio", portfolio['ID'], "verification complete."))
+        self.logger.debug("Portfolio verification complete.")
 
         return portfolio
 
@@ -149,23 +226,99 @@ class Portfolio:
         Save portfolio state to DB.
         """
 
-        result = self.db_other['portfolio'].replace_one({"id": ID}, portfolio)
+        result = self.db_other['portfolio'].replace_one(
+            {"id": portfolio['id']}, portfolio, upsert=True)
 
-        if result['modifiedCount'] == 1:
+        if result.acknowledged:
             self.logger.debug("Portfolio update successful.")
         else:
             self.logger.debug("Portfolio update unsuccessful.")
 
     def within_risk_limits(self, signal):
         """
-        Return true if current holdings are within permissible risk limits.
+        Return true if the new signal would not breach risk limits if traded.
         """
 
-        for trade in self.pf['trades']['exposure']:
-            pass
+        # Finish after signal > order logic is done.
+
+        return True
+
+    def calculate_exposure(self, trade):
+        """
+        Calculate the currect capital at risk for the given trade.
+        """
+        pass
 
     def correlated(self, instrument):
         """
-        Return true if active trades are correlated to the given instrument.
+        Return true if any active trades are correlated with 'instrument'.
         """
         pass
+
+    def calculate_stop(self, signal):
+        """
+        Find the stop price for the given signal.
+        """
+
+        if signal['stop_price'] is not None:
+            stop = signal['stop_price']
+        else:
+            stop = signal['entry_price'] / 100 * (100 - self.DEFAULT_STOP)
+
+        return stop
+
+    def calculate_position_size(self, stop, entry):
+        """
+        Find appropriate position size for the given parameters.
+        """
+
+        risk = self.RISK_PER_TRADE,
+        account_size = self.pf['current_value']
+
+        risked_amt = (account_size / 100) * risk
+        position_size = risk_amted / abs(((stop - entry) / entry))
+
+        return position_size
+
+    def fees(self, trade):
+        """
+        Calculate total current fees paid for the given trade object.
+        """
+
+    def save_new_trades_to_db(self):
+        """
+        Save trades in save-later queue to database.
+
+        Args:
+            None.
+        Returns:
+            None.
+        Raises:
+            pymongo.errors.DuplicateKeyError.
+        """
+
+        count = 0
+        while True:
+
+            try:
+                trade = self.trades_save_to_db.get(False)
+
+            except queue.Empty:
+                if count:
+                    self.logger.debug(
+                        "Wrote " + str(count) + " new trades to database " +
+                        str(self.db_other.name) + ".")
+                break
+
+            else:
+                if trade is not None:
+                    count += 1
+                    # Store signal in relevant db collection.
+                    try:
+                        self.db_other['trades'].insert_one(trade.get_trade())
+
+                    # Skip duplicates if they exist.
+                    except pymongo.errors.DuplicateKeyError:
+                        continue
+
+                self.trades_save_to_db.task_done()
