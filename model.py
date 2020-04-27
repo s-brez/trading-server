@@ -284,7 +284,7 @@ class EMACrossTestingOnly(Model):
                     return SignalEvent(symbol, int(entry_ts.timestamp()),
                                        direction, timeframe, self.name,
                                        exchange, entry_price, "Market", None,
-                                       None, None, None)
+                                       None, None, 1, None)
                 else:
                     return None
 
