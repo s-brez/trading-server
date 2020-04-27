@@ -630,9 +630,9 @@ class Strategy:
         for i in self.DAY_TIMEFRAMES:
             self.day_timeframe(i, timestamp, timeframes)
 
-        if (timestamp.minute == 0 and timestamp.hour == 0 and
-                calendar.day_name[date.today().weekday()] == "Monday"):
-            timeframes.append("1w")
+        # if (timestamp.minute == 0 and timestamp.hour == 0 and
+        #         calendar.day_name[date.today().weekday()] == "Monday"):
+        #     timeframes.append("7D")
 
         return timeframes
 
@@ -644,7 +644,7 @@ class Strategy:
 
         for i in range(0, 60, minutes):
             if timestamp.minute == i:
-                timeframes.append(f"{minutes}Min")
+                timeframes.append(minutes + "Min")
 
     def hour_timeframe(self, hours, timestamp, timeframes):
         """
@@ -653,7 +653,7 @@ class Strategy:
         """
 
         if timestamp.minute == 0 and timestamp.hour % hours == 0:
-            timeframes.append(f"{hours}H")
+            timeframes.append(hours + "H")
 
     def day_timeframe(self, days, timestamp, timeframes):
         """
@@ -663,7 +663,7 @@ class Strategy:
 
         if (timestamp.minute == 0 and timestamp.hour == 0 and
                 timestamp.day % days == 0):
-            timeframes.append(f"{days}D")
+            timeframes.append(days + "D")
 
     def save_new_signals_to_db(self):
         """
