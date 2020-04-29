@@ -11,6 +11,8 @@ Some rights reserved. See LICENSE.md, AUTHORS.md.
 
 from trade_types import SingleInstrumentTrade, Order, Position
 from event_types import OrderEvent, FillEvent
+from pymongo import MongoClient, errors
+import pymongo
 import time
 import queue
 
@@ -72,7 +74,7 @@ class Portfolio:
             None.
         """
 
-        signal = event.get_signal()
+        signal = event.get_signal_dict()
 
         if self.within_risk_limits(signal):
             orders = []
@@ -81,7 +83,8 @@ class Portfolio:
             if signal['instrument_count'] == 1:
 
                 stop = self.calculate_stop_price(signal),
-                size = self.calculate_position_size(stop, signal['entry_price'])
+                size = self.calculate_position_size(stop[0],
+                                                    signal['entry_price'])
 
                 # Entry.
                 orders.append(Order(
@@ -89,12 +92,13 @@ class Portfolio:
                     None,                   # Parent trade ID.
                     None,                   # Related position ID.
                     None,                   # Order ID as used by venue.
-                    signal['entry_price'],  # Order price.
-                    size,                   # Size in native denomination.
-                    signal['entry_type'],   # LIMIT MARKET STOP_LIMITMARKET.
-                    stop,                   # Order invalidation price.
-                    False,                  # Trail.
                     signal['direction'],    # LONG or SHORT.
+                    size,                   # Size in native denomination.
+                    signal['entry_price'],  # Order price.
+                    signal['entry_type'],   # LIMIT MARKET STOP_LIMIT/MARKET.
+                    "ENTRY",                # ENTRY, TAKE_PROFIT, STOP.
+                    stop[0],                # Order invalidation price.
+                    False,                  # Trail.
                     False,                  # Reduce-only order.
                     False))                 # Post-only order.
 
@@ -104,12 +108,13 @@ class Portfolio:
                     None,
                     None,
                     None,
-                    stop,
+                    event.inverse_direction(),
                     size,
+                    stop[0],
                     "STOP_MARKET",
+                    "STOP",
                     None,
                     signal['trail'],
-                    signal.inverse_direction(),
                     True,
                     False))
 
@@ -122,12 +127,13 @@ class Portfolio:
                             None,
                             None,
                             None,
-                            target[0],
+                            event.inverse_direction(),
                             tp_size,
+                            target[0],
                             "LIMIT",
-                            stop,
+                            "TAKE_PROFIT",
+                            stop[0],
                             False,
-                            signal.inverse_direction(),
                             True,
                             False))
 
@@ -136,20 +142,23 @@ class Portfolio:
                     self.logger,
                     signal['venue'],        # Exchange or broker traded with.
                     signal['symbol'],       # Instrument ticker code.
+                    signal['strategy'],     # Model name.
                     None,                   # Position object.
-                    orders,                 # List of open order objects.
-                    None)                   # List of filled order objects.
+                    [i.get_order_dict() for i in orders],  # Open orders dicts.
+                    None)                   # Filled order dicts.
+
+                trade.set_id(self.db_other)
 
                 # Queue the trade for storage and update portfolio state.
-                self.trades_save_to_db.put(trade)
-                self.pf['trades'].append(trade)
+                self.trades_save_to_db.put(trade.get_trade_dict())
+                self.pf['trades'].append(trade.get_trade_dict())
                 self.save_porfolio(self.pf)
 
             # TODO: Other trade types (multi-instrument, multi-venue etc).
 
             # Queue orders for execution.
             for order in orders:
-                events.put(order)
+                events.put(OrderEvent(order.get_order_dict()))
 
     def new_fill(self, events, event):
         """
@@ -236,10 +245,10 @@ class Portfolio:
 
     def within_risk_limits(self, signal):
         """
-        Return true if the new signal would not breach risk limits if traded.
+        Return true if the new signal would be within risk limits if traded.
         """
 
-        # Finish after signal > order logic is done.
+        # TODO: Finish after signal > order > fill logic is done.
 
         return True
 
@@ -255,7 +264,7 @@ class Portfolio:
         """
         pass
 
-    def calculate_stop(self, signal):
+    def calculate_stop_price(self, signal):
         """
         Find the stop price for the given signal.
         """
@@ -272,13 +281,19 @@ class Portfolio:
         Find appropriate position size for the given parameters.
         """
 
-        risk = self.RISK_PER_TRADE,
-        account_size = self.pf['current_value']
+        # Fixed percentage per trade risk management.
+        if isinstance(self.RISK_PER_TRADE, int):
 
-        risked_amt = (account_size / 100) * risk
-        position_size = risk_amted / abs(((stop - entry) / entry))
+            account_size = self.pf['current_value']
+            risked_amt = (account_size / 100) * self.RISK_PER_TRADE
+            print("amt", risked_amt, "stop", stop, "entry", entry)
+            position_size = risked_amt // ((stop - entry) / entry)
 
-        return position_size
+            return abs(position_size)
+
+        # TOOD: Kelly criteron risk management.
+        elif self.RISK_PER_TRADE.upper() == "KELLY":
+            pass
 
     def fees(self, trade):
         """
@@ -315,7 +330,7 @@ class Portfolio:
                     count += 1
                     # Store signal in relevant db collection.
                     try:
-                        self.db_other['trades'].insert_one(trade.get_trade())
+                        self.db_other['trades'].insert_one(trade)
 
                     # Skip duplicates if they exist.
                     except pymongo.errors.DuplicateKeyError:
