@@ -25,7 +25,6 @@ class Trade(ABC):
     """
 
     def __init__(self):
-        super.__init__()
         self.trade_id = None            # Must be set before saving to DB.
         self.active = False             # True/False.
         self.venue_count = 0            # Number of venues in use.
@@ -48,7 +47,7 @@ class Trade(ABC):
         return trade_id
 
     @abstractmethod
-    def get_trade(self):
+    def get_trade_dict(self):
         """
         Return all trade variables as a dict for DB storage.
         """
@@ -62,19 +61,21 @@ class SingleInstrumentTrade(Trade):
     and stop loss orders.
     """
 
-    def __init__(self, logger, venue, symbol, position=None, open_orders=None,
-                 filled_orders=None):
+    def __init__(self, logger, venue, symbol, model, position=None,
+                 open_orders=None, filled_orders=None):
+        super().__init__()
         self.logger = logger
         self.type = "SINGLE_INSTRUMENT"
         self.venue_count = 1
         self.instrument_count = 1
         self.venue = venue                  # Exchange or broker traded with.
         self.symbol = symbol                # Instrument ticker code.
+        self.model = model                  # Name of triggerstrategy.
         self.position = position            # Position object, if positioned.
         self.open_orders = open_orders      # List of active orders.
         self.filled_orders = filled_orders  # List of filled orders.
 
-    def get_trade(self):
+    def get_trade_dict(self):
         return {
             'trade_id': self.trade_id,
             'type': self.type,
@@ -89,7 +90,7 @@ class SingleInstrumentTrade(Trade):
             'venue': self.venue,
             'symbol': self.symbol,
             'open_orders': self.open_orders,
-            'filled_orders': self.filled}
+            'filled_orders': self.filled_orders}
 
 
 class Position:
@@ -97,25 +98,36 @@ class Position:
     Models a single active position, as part of a parent trade.
     """
 
-    def __init__(self, logger, trade_id, symbol, direction, leverage,
-                 liquidation, size, value, entry_price):
+    def __init__(self, logger, trade_id, direction, leverage,
+                 liquidation, size, entry_price):
         self.logger = logger
         self.trade_id = trade_id        # Parent trade ID.
         self.direction = direction      # Long or short.
         self.leverage = leverage        # Leverage in use.
         self.liquidation = liquidation  # Liquidation price.
         self.size = size                # Asset/contract demonination.
-        self.value = value              # USD value (size * USD xchange rate).
         self.entry_price = entry_price  # Average entry price.
+
+    def get_position_dict(self):
+        """
+        Return all position variables as a dict for DB storage.
+        """
+        return {
+            'trade_id': self.trade_id,
+            'direction': self.direction,
+            'leverage': self.leverage,
+            'liquidation': self.liquidation,
+            'size': self.size,
+            'entry_price': self.entry_price}
 
 
 class Order:
     """
-    Models a single active, untriggered order, as part of parent trade.
+    Models a single order, as part of parent trade.
     """
 
-    def __init__(self, logger, trade_id, position_id, order_id, direction,
-                 size, price, order_type, void_price, trail,
+    def __init__(self, logger, trade_id, p_id, order_id, direction,
+                 size, price, order_type, metatype, void_price, trail,
                  reduce_only, post_only, status="UNFILLED"):
         self.logger = logger
         self.trade_id = trade_id        # Parent trade ID.
@@ -125,8 +137,28 @@ class Order:
         self.size = size                # Size in local asset/contract.
         self.price = price              # Order price.
         self.order_type = order_type    # LIMIT MARKET STOP_LIMIT STOP_MARKET.
+        self.metatype = metatype        # ENTRY, TAKE_PROFIT, STOP.
         self.void_price = void_price    # Order invalidation price.
         self.trail = trail              # True or False, only for stops.
         self.reduce_only = reduce_only  # True or False.
         self.post_only = post_only      # True of False.
         self.status = status            # FILLED, UNFILLED, PARTIAL.
+
+    def get_order_dict(self):
+        """
+        Return all order variables as a dict for DB storage.
+        """
+        return {
+            'trade_id': self.trade_id,
+            'position_id': self.position_id,
+            'order_id': self.order_id,
+            'direction': self.direction,
+            'size': self.size,
+            'price': self.price,
+            'order_type': self.order_type,
+            'metatype': self.metatype,
+            'void_price': self.void_price,
+            'trail': self.trail,
+            'reduce_only': self.reduce_only,
+            'post_only': self.post_only,
+            'status': self.status}
