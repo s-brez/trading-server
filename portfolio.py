@@ -9,7 +9,7 @@ Licensed under GNU General Public License 3.0 or later.
 Some rights reserved. See LICENSE.md, AUTHORS.md.
 """
 
-from trade_types import SingleInstrumentTrade, Order, Position
+from trade_types import SingleInstrumentTrade, Order, Position, TradeID
 from event_types import OrderEvent, FillEvent
 from pymongo import MongoClient, errors
 import pymongo
@@ -39,25 +39,9 @@ class Portfolio:
         self.db_client = db_client
         self.models = models
 
+        self.id_gen = TradeID(db_other)
         self.pf = self.load_portfolio()
-
         self.trades_save_to_db = queue.Queue(0)
-
-    def update_price(self, events, event):
-        """
-        Check price and time updates gainst existing positions.
-
-        Args:
-            events: event queue object.
-            event: new market event.
-
-        Returns:
-           None.
-
-        Raises:
-            None.
-        """
-        pass
 
     def new_signal(self, events, event):
         """
@@ -86,10 +70,13 @@ class Portfolio:
                 size = self.calculate_position_size(stop[0],
                                                     signal['entry_price'])
 
-                # Entry.
+                # Generate sequential trade ID for order and trade objects.
+                trade_id = self.id_gen.new_id()
+
+                # Entry order.
                 orders.append(Order(
                     self.logger,
-                    None,                   # Parent trade ID.
+                    trade_id,               # Parent trade ID.
                     None,                   # Related position ID.
                     None,                   # Order ID as used by venue.
                     signal['direction'],    # LONG or SHORT.
@@ -102,10 +89,10 @@ class Portfolio:
                     False,                  # Reduce-only order.
                     False))                 # Post-only order.
 
-                # Stop.
+                # Stop order.
                 orders.append(Order(
                     self.logger,
-                    None,
+                    trade_id,
                     None,
                     None,
                     event.inverse_direction(),
@@ -124,7 +111,7 @@ class Portfolio:
                         tp_size = (size / 100) * target[1]
                         orders.append(Order(
                             self.logger,
-                            None,
+                            trade_id,
                             None,
                             None,
                             event.inverse_direction(),
@@ -147,7 +134,8 @@ class Portfolio:
                     [i.get_order_dict() for i in orders],  # Open orders dicts.
                     None)                   # Filled order dicts.
 
-                trade.set_id(self.db_other)
+                # Set trade_id manually, since we already generated it above.
+                trade.trade_id = trade_id
 
                 # Queue the trade for storage and update portfolio state.
                 self.trades_save_to_db.put(trade.get_trade_dict())
@@ -160,9 +148,27 @@ class Portfolio:
             for order in orders:
                 events.put(OrderEvent(order.get_order_dict()))
 
+            self.logger.debug("Trade " + str(trade_id) + " registered.")
+
     def new_fill(self, events, event):
         """
         Process incoming fill event and update position records accordingly.
+
+        Args:
+            events: event queue object.
+            event: new market event.
+
+        Returns:
+           None.
+
+        Raises:
+            None.
+        """
+        pass
+
+    def update_price(self, events, market_event):
+        """
+        Check price and time updates against existing positions.
 
         Args:
             events: event queue object.
@@ -286,7 +292,6 @@ class Portfolio:
 
             account_size = self.pf['current_value']
             risked_amt = (account_size / 100) * self.RISK_PER_TRADE
-            print("amt", risked_amt, "stop", stop, "entry", entry)
             position_size = risked_amt // ((stop - entry) / entry)
 
             return abs(position_size)

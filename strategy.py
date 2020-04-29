@@ -304,8 +304,6 @@ class Strategy:
                             # Put signal in separate save-later queue.
                             self.signals_save_to_db.put(result)
 
-                            self.logger.debug(result.get_signal_dict())
-
     def build_dataframe(self, exc, sym, tf, current_bar=None, lookback=150):
         """
         Return a dataframe of size lookback for the given symbol,

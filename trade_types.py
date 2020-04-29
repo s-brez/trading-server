@@ -35,17 +35,6 @@ class Trade(ABC):
         self.fees = 0                   # Total fees/commisions paid.
         self.exposure = None            # Percentage of capital at risk.
 
-    def set_id(self, db):
-        """
-        Set ID as the next-highest integer not in use by existing trades.
-        """
-
-        result = list(db['trades'].find({}).sort([("trade_id", -1)]))
-        trade_id = (int(result[0]['trade_id']) + 1) if result else 1
-        self.trade_id = trade_id
-
-        return trade_id
-
     @abstractmethod
     def get_trade_dict(self):
         """
@@ -162,3 +151,16 @@ class Order:
             'reduce_only': self.reduce_only,
             'post_only': self.post_only,
             'status': self.status}
+
+
+class TradeID():
+    """
+    Utility class for generating sequential trade ID's from database.
+    """
+
+    def __init__(self, db):
+        self.db = db
+
+    def new_id(self):
+        result = list(self.db['trades'].find({}).sort([("trade_id", -1)]))
+        return (int(result[0]['trade_id']) + 1) if result else 1
