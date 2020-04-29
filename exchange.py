@@ -11,6 +11,7 @@ Some rights reserved. See LICENSE.md, AUTHORS.md.
 
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
+import os
 
 
 class Exchange(ABC):
@@ -19,7 +20,7 @@ class Exchange(ABC):
     """
 
     def __init__(self):
-        super.__init__()
+        pass
 
     def get_new_bars(self):
         """
@@ -209,6 +210,31 @@ class Exchange(ABC):
     def finished_parsing_ticks(self):
         return self.finished_parsing_ticks
 
+    def load_api_keys(self):
+        """
+        Loads key and secret from environment variables.
+
+        Keys must be stored as follows (all capitalised):
+        API key:    VENUE_NAME_API_KEY
+        API secret: VENUE_NAME_SECRET_KEY
+
+        Args:
+            None.
+
+        Returns:
+            key: api key matching exchange name.
+            secret: api secret key matching venue name.
+
+        Raises:
+            None.
+        """
+
+        venue_name = self.get_name().upper()
+        key = os.environ[venue_name + '_API_KEY']
+        secret = os.environ[venue_name + '_API_SECRET']
+
+        return key, secret
+
     @abstractmethod
     def get_bars_in_period(self, symbol: str, start_time: int, total: int):
         """
@@ -276,6 +302,32 @@ class Exchange(ABC):
         Returns:
             Converts streamed websocket tick data into a 1-min OHLCV bars, then
             appends new bars to the exchange object self.bars[symbol] tree.
+
+        Raises:
+            None.
+        """
+
+    @abstractmethod
+    def get_positions(self):
+        """
+        Args:
+            None.
+
+        Returns:
+            List containing open positions.
+
+        Raises:
+            None.
+        """
+
+    @abstractmethod
+    def get_orders(self):
+        """
+        Args:
+            None.
+
+        Returns:
+            List containing all orders, both active and inactive.
 
         Raises:
             None.

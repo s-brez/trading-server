@@ -10,11 +10,17 @@ Some rights reserved. See LICENSE.md, AUTHORS.md.
 """
 
 from datetime import timezone, datetime, timedelta
+from requests import Request, Session
+from requests.auth import AuthBase
+from urllib.parse import urlparse
 from bitmex_ws import Bitmex_WS
 from exchange import Exchange
 from dateutil import parser
 import traceback
 import requests
+import hashlib
+import hmac
+import time
 
 
 class Bitmex(Exchange):
@@ -23,40 +29,42 @@ class Bitmex(Exchange):
     """
 
     MAX_BARS_PER_REQUEST = 750
+    TIMESTAMP_FORMAT = '%Y-%m-%d%H:%M:%S.%f'
+
     BASE_URL = "https://www.bitmex.com/api/v1"
+    BASE_URL_TESTNET = "https://www.testnet.bitmex.com/api/v1"
+    WS_URL = "wss://www.bitmex.com/realtime"
     BARS_URL = "/trade/bucketed?binSize="
     TICKS_URL = "/trade?symbol="
-    # WS_URL = "wss://testnet.bitmex.com/realtime"
-    WS_URL = "wss://www.bitmex.com/realtime"
-    TIMESTAMP_FORMAT = '%Y-%m-%d%H:%M:%S.%f'
+    POSITIONS_URL = "/position"
+    ORDERS_URL = "/order"
 
     def __init__(self, logger):
         super()
         self.logger = logger
         self.name = "BitMEX"
         self.symbols = ["XBTUSD"]  # "ETHUSD", "XRPUSD"
-        self.channels = ["trade"]  # , "orderBookL2"
+        self.channels = ["trade"]
 
         self.origin_tss = {
             "XBTUSD": 1483228800,
             "ETHUSD": 1533200520,
             "XRPUSD": 1580875200}
 
-        self.api_key = None
-        self.api_secret = None
+        self.api_key, self.api_secret = self.load_api_keys()
 
         # Non persistent datastores.
         self.bars = {}
         self.ticks = {}
 
-        # Connect to trade websocket
+        # Connect to trade websocket.
         self.ws = Bitmex_WS(
             self.logger, self.symbols, self.channels, self.WS_URL,
             self.api_key, self.api_secret)
         if not self.ws.ws.sock.connected:
             self.logger.debug("Failed to to connect to BitMEX websocket.")
 
-        # Note, for future channel subs, create assitional Bitmex_WS.
+        # Note, for future channel subs, create new Bitmex_WS in new process.
 
     def parse_ticks(self):
 
@@ -229,3 +237,80 @@ class Bitmex(Exchange):
                 i['timestamp']).minute == match_dt.minute]
 
         return final_ticks
+
+    def get_positions(self):
+        s = Session()
+        prepared_request = Request(
+            'GET',
+            self.BASE_URL_TESTNET + self.POSITIONS_URL,
+            params='').prepare()
+        request = self.generate_request_headers(prepared_request, api_key,
+                                                api_secret)
+        response = s.send(request).json()
+
+        return response
+
+    def get_orders(self):
+        s = Session()
+        prepared_request = Request(
+            'GET',
+            self.BASE_URL_TESTNET + self.ORDERS_URL,
+            params='').prepare()
+        request = self.generate_request_headers(prepared_request, api_key,
+                                                api_secret)
+        response = s.send(request).json()
+
+        return response
+
+    def generate_request_signature(self, secret, request_type, url, nonce,
+                                   data):
+        """
+        Generate BitMEX-compatible authenticated request signature header.
+
+        Args:
+            secret: API secret key.
+            request_type: Request type (GET, POST, etc).
+            url: full request url.
+            validity: seconds request will be valid for after creation.
+        Returns:
+            signature: hex(HMAC_SHA256(apiSecret, verb + path + expires + data)
+        Raises:
+            None.
+        """
+
+        parsed_url = urlparse(url)
+        path = parsed_url.path
+
+        if parsed_url.query:
+            path = path + '?' + parsed_url.query
+
+        if isinstance(data, (bytes, bytearray)):
+            data = data.decode('utf8')
+
+        message = str(request_type).upper() + path + str(nonce) + data
+        signature = hmac.new(bytes(secret, 'utf8'), bytes(message, 'utf8'),
+                             digestmod=hashlib.sha256).hexdigest()
+
+        return signature
+
+    def generate_request_headers(self, request, api_key, api_secret):
+        """
+        Add BitMEX-compatible authentication headers to a request object.
+
+        Args:
+            api_key: API key.
+            api_secret: API secret key.
+            request: Request object to be amended.
+        Returns:
+            request: Modified request object.
+        Raises:
+            None.
+        """
+
+        nonce = str(int(round(time.time()) + 5))
+        request.headers['api-expires'] = nonce
+        request.headers['api-key'] = api_key
+        request.headers['api-signature'] = generate_request_signature(
+            api_secret, request.method, request.url, nonce, request.body or '')
+
+        return request

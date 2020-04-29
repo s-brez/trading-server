@@ -9,11 +9,11 @@ Licensed under GNU General Public License 3.0 or later.
 Some rights reserved. See LICENSE.md, AUTHORS.md.
 """
 
-from event import MarketEvent
+from event_types import MarketEvent
 from itertools import groupby, count
 from pymongo import MongoClient, errors
 from itertools import groupby, count
-from event import MarketEvent
+from event_types import MarketEvent
 import pymongo
 import queue
 import time
