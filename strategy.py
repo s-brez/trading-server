@@ -304,7 +304,7 @@ class Strategy:
                             # Put signal in separate save-later queue.
                             self.signals_save_to_db.put(result)
 
-                            self.logger.debug(result.get_signal())
+                            self.logger.debug(result.get_signal_dict())
 
     def build_dataframe(self, exc, sym, tf, current_bar=None, lookback=150):
         """
@@ -695,7 +695,8 @@ class Strategy:
                     count += 1
                     # Store signal in relevant db collection.
                     try:
-                        self.db_other['signals'].insert_one(signal.get_signal())
+                        self.db_other['signals'].insert_one(
+                            signal.get_signal_dict())
 
                     # Skip duplicates if they exist.
                     except pymongo.errors.DuplicateKeyError:
