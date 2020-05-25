@@ -26,6 +26,8 @@ class Trade(ABC):
 
     def __init__(self):
         self.trade_id = None            # Must be set before saving to DB.
+        self.order_count = 0           # Number of component orders.
+        self.signal_timestamp = None    # Epoch timestamp of parent signal.
         self.active = False             # True/False.
         self.venue_count = 0            # Number of venues in use.
         self.instrument_count = 0       # Number of instruments in use.
@@ -41,6 +43,15 @@ class Trade(ABC):
         Return all trade variables as a dict for DB storage.
         """
 
+    def set_batch_size_and_id(self, trade_id):
+        """
+        Must be called after trade object has been prepared.
+        Sets the trade ID and order count.
+        """
+
+        self.order_count = len(self.orders)
+        self.trade_id = trade_id
+
 
 class SingleInstrumentTrade(Trade):
     """
@@ -50,23 +61,24 @@ class SingleInstrumentTrade(Trade):
     and stop loss orders.
     """
 
-    def __init__(self, logger, venue, symbol, model, position=None,
-                 open_orders=None, filled_orders=None):
+    def __init__(self, logger, venue, symbol, model, s_ts=None, position=None,
+                 orders=None):
         super().__init__()
         self.logger = logger
         self.type = "SINGLE_INSTRUMENT"
         self.venue_count = 1
         self.instrument_count = 1
+        self.signal_timestamp = s_ts        # Epoch timestamp of parent signal.
         self.venue = venue                  # Exchange or broker traded with.
         self.symbol = symbol                # Instrument ticker code.
         self.model = model                  # Name of triggerstrategy.
         self.position = position            # Position object, if positioned.
-        self.open_orders = open_orders      # List of active orders.
-        self.filled_orders = filled_orders  # List of filled orders.
+        self.orders = orders                # List of component orders.
 
     def get_trade_dict(self):
         return {
             'trade_id': self.trade_id,
+            'signal_timestamp': self.signal_timestamp,
             'type': self.type,
             'active': self.active,
             'venue_count': self.venue_count,
@@ -78,8 +90,8 @@ class SingleInstrumentTrade(Trade):
             'exposure': self.exposure,
             'venue': self.venue,
             'symbol': self.symbol,
-            'open_orders': self.open_orders,
-            'filled_orders': self.filled_orders}
+            'order_count': self.order_count,
+            'orders': self.orders}
 
 
 class Position:
@@ -131,6 +143,7 @@ class Order:
         self.trail = trail              # True or False, only for stops.
         self.reduce_only = reduce_only  # True or False.
         self.post_only = post_only      # True of False.
+        self.batch_size = 0             # Batch size for all related orders.
         self.status = status            # FILLED, UNFILLED, PARTIAL.
 
     def get_order_dict(self):
@@ -150,6 +163,7 @@ class Order:
             'trail': self.trail,
             'reduce_only': self.reduce_only,
             'post_only': self.post_only,
+            'batch_size': self.batch_size,
             'status': self.status}
 
 

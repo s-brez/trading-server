@@ -130,6 +130,7 @@ class OrderEvent(Event):
         self.trail = order_dict['trail']
         self.reduce_only = order_dict['reduce_only']
         self.post_only = order_dict['post_only']
+        self.batch_size = order_dict['batch_size']
         self.status = order_dict['status']
 
     def __str__(self):
