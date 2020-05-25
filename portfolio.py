@@ -20,10 +20,10 @@ import queue
 class Portfolio:
     """
     Portfolio manages the net holdings for all models, issuing order events
-    and reacting to fill events to open and close positions and strategies
+    and reacting to fill events to open and close positions as strategies
     dictate.
 
-    Capital allocations to strategies and risk parameters defined here.
+    Capital allocations to strategies and risk parameters are defined here.
     """
 
     MAX_SIMULTANEOUS_POSITIONS = 20
@@ -61,17 +61,18 @@ class Portfolio:
         signal = event.get_signal_dict()
 
         if self.within_risk_limits(signal):
+
             orders = []
 
-            # Prepare orders for single-instrument signals:
+            # Generate sequential trade ID for new trade.
+            trade_id = self.id_gen.new_id()
+
+            # Handle single-instrument signals:
             if signal['instrument_count'] == 1:
 
                 stop = self.calculate_stop_price(signal),
                 size = self.calculate_position_size(stop[0],
                                                     signal['entry_price'])
-
-                # Generate sequential trade ID for order and trade objects.
-                trade_id = self.id_gen.new_id()
 
                 # Entry order.
                 orders.append(Order(
@@ -130,22 +131,29 @@ class Portfolio:
                     signal['venue'],        # Exchange or broker traded with.
                     signal['symbol'],       # Instrument ticker code.
                     signal['strategy'],     # Model name.
+                    signal['entry_timestamp'],  # Signal timestamp.
                     None,                   # Position object.
-                    [i.get_order_dict() for i in orders],  # Open orders dicts.
-                    None)                   # Filled order dicts.
+                    [i.get_order_dict() for i in orders])  # Order dicts.
 
-                # Set trade_id manually, since we already generated it above.
-                trade.trade_id = trade_id
+                # Finalise trade object. Must be called to set ID + order count
+                trade.set_batch_size_and_id(trade_id)
 
                 # Queue the trade for storage and update portfolio state.
                 self.trades_save_to_db.put(trade.get_trade_dict())
                 self.pf['trades'].append(trade.get_trade_dict())
                 self.save_porfolio(self.pf)
 
-            # TODO: Other trade types (multi-instrument, multi-venue etc).
+            # TODO: handle multi-instrument, multi-venue trades.
+            if signal['instrument_count'] == 2:
+                pass
 
-            # Queue orders for execution.
+            if signal['instrument_count'] > 2:
+                pass
+
+            # Set order batch size and queue orders for execution.
+            batch_size = len(orders)
             for order in orders:
+                order.batch_size = batch_size
                 events.put(OrderEvent(order.get_order_dict()))
 
             self.logger.debug("Trade " + str(trade_id) + " registered.")
@@ -197,8 +205,8 @@ class Portfolio:
             empty_portfolio = {
                 'id': ID,
                 'start_date': int(time.time()),
-                'initial_funds': 0,
-                'current_value': 0,
+                'initial_funds': 1000,
+                'current_value': 1000,
                 'current_drawdown': 0,
                 'trades': [],
                 'model_allocations': {  # Equal allocation by default.
