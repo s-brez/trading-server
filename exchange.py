@@ -236,6 +236,36 @@ class Exchange(ABC):
         return key, secret
 
     @abstractmethod
+    def place_orders(self, orders: list):
+        """
+        Given a list of order events objects, place corresponding orders with
+        the respective trading venue.
+
+        Args:
+            orders: list of order objects
+
+        Returns:
+
+        Raises:
+
+        """
+
+    @abstractmethod
+    def format_orders(self, orders: list):
+        """
+        Converts internally formatted orders into relevant venue order format.
+
+        Args:
+            orders: list of order objects
+
+        Returns:
+            formatted_orders: new list of venue-appropirate formatted orders
+
+        Raises:
+
+        """
+
+    @abstractmethod
     def get_bars_in_period(self, symbol: str, start_time: int, total: int):
         """
         Args:
