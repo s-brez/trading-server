@@ -200,7 +200,7 @@ class Server:
 
                     # Order placement and Fill Event generation.
                     elif event.type == "ORDER":
-                        self.logger.debug("Started order execution.")
+                        self.logger.debug("Start processing orders.")
                         self.broker.new_order(self.events, event)
 
                     # Final portolio update.

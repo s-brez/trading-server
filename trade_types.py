@@ -46,7 +46,7 @@ class Trade(ABC):
     def set_batch_size_and_id(self, trade_id):
         """
         Must be called after trade object has been prepared.
-        Sets the trade ID and order count.
+        Sets the trade ID and order count, and assigns unique ID's to orders.
         """
 
         self.order_count = len(self.orders)
@@ -127,13 +127,14 @@ class Order:
     Models a single order, as part of parent trade.
     """
 
-    def __init__(self, logger, trade_id, p_id, order_id, direction,
+    def __init__(self, logger, trade_id, p_id, order_id, venue, direction,
                  size, price, order_type, metatype, void_price, trail,
                  reduce_only, post_only, status="UNFILLED"):
         self.logger = logger
         self.trade_id = trade_id        # Parent trade ID.
         self.position_id = p_id         # Related position ID.
         self.order_id = order_id        # Order ID as used by venue.
+        self.venue = venue              # Venue or exchange traded at.
         self.direction = direction      # Long or short.
         self.size = size                # Size in local asset/contract.
         self.price = price              # Order price.
@@ -154,6 +155,7 @@ class Order:
             'trade_id': self.trade_id,
             'position_id': self.position_id,
             'order_id': self.order_id,
+            'venue': self.venue,
             'direction': self.direction,
             'size': self.size,
             'price': self.price,
