@@ -80,6 +80,7 @@ class Portfolio:
                     trade_id,               # Parent trade ID.
                     None,                   # Related position ID.
                     None,                   # Order ID as used by venue.
+                    signal['venue'],        # Venue name.
                     signal['direction'],    # LONG or SHORT.
                     size,                   # Size in native denomination.
                     signal['entry_price'],  # Order price.
@@ -96,6 +97,7 @@ class Portfolio:
                     trade_id,
                     None,
                     None,
+                    signal['venue'],
                     event.inverse_direction(),
                     size,
                     stop[0],
@@ -115,6 +117,7 @@ class Portfolio:
                             trade_id,
                             None,
                             None,
+                            signal['venue'],
                             event.inverse_direction(),
                             tp_size,
                             target[0],
@@ -125,14 +128,20 @@ class Portfolio:
                             True,
                             False))
 
+                # Set sequential order ID's, based on trade ID.
+                count = 1
+                for order in orders:
+                    order.order_id = int(str(trade_id) + str(count))
+                    count += 1
+
                 # Parent trade object:
                 trade = SingleInstrumentTrade(
                     self.logger,
-                    signal['venue'],        # Exchange or broker traded with.
-                    signal['symbol'],       # Instrument ticker code.
-                    signal['strategy'],     # Model name.
+                    signal['venue'],            # Venue name.
+                    signal['symbol'],           # Instrument ticker code.
+                    signal['strategy'],         # Model name.
                     signal['entry_timestamp'],  # Signal timestamp.
-                    None,                   # Position object.
+                    None,                       # Position object.
                     [i.get_order_dict() for i in orders])  # Order dicts.
 
                 # Finalise trade object. Must be called to set ID + order count
