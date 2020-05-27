@@ -38,12 +38,20 @@ class Bitmex(Exchange):
     TICKS_URL = "/trade?symbol="
     POSITIONS_URL = "/position"
     ORDERS_URL = "/order"
+    BULK_ORDERS_URL = "/order/bulk"
 
     def __init__(self, logger):
         super()
         self.logger = logger
         self.name = "BitMEX"
         self.symbols = ["XBTUSD"]  # "ETHUSD", "XRPUSD"
+
+        # Minimum price increment for each instrument.
+        self.symbol_min_increment = {
+            'XBTUSD': 0.5,
+            'ETHUSD': 0.05,
+            'XRPUSD': 0.0001}
+
         self.channels = ["trade"]
 
         self.origin_tss = {
@@ -53,7 +61,7 @@ class Bitmex(Exchange):
 
         self.api_key, self.api_secret = self.load_api_keys()
 
-        # Non persistent datastores.
+        # Non persistent storage for ticks and new 1 mins bars.
         self.bars = {}
         self.ticks = {}
 
