@@ -235,6 +235,23 @@ class Exchange(ABC):
 
         return key, secret
 
+    def round_increment(self, number, symbol):
+        """
+        Round a given number to its nearest minimum increment
+        """
+
+        inc = self.symbol_min_increment[symbol]
+
+        if number < 1:
+            quote = number
+        else:
+            quote = (number // inc) * inc
+
+        print("Rounded quote:", quote)
+
+        return quote
+
+
     @abstractmethod
     def place_orders(self, orders: list):
         """
