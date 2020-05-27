@@ -127,13 +127,14 @@ class Order:
     Models a single order, as part of parent trade.
     """
 
-    def __init__(self, logger, trade_id, p_id, order_id, venue, direction,
-                 size, price, order_type, metatype, void_price, trail,
-                 reduce_only, post_only, status="UNFILLED"):
+    def __init__(self, logger, trade_id, p_id, order_id, symbol, venue,
+                 direction, size, price, order_type, metatype, void_price,
+                 trail, reduce_only, post_only, status="UNFILLED"):
         self.logger = logger
         self.trade_id = trade_id        # Parent trade ID.
         self.position_id = p_id         # Related position ID.
         self.order_id = order_id        # Order ID as used by venue.
+        self.symbol = symbol            # Instrument ticker code.
         self.venue = venue              # Venue or exchange traded at.
         self.direction = direction      # Long or short.
         self.size = size                # Size in local asset/contract.
@@ -156,6 +157,7 @@ class Order:
             'position_id': self.position_id,
             'order_id': self.order_id,
             'venue': self.venue,
+            'symbol': self.symbol,
             'direction': self.direction,
             'size': self.size,
             'price': self.price,
