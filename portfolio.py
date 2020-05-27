@@ -80,6 +80,7 @@ class Portfolio:
                     trade_id,               # Parent trade ID.
                     None,                   # Related position ID.
                     None,                   # Order ID as used by venue.
+                    signal['symbol'],       # Instrument ticker code.
                     signal['venue'],        # Venue name.
                     signal['direction'],    # LONG or SHORT.
                     size,                   # Size in native denomination.
@@ -97,6 +98,7 @@ class Portfolio:
                     trade_id,
                     None,
                     None,
+                    signal['symbol'],
                     signal['venue'],
                     event.inverse_direction(),
                     size,
@@ -117,6 +119,7 @@ class Portfolio:
                             trade_id,
                             None,
                             None,
+                            signal['symbol'],
                             signal['venue'],
                             event.inverse_direction(),
                             tp_size,
@@ -147,7 +150,7 @@ class Portfolio:
                 # Finalise trade object. Must be called to set ID + order count
                 trade.set_batch_size_and_id(trade_id)
 
-                # Queue the trade for storage and update portfolio state.
+                # Queue the trade for DB storage and update portfolio state.
                 self.trades_save_to_db.put(trade.get_trade_dict())
                 self.pf['trades'].append(trade.get_trade_dict())
                 self.save_porfolio(self.pf)
