@@ -247,19 +247,32 @@ class Exchange(ABC):
         else:
             quote = (number // inc) * inc
 
-        print("Rounded quote:", quote)
-
+        # print("Rounded quote:", quote)
         return quote
 
 
     @abstractmethod
-    def place_orders(self, orders: list):
+    def place_bulk_orders(self, orders: list):
         """
         Given a list of order events objects, place corresponding orders with
         the respective trading venue.
 
         Args:
             orders: list of order objects
+
+        Returns:
+
+        Raises:
+
+        """
+
+    @abstractmethod
+    def place_single_order(self, order):
+        """
+        Place a single order with the respective trading venue.
+
+        Args:
+            order: order object
 
         Returns:
 
