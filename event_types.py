@@ -67,7 +67,7 @@ class SignalEvent(Event):
         self.symbol = symbol            # Ticker code for instrument.
         self.direction = direction      # LONG or SHORT.
         self.entry_price = entry_price  # Trade entry price.
-        self.entry_type = entry_type    # Order type for entry.
+        self.entry_type = entry_type.upper()  # Order type for entry.
         self.targets = targets          # [(price target, int % to close)]
         self.stop_price = stop_price    # Stop-loss order price.
         self.void_price = void_price    # Invalidation price.

@@ -139,7 +139,7 @@ class Order:
         self.direction = direction      # Long or short.
         self.size = size                # Size in local asset/contract.
         self.price = price              # Order price.
-        self.order_type = order_type    # LIMIT MARKET STOP_LIMIT STOP_MARKET.
+        self.order_type = order_type.upper()  # LIMIT MARKET STOP_LIMIT STOP.
         self.metatype = metatype        # ENTRY, TAKE_PROFIT, STOP.
         self.void_price = void_price    # Order invalidation price.
         self.trail = trail              # True or False, only for stops.
