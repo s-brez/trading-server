@@ -67,7 +67,7 @@ class Broker:
                     # Flag orders for removal from self.orders.
                     to_remove.append(trade_id)
 
-            # Remove orders after iteration complete.
+            # Remove sent orders after iteration complete.
             for t_id in to_remove:
                 del self.orders[t_id]
 

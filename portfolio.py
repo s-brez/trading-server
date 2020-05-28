@@ -103,7 +103,7 @@ class Portfolio:
                     event.inverse_direction(),
                     size,
                     stop[0],
-                    "STOP_MARKET",
+                    "STOP",
                     "STOP",
                     None,
                     signal['trail'],
