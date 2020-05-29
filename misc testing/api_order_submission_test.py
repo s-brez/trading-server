@@ -60,7 +60,7 @@ def generate_request_signature(secret, request_type, url, nonce,
 
 def generate_request_headers(request, api_key, api_secret):
 
-    nonce = str(int(round(time.time()) + 5))
+    nonce = str(int(round(time.time()) + 20))
     request.headers['api-expires'] = nonce
     request.headers['api-key'] = api_key
     request.headers['api-signature'] = generate_request_signature(
@@ -70,6 +70,19 @@ def generate_request_headers(request, api_key, api_secret):
     request.headers['X-Requested-With'] = 'XMLHttpRequest'
 
     return request
+
+
+def get_positions():
+    s = Session()
+    prepared_request = Request(
+        'GET',
+        BASE_URL_TESTNET + POSITIONS_URL,
+        params='').prepare()
+    request = generate_request_headers(prepared_request, api_key,
+                                       api_secret)
+    response = s.send(request).json()
+
+    return response
 
 
 def round_increment(number, symbol):
@@ -142,34 +155,26 @@ def place_single_order(order):
         api_key,
         api_secret)
 
-    response = s.send(request).json()
-
-    print(response)
+    response = s.send(request)
 
     return response
 
 
 def place_bulk_orders(orders):
 
-    # Remove market orders. BitMEX doesnt allow bulk market orders.
+    # Separate market orders as BitMEX doesnt allow bulk market orders.
     m_o = [o for o in orders if o['order_type'] == "MARKET"]
     nm_o = [o for o in orders if o not in m_o]
 
-    print("Non-market orders:", len(nm_o))
-    print("Market orders:", len(m_o))
+    # Send market orders individually amd store responses.
+    responses = [place_single_order(o) for o in m_o if m_o]
 
-    # Send market orders individually.
-    if m_o:
-        for order in m_o:
-            place_single_order(order)
-
-    # Submit other order types in a single batch.
+    # Submit non-market orders in a single batch.
+    response = None
     if nm_o:
         payload = {'orders': format_orders(nm_o)}
 
         s = Session()
-
-        print(payload)
 
         prepared_request = Request(
             'POST',
@@ -182,33 +187,92 @@ def place_bulk_orders(orders):
             api_key,
             api_secret)
 
-        response = s.send(request).json()
+        response = s.send(request)
 
-        return response
+    # Unpack successful order confirmations and handle errors.
+    order_confirmations = []
+    for r in responses + [response]:
+        if r.status_code == 200:
+
+            res = r.json()
+
+            if isinstance(res, list):
+                for item in res:
+                    order_confirmations.append(item)
+
+            elif isinstance(res, dict):
+                order_confirmations.append(res)
+
+        elif 400 <= r.status_code <= 404:
+            # Syntax, auth or system limit error messages, raise exception.
+            raise Exception(r.status_code, r.json()['error']['message'])
+
+        elif r.status_code == 503:
+            # Server overloaded, retry after 500ms, dont raise exception.
+            print(r.status_code, r.json()['error']['message'])
+
+            # TODO: Check what orders were placed (if any) and re-submit.
+
+        else:
+            print(r.status_code, r.json())
+
+    updated_orders = []
+    if order_confirmations:
+        for res in order_confirmations:
+            for order in orders:
+                if int(order['order_id']) == int(res['clOrdID']):
+
+                    if res['ordStatus'] == 'Filled':
+                        fill = "FILLED"
+                    elif res['ordStatus'] == 'New':
+                        fill = "NEW"
+
+                    updated_orders.append({
+                        'trade_id': order['trade_id'],
+                        'position_id': order['position_id'],
+                        'order_id': order['order_id'],
+                        'timestamp': res['timestamp'],
+                        'avg_fill_price': res['avgPx'],
+                        'currency': res['currency'],
+                        'venue_id': res['orderID'],
+                        'venue': order['venue'],
+                        'symbol': order['symbol'],
+                        'direction': order['direction'],
+                        'size': res['orderQty'],
+                        'price': res['price'],
+                        'order_type': order['order_type'],
+                        'metatype': order['metatype'],
+                        'void_price': order['void_price'],
+                        'trail': order['trail'],
+                        'reduce_only': order['reduce_only'],
+                        'post_only': order['post_only'],
+                        'batch_size': order['batch_size'],
+                        'status': fill})
+
+    return updated_orders
 
 
-orders = [{'trade_id': 47, 'position_id': None, 'order_id': 481,
+orders = [{'trade_id': 47, 'position_id': None, 'order_id': 119131,
            'venue': 'BitMEX', 'symbol': 'XBTUSD', 'direction': 'LONG',
            'size': 334.0, 'price': 9172.5, 'order_type': 'MARKET',
            'metatype': 'ENTRY', 'void_price': 8897.324999999999,
            'trail': False, 'reduce_only': False, 'post_only': False,
-           'batch_size': 2, 'status': 'UNFILLED'},
-          {'trade_id': 47, 'position_id': None, 'order_id': 476,
+           'batch_size': 2, 'status': 'UNFILLED', 'timestamp': None,
+           'avg_fill_price': None, 'currency': None, 'venue_id': None},
+          {'trade_id': 47, 'position_id': None, 'order_id': 219131,
            'venue': 'BitMEX', 'symbol': 'XBTUSD', 'direction': 'SHORT',
-           'size': 334.0, 'price': 9972.5, 'order_type': 'STOP',
+           'size': 334.0, 'price': 9000, 'order_type': 'STOP',
            'metatype': 'STOP', 'void_price': 8897.324999999999,
            'trail': False, 'reduce_only': False, 'post_only': False,
-           'batch_size': 2, 'status': 'UNFILLED'},
-          {'trade_id': 47, 'position_id': None, 'order_id': 477,
+           'batch_size': 2, 'status': 'UNFILLED', 'timestamp': None,
+           'avg_fill_price': None, 'currency': None, 'venue_id': None},
+          {'trade_id': 47, 'position_id': None, 'order_id': 319131,
            'venue': 'BitMEX', 'symbol': 'XBTUSD', 'direction': 'SHORT',
            'size': 334.0, 'price': 10000.5, 'order_type': 'LIMIT',
            'metatype': 'TAKE_PROFIT', 'void_price': 8897.324999999999,
            'trail': False, 'reduce_only': False, 'post_only': False,
-           'batch_size': 2, 'status': 'UNFILLED'}]
+           'batch_size': 2, 'status': 'UNFILLED', 'timestamp': None,
+           'avg_fill_price': None, 'currency': None, 'venue_id': None}]
 
-
-print(BASE_URL_TESTNET + BULK_ORDERS_URL)
-# print(orders)
-# print(format_orders(orders))
 
 print(place_bulk_orders(orders))
