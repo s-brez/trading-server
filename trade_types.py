@@ -133,7 +133,11 @@ class Order:
         self.logger = logger
         self.trade_id = trade_id        # Parent trade ID.
         self.position_id = p_id         # Related position ID.
-        self.order_id = order_id        # Order ID as used by venue.
+        self.order_id = None            # Internal use order ID.
+        self.timestamp = None           # Order placement timestamp.
+        self.avg_fill_price = None      # Actual fill price
+        self.currency = None            # Instrument denomination currency.
+        self.venue_id = None            # Order ID as used by venue.
         self.symbol = symbol            # Instrument ticker code.
         self.venue = venue              # Venue or exchange traded at.
         self.direction = direction      # Long or short.
@@ -146,7 +150,7 @@ class Order:
         self.reduce_only = reduce_only  # True or False.
         self.post_only = post_only      # True of False.
         self.batch_size = 0             # Batch size for all related orders.
-        self.status = status            # FILLED, UNFILLED, PARTIAL.
+        self.status = status            # FILLED, NEW, PARTIAL.
 
     def get_order_dict(self):
         """
@@ -156,6 +160,10 @@ class Order:
             'trade_id': self.trade_id,
             'position_id': self.position_id,
             'order_id': self.order_id,
+            'timestamp': self.timestamp,
+            'avg_fill_price': self.avg_fill_price,
+            'currency': self.currency,
+            'venue_id': self.venue_id,
             'venue': self.venue,
             'symbol': self.symbol,
             'direction': self.direction,
