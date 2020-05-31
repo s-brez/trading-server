@@ -28,9 +28,9 @@ class Portfolio:
 
     MAX_SIMULTANEOUS_POSITIONS = 20
     MAX_CORRELATED_TRADES = 1
-    MAX_ACCEPTED_DRAWDOWN = 15          # Percentage as integer.
-    RISK_PER_TRADE = 1                  # Percentage as integer OR 'KELLY'
-    DEFAULT_STOP = 3                    # % stop distance if none provided.
+    MAX_ACCEPTED_DRAWDOWN = 15  # Percentage as integer.
+    RISK_PER_TRADE = 1          # Percentage as integer OR 'KELLY'
+    DEFAULT_STOP = 3            # Default (%) stop distance if none provided.
 
     def __init__(self, exchanges, logger, db_other, db_client, models):
         self.exchanges = {i.get_name(): i for i in exchanges}
@@ -134,7 +134,7 @@ class Portfolio:
                 # Set sequential order ID's, based on trade ID.
                 count = 1
                 for order in orders:
-                    order.order_id = int(str(trade_id) + str(count))
+                    order.order_id = str(trade_id) + "-" + str(count)
                     count += 1
 
                 # Parent trade object:
@@ -145,21 +145,21 @@ class Portfolio:
                     signal['strategy'],         # Model name.
                     signal['entry_timestamp'],  # Signal timestamp.
                     None,                       # Position object.
-                    [i.get_order_dict() for i in orders])  # Order dicts.
+                    {str(i.get_order_dict()['order_id']): i.get_order_dict() for i in orders})  # noqa
 
                 # Finalise trade object. Must be called to set ID + order count
                 trade.set_batch_size_and_id(trade_id)
 
                 # Queue the trade for DB storage and update portfolio state.
                 self.trades_save_to_db.put(trade.get_trade_dict())
-                self.pf['trades'].append(trade.get_trade_dict())
+                self.pf['trades'][str(trade_id)] = trade.get_trade_dict()
                 self.save_porfolio(self.pf)
 
             # TODO: handle multi-instrument, multi-venue trades.
-            if signal['instrument_count'] == 2:
+            elif signal['instrument_count'] == 2:
                 pass
 
-            if signal['instrument_count'] > 2:
+            elif signal['instrument_count'] > 2:
                 pass
 
             # Set order batch size and queue orders for execution.
@@ -170,9 +170,10 @@ class Portfolio:
 
             self.logger.debug("Trade " + str(trade_id) + " registered.")
 
-    def new_fill(self, events, event):
+    def new_fill(self, event):
         """
-        Process incoming fill event and update position records accordingly.
+        Process incoming fill event, update position, trade and order state
+        accordingly.
 
         Args:
             events: event queue object.
@@ -185,6 +186,40 @@ class Portfolio:
             None.
         """
         pass
+
+    def new_order_conf(self, order_confs: list, events):
+        """
+        Update stored trade and order state to match given order confirmations.
+
+        Create a fill event if any orders instantly filled after placement
+        i.e. market orders should always fill instantly.
+
+        Args:
+            order_confs: list of order dicts containing updated details.
+            events:  event queue object.
+        Returns:
+           None.
+
+        Raises:
+            None.
+        """
+
+        self.logger.debug(str(order_confs))
+
+        # Update portfolio state.
+        for conf in order_confs:
+            t_id = conf['trade_id']
+            o_id = conf['order_id']
+            self.pf['trades'][t_id]['orders'][o_id] = conf
+
+            print(conf)
+            print(self.pf['trades'][t_id]['orders'][o_id])
+
+            # Create a fill event if the order has already been filled.
+            if conf['status'] == "FILLED":
+                events.put(FillEvent(conf))
+
+        self.save_porfolio(self.pf)
 
     def update_price(self, events, market_event):
         """
@@ -214,23 +249,24 @@ class Portfolio:
             return portfolio
 
         else:
-            empty_portfolio = {
+            default_portfolio = {
                 'id': ID,
                 'start_date': int(time.time()),
                 'initial_funds': 1000,
                 'current_value': 1000,
                 'current_drawdown': 0,
-                'trades': [],
-                'model_allocations': {  # Equal allocation by default.
-                    i.get_name(): (100 / len(self.models)) for i in self.models},
                 'risk_per_trade': self.RISK_PER_TRADE,
                 'max_correlated_trades': self.MAX_CORRELATED_TRADES,
                 'max_accepted_drawdown': self.MAX_ACCEPTED_DRAWDOWN,
                 'max_simultaneous_positions': self.MAX_SIMULTANEOUS_POSITIONS,
-                'default_stop': self.DEFAULT_STOP}
+                'default_stop': self.DEFAULT_STOP,
+                'model_allocations': {  # Equal allocation by default.
+                    i.get_name(): (100 / len(self.models)) for i in self.models},
+                'trades': {}}
 
-            self.save_porfolio(empty_portfolio)
-            return empty_portfolio
+            self.save_porfolio(default_portfolio)
+
+            return default_portfolio
 
     def verify_portfolio_state(self, portfolio):
         """
@@ -244,7 +280,6 @@ class Portfolio:
         if trades:
             self.logger.debug("Verifying trade records match trade state.")
             for venue in [trade['venue'] for trade in trades]:
-
                 print("Fetched positions and orders.")
                 positions = self.exchanges[venue].get_positions()
                 orders = self.exchanges[venue].get_orders()
@@ -322,7 +357,7 @@ class Portfolio:
 
     def fees(self, trade):
         """
-        Calculate total current fees paid for the given trade object.
+        Calculate total current fees paid for the given trade.
         """
 
     def save_new_trades_to_db(self):
