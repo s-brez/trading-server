@@ -121,6 +121,10 @@ class OrderEvent(Event):
         self.trade_id = order_dict['trade_id']
         self.position_id = order_dict['position_id']
         self.order_id = order_dict['order_id']
+        self.timestamp = order_dict['timestamp']
+        self.avg_fill_price = order_dict['avg_fill_price']
+        self.currency = order_dict['currency']
+        self.venue_id = order_dict['venue_id']
         self.direction = order_dict['direction']
         self.size = order_dict['size']
         self.price = order_dict['price']
@@ -137,33 +141,24 @@ class OrderEvent(Event):
         return str(" ")
 
     def get_order_dict(self):
-        """
-        Return all order variables as a dict for DB storage.
-        """
         return self.order_dict
 
 
 class FillEvent(Event):
     """
-    Holds transaction data including fees/comissions, slippage, brokerage,
+    Holds transaction data including fees/commissions, slippage, brokerage,
     actual fill price, timestamp, etc.
     """
 
-    def __init__(self, timestamp, symbol, exchange, quantity,
-                 direction, fill_cost, commission=None):
-        self.type = 'FILL'
-        self.timestamp = timestamp     # Fill timestamp
-        self.symbol = symbol           # Instrument ticker
-        self.exchange = exchange       # Source exchange
-        self.quantity = quantity       # Position size.
-        self.fill_cost = fill_cost     # USD value of fees.
+    def __init__(self, order_conf):
+        self.type = 'ORDER'
+        self.order_conf = order_conf
 
-        # use BitMEX taker fees as placeholder
-        if commission is None:
-            self.commission = (fill_cost / 100) * 0.075
-        else:
-            self.commission = commission
+        # Use BitMEX taker fees as placeholder.
+        self.fees = (order_conf['avg_fill_price'] / 100) * 0.075
 
-    def calculate_commission(self):
-        """
-        """
+    def __str__(self):
+        return str(" ")
+
+    def get_order_conf(self):
+        return order_conf
