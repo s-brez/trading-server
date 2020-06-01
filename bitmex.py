@@ -347,18 +347,16 @@ class Bitmex(Exchange):
 
             elif r.status_code == 503:
                 # Server overloaded, retry after 500ms, dont raise exception.
-                print(r.status_code, r.json()['error']['message'])
-
-                # TODO: Check what orders were placed (if any) and re-submit.
-
+                self.logger.debug(
+                    str(r.status_code) + " " + r.json()['error']['message'])
             else:
-                print(r.status_code, r.json())
+                self.logger.debug(str(r.status_code), str(r.json()))
 
         updated_orders = []
         if order_confirmations:
             for res in order_confirmations:
                 for order in orders:
-                    if int(order['order_id']) == int(res['clOrdID']):
+                    if str(order['order_id']) == str(res['clOrdID']):
 
                         if res['ordStatus'] == 'Filled':
                             fill = "FILLED"
@@ -426,7 +424,7 @@ class Bitmex(Exchange):
                     'orderQty': orderQty,
                     'price': price,
                     'stopPx': stopPx,
-                    'clOrdID': int(order['order_id']),
+                    'clOrdID': order['order_id'],
                     'ordType': ordType,
                     'timeInForce': timeInForce,
                     'execInst': execInst,
