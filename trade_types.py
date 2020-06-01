@@ -73,7 +73,7 @@ class SingleInstrumentTrade(Trade):
         self.symbol = symbol                # Instrument ticker code.
         self.model = model                  # Name of triggerstrategy.
         self.position = position            # Position object, if positioned.
-        self.orders = orders                # List of component orders.
+        self.orders = orders                # Dict of component orders.
 
     def get_trade_dict(self):
         return {
@@ -90,6 +90,7 @@ class SingleInstrumentTrade(Trade):
             'exposure': self.exposure,
             'venue': self.venue,
             'symbol': self.symbol,
+            'position': self.positon,
             'order_count': self.order_count,
             'orders': self.orders}
 
@@ -99,27 +100,17 @@ class Position:
     Models a single active position, as part of a parent trade.
     """
 
-    def __init__(self, logger, trade_id, direction, leverage,
-                 liquidation, size, entry_price):
-        self.logger = logger
-        self.trade_id = trade_id        # Parent trade ID.
-        self.direction = direction      # Long or short.
-        self.leverage = leverage        # Leverage in use.
-        self.liquidation = liquidation  # Liquidation price.
-        self.size = size                # Asset/contract demonination.
-        self.entry_price = entry_price  # Average entry price.
+    def __init__(self, fill_conf):
+        self.fill_conf = fill_conf
 
-    def get_position_dict(self):
-        """
-        Return all position variables as a dict for DB storage.
-        """
-        return {
-            'trade_id': self.trade_id,
-            'direction': self.direction,
-            'leverage': self.leverage,
-            'liquidation': self.liquidation,
-            'size': self.size,
-            'entry_price': self.entry_price}
+        # Use BitMEX taker fees as placeholder.
+        self.fees = (fill_conf['avg_fill_price'] / 100) * 0.075
+
+    def __str__(self):
+        return str(" ")
+
+    def get_fill_conf(self):
+        return fill_conf
 
 
 class Order:
