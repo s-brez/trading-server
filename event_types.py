@@ -151,7 +151,7 @@ class FillEvent(Event):
     """
 
     def __init__(self, order_conf):
-        self.type = 'ORDER'
+        self.type = 'FILL'
         self.order_conf = order_conf
 
         # Use BitMEX taker fees as placeholder.
