@@ -88,8 +88,8 @@ class Server:
         self.portfolio = Portfolio(self.exchanges, self.logger, self.db_other,
                                    self.db_client, self.strategy.models)
 
-        self.broker = Broker(self.exchanges, self.logger, self.db_other,
-                             self.db_client, self.live_trading)
+        self.broker = Broker(self.exchanges, self.logger, self.portfolio,
+                             self.db_other, self.db_client, self.live_trading)
 
         # Processing performance tracking variables.
         self.start_processing = None
@@ -206,7 +206,7 @@ class Server:
                     # Final portolio update.
                     elif event.type == "FILL":
                         self.logger.debug("Processing fill events.")
-                        self.portfolio.new_fill(self.events, event)
+                        self.portfolio.new_fill(event)
 
                 # Finished all jobs in queue.
                 self.events.task_done()
