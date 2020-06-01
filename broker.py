@@ -17,9 +17,11 @@ class Broker:
     Fill events in the main event queue post-transaction.
     """
 
-    def __init__(self, exchanges, logger, db_other, db_client, live_trading):
+    def __init__(self, exchanges, logger, portfolio, db_other, db_client,
+                 live_trading):
         self.exchanges = {i.get_name(): i for i in exchanges}
         self.logger = logger
+        self.pf = portfolio
         self.db_other = db_other
         self.db_client = db_client
         self.live_trading = live_trading
@@ -29,8 +31,9 @@ class Broker:
 
     def new_order(self, events, order_event):
         """
-        Process incoming order event, place orders with venues and generate
-        a fill event post-execution.
+        Process incoming order events and place orders with venues.
+
+        Create fill notifications as order fill confirmations are received.
 
         Args:
             events: event queue object.
@@ -61,10 +64,15 @@ class Broker:
                     self.logger.debug(
                         "Trade " + str(trade_id) + " order batch ready.")
 
-                    print(self.exchanges[venue].place_bulk_orders(
-                        self.orders[trade_id]))
+                    # Place orders.
+                    order_confs = self.exchanges[venue].place_bulk_orders(
+                        self.orders[trade_id])
 
-                    # Flag orders for removal from self.orders.
+                    # Update portfolio state with order placement details.
+                    if order_confs:
+                        self.pf.new_order_conf(order_confs, events)
+
+                    # Flag sent orders for removal from self.orders.
                     to_remove.append(trade_id)
 
             # Remove sent orders after iteration complete.
@@ -74,3 +82,6 @@ class Broker:
         except KeyError as ke:
             self.orders[new_order['trade_id']] = [new_order]
             # print(traceback.format_exc())
+
+    def check_fills(self):
+        pass
