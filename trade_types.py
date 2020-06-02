@@ -131,11 +131,11 @@ class Order:
         self.venue_id = None            # Order ID as used by venue.
         self.symbol = symbol            # Instrument ticker code.
         self.venue = venue              # Venue or exchange traded at.
-        self.direction = direction      # Long or short.
+        self.direction = direction.upper()    # LONG, SHORT.
         self.size = size                # Size in local asset/contract.
         self.price = price              # Order price.
         self.order_type = order_type.upper()  # LIMIT MARKET STOP_LIMIT STOP.
-        self.metatype = metatype        # ENTRY, TAKE_PROFIT, STOP.
+        self.metatype = metatype.upper()      # ENTRY, TAKE_PROFIT, STOP.
         self.void_price = void_price    # Order invalidation price.
         self.trail = trail              # True or False, only for stops.
         self.reduce_only = reduce_only  # True or False.
