@@ -170,7 +170,7 @@ class Portfolio:
 
             self.logger.debug("Trade " + str(trade_id) + " registered.")
 
-    def new_fill(self, event):
+    def new_fill(self, fill_event):
         """
         Process incoming fill event, update position, trade and order state
         accordingly.
@@ -185,14 +185,25 @@ class Portfolio:
         Raises:
             None.
         """
-        pass
+
+        fill_conf = fill_event.get_order_conf()
+        if fill_conf['metatype'] == "ENTRY":
+            # Create a new postion object, trade has been entered.
+            pass
+
+        elif fill_conf['metatype'] == "STOP":
+            # Update the now closed postiion, trade is done.
+            pass
+
+        elif fill_conf['metatype'] == "TAKE_PROFIT":
+            # Update the modified position, trade still active.
+            pass
+
+        # Update portfolio and DB state after changes made.
 
     def new_order_conf(self, order_confs: list, events):
         """
         Update stored trade and order state to match given order confirmations.
-
-        Create a fill event if any orders instantly filled after placement
-        i.e. market orders should always fill instantly.
 
         Args:
             order_confs: list of order dicts containing updated details.
@@ -204,16 +215,13 @@ class Portfolio:
             None.
         """
 
-        self.logger.debug(str(order_confs))
-
         # Update portfolio state.
         for conf in order_confs:
             t_id = conf['trade_id']
             o_id = conf['order_id']
-            self.pf['trades'][t_id]['orders'][o_id] = conf
+            self.pf['trades'][str(t_id)]['orders'][str(o_id)] = conf
 
-            print(conf)
-            print(self.pf['trades'][t_id]['orders'][o_id])
+            print(self.pf['trades'][str(t_id)]['orders'][str(o_id)])
 
             # Create a fill event if the order has already been filled.
             if conf['status'] == "FILLED":
