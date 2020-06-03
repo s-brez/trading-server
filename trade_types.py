@@ -90,7 +90,7 @@ class SingleInstrumentTrade(Trade):
             'exposure': self.exposure,
             'venue': self.venue,
             'symbol': self.symbol,
-            'position': self.positon,
+            'position': self.position,
             'order_count': self.order_count,
             'orders': self.orders}
 
@@ -112,18 +112,26 @@ class Position:
     def get_fill_conf(self):
         return fill_conf
 
+    def get_pos_dict(self):
+        return {
+            'trade_id': self.fill_conf['trade_id'],
+            'size': self.fill_conf['size'],
+            'avg_entry_price': self.fill_conf['avg_entry_price'],
+            'symbol': self.fill_conf['symbol'],
+            'direction': self.fill_conf['direction'],
+            'currency': self.fill_conf['currency']}
+
 
 class Order:
     """
     Models a single order, as part of parent trade.
     """
 
-    def __init__(self, logger, trade_id, p_id, order_id, symbol, venue,
+    def __init__(self, logger, trade_id, order_id, symbol, venue,
                  direction, size, price, order_type, metatype, void_price,
                  trail, reduce_only, post_only, status="UNFILLED"):
         self.logger = logger
         self.trade_id = trade_id        # Parent trade ID.
-        self.position_id = p_id         # Related position ID.
         self.order_id = None            # Internal use order ID.
         self.timestamp = None           # Order placement timestamp.
         self.avg_fill_price = None      # Actual fill price
@@ -149,7 +157,6 @@ class Order:
         """
         return {
             'trade_id': self.trade_id,
-            'position_id': self.position_id,
             'order_id': self.order_id,
             'timestamp': self.timestamp,
             'avg_fill_price': self.avg_fill_price,
