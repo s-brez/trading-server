@@ -281,6 +281,20 @@ class Exchange(ABC):
         """
 
     @abstractmethod
+    def cancel_orders(self, order_ids: list):
+        """
+        Cancel all orders matching list of given order IDs.
+
+        Args:
+            orders: list of orders
+
+        Returns:
+
+        Raises:
+
+        """
+
+    @abstractmethod
     def format_orders(self, orders: list):
         """
         Converts internally formatted orders into relevant venue order format.
