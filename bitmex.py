@@ -65,7 +65,14 @@ class Bitmex(Exchange):
 
         self.api_key, self.api_secret = self.load_api_keys()
 
-        # Set default request retry behaviour.
+        # Connect to trade websocket.
+        self.ws = Bitmex_WS(
+            self.logger, self.symbols, self.channels, self.WS_URL,
+            self.api_key, self.api_secret)
+        if not self.ws.ws.sock.connected:
+            self.logger.debug("Failed to to connect to BitMEX websocket.")
+
+        # Set default https request retry behaviour.
         retries = Retry(
             total=5,
             backoff_factor=0.25,
@@ -77,13 +84,6 @@ class Bitmex(Exchange):
         # Non persistent storage for ticks and new 1 mins bars.
         self.bars = {}
         self.ticks = {}
-
-        # Connect to trade websocket.
-        self.ws = Bitmex_WS(
-            self.logger, self.symbols, self.channels, self.WS_URL,
-            self.api_key, self.api_secret)
-        if not self.ws.ws.sock.connected:
-            self.logger.debug("Failed to to connect to BitMEX websocket.")
 
         # Note, for future channel subs, create new Bitmex_WS in new process.
 
@@ -259,7 +259,7 @@ class Bitmex(Exchange):
 
         return final_ticks
 
-    def get_positions(self):
+    def get_position(self, symbol):
         prepared_request = Request(
             'GET',
             self.BASE_URL_TESTNET + self.POSITIONS_URL,
@@ -268,7 +268,24 @@ class Bitmex(Exchange):
                                                 self.api_secret)
         response = self.session.send(request).json()
 
-        return response
+        for pos in response:
+            if pos['symbol'] == symbol:
+
+                status = "OPEN" if pos['isOpen'] is True else "CLOSED"
+                direction = "LONG" if pos['currentQty'] > 0 else "SHORT"
+
+                return {
+                    'size': pos['currentQty'],
+                    'avg_entry_price': pos['avgEntryPrice'],
+                    'symbol': symbol,
+                    'direction': direction,
+                    'currency': pos['quoteCurrency'],
+                    'opening_timestamp': pos['openingTimestamp'],
+                    'opening_size': pos['openingQty'],
+                    'status': status}
+
+    def close_position(self, symbol, amount=None):
+        pass
 
     def get_orders(self):
         prepared_request = Request(
@@ -373,7 +390,7 @@ class Bitmex(Exchange):
                             'venue': order['venue'],
                             'symbol': order['symbol'],
                             'direction': order['direction'],
-                            'size': res['orderQty'],
+                            'size': res['size'],
                             'price': res['price'],
                             'order_type': order['order_type'],
                             'metatype': order['metatype'],
@@ -401,7 +418,14 @@ class Bitmex(Exchange):
 
         response = self.session.send(request).json()
 
-        return response
+        cancel_confs = {}
+        for i in response:
+            try:
+                cancel_confs[i['orderID']] = i['error']
+            except KeyError as ke:
+                cancel_confs[i['orderID']] = "SUCCESS"
+
+        return cancel_confs
 
     def format_orders(self, orders):
 
@@ -412,6 +436,7 @@ class Bitmex(Exchange):
             # TODO: add logic for execInst and stopPx
             execInst = None
             stopPx = None
+            timeInForce = None
 
             symbol = order['symbol']
             side = "Buy" if order['direction'] == "LONG" else "Sell"
