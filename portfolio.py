@@ -192,7 +192,7 @@ class Portfolio:
             # Create a position record and set trade to active.
             self.pf['trades'][t_id]['position'] = position
             self.pf['trades'][t_id]['active'] = True
-            self.calculate_pnl(trade_id)
+            self.calculate_pnl(t_id)
 
         elif fill_conf['metatype'] == "STOP":
 
@@ -211,7 +211,7 @@ class Portfolio:
             if new_size == 0:
                 self.trade_complete(t_id)
             else:
-                self.calculate_pnl(trade_id)
+                self.calculate_pnl(t_id)
 
         elif fill_conf['metatype'] == "FINAL_TAKE_PROFIT":
 
@@ -248,22 +248,6 @@ class Portfolio:
 
         self.save_porfolio(self.pf)
 
-    def update_price(self, events, market_event):
-        """
-        Check price and time updates against existing positions.
-
-        Args:
-            events: event queue object.
-            event: new market event.
-
-        Returns:
-           None.
-
-        Raises:
-            None.
-        """
-        pass
-
     def trade_complete(self, trade_id):
         """
         Check all orders and positions are closed, calculate pnl, run post
@@ -280,22 +264,40 @@ class Portfolio:
         self.calculate_pnl(trade_id)
 
         # Save portfolio state.
-        self.pf['trades'][t_id]['active'] = False
         self.save_porfolio(self.pf)
 
         # Run post-trade analytics.
         self.post_trade_analysis(trade_id)
 
-    def cancel_orders_by_trade_id(self, trade_id):
+    def cancel_orders_by_trade_id(self, t_id):
         """
         Cancel all orders matching the given trade ID.
         """
-        pass
 
-    def close_positions_by_trade(self, trade_id):
+        o_ids = self.pf['trades'][t_id]['orders'].keys()
+        v_ids = [i['venue_id'] for i in self.pf['trades'][t_id]['orders']]
+
+        venue = self.pf['trades'][t_id]['venue']
+        cancel_confs = self.exchanges[venue].cancel_orders(v_ids)
+
+        # Update portfolio state based on cancellation messagfes
+        for order_id in o_ids:
+            for venue_id in v_ids:
+
+                if self.pf['trades'][t_id]['orders'][order_id][
+                    'venue_id'] == venue_id and cancel_confs[
+                        venue_id] == "SUCCESS":
+
+                    self.pf['trades'][t_id]['orders']['order_id'][
+                        'status'] = "CANCELLED"
+
+                    self.pf['trades'][t_id]['active'] = False
+
+    def close_position_by_trade_id(self, trade_id):
         """
         """
-        self.pf['trades'][t_id]['position']['size'] = 0
+
+        
 
     def calculate_pnl(self, trade_id):
         """
@@ -430,6 +432,21 @@ class Portfolio:
         elif self.RISK_PER_TRADE.upper() == "KELLY":
             pass
 
+    def update_price(self, events, market_event):
+        """
+        Check price and time updates against existing positions.
+
+        Args:
+            events: event queue object.
+            event: new market event.
+
+        Returns:
+           None.
+
+        Raises:
+            None.
+        """
+        pass
 
     def save_new_trades_to_db(self):
         """
