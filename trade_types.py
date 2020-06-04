@@ -119,7 +119,10 @@ class Position:
             'avg_entry_price': self.fill_conf['avg_fill_price'],
             'symbol': self.fill_conf['symbol'],
             'direction': self.fill_conf['direction'],
-            'currency': self.fill_conf['currency']}
+            'currency': self.fill_conf['currency'],
+            'opening_timestamp': self.fill_conf['timestamp'],
+            'opening_size': self.fill_conf['size'],
+            'status': "OPEN"}
 
 
 class Order:
