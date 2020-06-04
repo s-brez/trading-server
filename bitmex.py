@@ -365,9 +365,8 @@ class Bitmex(Exchange):
 
                         updated_orders.append({
                             'trade_id': order['trade_id'],
-                            'position_id': order['position_id'],
                             'order_id': order['order_id'],
-                            'timestamp': res['timestamp'],
+                            'timestamp': int(parser.parse(res['timestamp']).timestamp()),
                             'avg_fill_price': res['avgPx'],
                             'currency': res['currency'],
                             'venue_id': res['orderID'],
@@ -387,16 +386,32 @@ class Bitmex(Exchange):
 
         return updated_orders
 
+    def cancel_orders(self, order_ids):
+        payload = {"orderID": order_ids}
+        prepared_request = Request(
+            "DELETE",
+            self.BASE_URL_TESTNET + self.ORDERS_URL,
+            json=payload,
+            params='').prepare()
+
+        request = generate_request_headers(
+            prepared_request,
+            self.api_key,
+            self.api_secret)
+
+        response = self.session.send(request).json()
+
+        return response
+
     def format_orders(self, orders):
 
         formatted = []
         for order in orders:
             price = self.round_increment(order['price'], order['symbol'])
 
-            # TODO: add logic for below three fields.
+            # TODO: add logic for execInst and stopPx
             execInst = None
             stopPx = None
-            timeInForce = None
 
             symbol = order['symbol']
             side = "Buy" if order['direction'] == "LONG" else "Sell"
@@ -406,17 +421,25 @@ class Bitmex(Exchange):
 
             if order['order_type'] == "LIMIT":
                 ordType = "Limit"
+                timeInForce = 'GoodTillCancel'
+
             elif order['order_type'] == "MARKET":
                 ordType = "Market"
                 price = None
+                timeInForce = 'ImmediateOrCancel'
+
             elif order['order_type'] == "STOP_LIMIT":
                 ordType = "StopLimit"
+                timeInForce = 'GoodTillCancel'
+
             elif order['order_type'] == "STOP":
                 ordType = "Stop"
                 stopPx = price
                 price = None
+                timeInForce = 'ImmediateOrCancel'
+
             else:
-                ordType = None
+                raise Exception("Incorrect order type specified.")
 
             formatted.append({
                     'symbol': symbol,
