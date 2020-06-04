@@ -116,7 +116,7 @@ class Position:
         return {
             'trade_id': self.fill_conf['trade_id'],
             'size': self.fill_conf['size'],
-            'avg_entry_price': self.fill_conf['avg_entry_price'],
+            'avg_entry_price': self.fill_conf['avg_fill_price'],
             'symbol': self.fill_conf['symbol'],
             'direction': self.fill_conf['direction'],
             'currency': self.fill_conf['currency']}
@@ -143,7 +143,7 @@ class Order:
         self.size = size                # Size in local asset/contract.
         self.price = price              # Order price.
         self.order_type = order_type.upper()  # LIMIT MARKET STOP_LIMIT STOP.
-        self.metatype = metatype.upper()      # ENTRY, TAKE_PROFIT, STOP.
+        self.metatype = metatype.upper()      # ENTRY, STOP, TAKE_PROFIT, FINAL_TAKE_PROFIT.
         self.void_price = void_price    # Order invalidation price.
         self.trail = trail              # True or False, only for stops.
         self.reduce_only = reduce_only  # True or False.

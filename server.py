@@ -195,17 +195,17 @@ class Server:
 
                     # Order Event generation.
                     elif event.type == "SIGNAL":
-                        self.logger.debug("Processing signal events.")
+                        self.logger.debug("Processing signal event.")
                         self.portfolio.new_signal(self.events, event)
 
                     # Order placement and Fill Event generation.
                     elif event.type == "ORDER":
-                        self.logger.debug("Processing order events.")
+                        self.logger.debug("Processing order event.")
                         self.broker.new_order(self.events, event)
 
                     # Final portolio update.
                     elif event.type == "FILL":
-                        self.logger.debug("Processing fill events.")
+                        self.logger.debug("Processing fill event.")
                         self.portfolio.new_fill(event)
 
                 # Finished all jobs in queue.

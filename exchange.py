@@ -286,7 +286,7 @@ class Exchange(ABC):
         Cancel all orders matching list of given order IDs.
 
         Args:
-            orders: list of orders
+            orders: list of orders.
 
         Returns:
 

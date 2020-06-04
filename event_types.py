@@ -119,7 +119,6 @@ class OrderEvent(Event):
         self.type = 'ORDER'
         self.order_dict = order_dict
         self.trade_id = order_dict['trade_id']
-        self.position_id = order_dict['position_id']
         self.order_id = order_dict['order_id']
         self.timestamp = order_dict['timestamp']
         self.avg_fill_price = order_dict['avg_fill_price']
@@ -161,4 +160,4 @@ class FillEvent(Event):
         return str(" ")
 
     def get_order_conf(self):
-        return order_conf
+        return self.order_conf
