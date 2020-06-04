@@ -289,6 +289,22 @@ class Exchange(ABC):
             orders: list of orders.
 
         Returns:
+            cancel_status: dict, {order_id: cancel succcess/fail message}
+
+        Raises:
+
+        """
+
+    @abstractmethod
+    def close_position(self, symbol):
+        """
+        Close postion for the given symbol.
+
+        Args:
+            symbol: instrument symbol to close.
+
+        Returns:
+            close_confirmation_dict.
 
         Raises:
 
