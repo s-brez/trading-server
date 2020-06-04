@@ -78,7 +78,6 @@ class Portfolio:
                 orders.append(Order(
                     self.logger,
                     trade_id,               # Parent trade ID.
-                    None,                   # Related position ID.
                     None,                   # Order ID as used by venue.
                     signal['symbol'],       # Instrument ticker code.
                     signal['venue'],        # Venue name.
@@ -96,7 +95,6 @@ class Portfolio:
                 orders.append(Order(
                     self.logger,
                     trade_id,
-                    None,
                     None,
                     signal['symbol'],
                     signal['venue'],
@@ -117,7 +115,6 @@ class Portfolio:
                         orders.append(Order(
                             self.logger,
                             trade_id,
-                            None,
                             None,
                             signal['symbol'],
                             signal['venue'],
@@ -187,19 +184,41 @@ class Portfolio:
         """
 
         fill_conf = fill_event.get_order_conf()
+        position = Position(fill_conf).get_pos_dict()
+        t_id = str(position['trade_id'])
+
         if fill_conf['metatype'] == "ENTRY":
-            # Create a new postion object, trade has been entered.
-            pass
+
+            # Create a position record and set trade to active.
+            self.pf['trades'][t_id]['position'] = position
+            self.pf['trades'][t_id]['active'] = True
+            self.calculate_pnl(trade_id)
 
         elif fill_conf['metatype'] == "STOP":
+
             # Update the now closed postiion, trade is done.
-            pass
+            self.trade_complete(t_id)
 
         elif fill_conf['metatype'] == "TAKE_PROFIT":
-            # Update the modified position, trade still active.
-            pass
 
-        # Update portfolio and DB state after changes made.
+            # Update the modified position.
+            direction = self.pf['trades'][t_id]['position']['direction']
+            size = self.pf['trades'][t_id]['position']['size']
+
+            # Update position size.
+            new_size = size - fill_conf['size']
+            self.pf['trades'][t_id]['position']['size'] = new_size
+            if new_size == 0:
+                self.trade_complete(t_id)
+            else:
+                self.calculate_pnl(trade_id)
+
+        elif fill_conf['metatype'] == "FINAL_TAKE_PROFIT":
+
+            # Update the now closed postiion, trade is done.
+            self.trade_complete(t_id)
+
+        self.save_porfolio(self.pf)
 
     def new_order_conf(self, order_confs: list, events):
         """
@@ -217,11 +236,11 @@ class Portfolio:
 
         # Update portfolio state.
         for conf in order_confs:
-            t_id = conf['trade_id']
-            o_id = conf['order_id']
-            self.pf['trades'][str(t_id)]['orders'][str(o_id)] = conf
+            t_id = str(conf['trade_id'])
+            o_id = str(conf['order_id'])
+            self.pf['trades'][t_id]['orders'][o_id] = conf
 
-            print(self.pf['trades'][str(t_id)]['orders'][str(o_id)])
+            self.logger.debug(str(self.pf['trades'][t_id]['orders'][o_id]))
 
             # Create a fill event if the order has already been filled.
             if conf['status'] == "FILLED":
@@ -242,6 +261,51 @@ class Portfolio:
 
         Raises:
             None.
+        """
+        pass
+
+    def trade_complete(self, trade_id):
+        """
+        Check all orders and positions are closed, calculate pnl, run post
+        trade checks/analytics.
+        """
+
+        # Cancel all orders marching trade ID.
+        self.cancel_orders_by_trade_id(trade_id)
+
+        # Close positions, if still open.
+        self.close_positions_by_trade(trade_id)
+
+        # Calculate trade pnl.
+        self.calculate_pnl(trade_id)
+
+        # Save portfolio state.
+        self.pf['trades'][t_id]['active'] = False
+        self.save_porfolio(self.pf)
+
+        # Run post-trade analytics.
+        self.post_trade_analysis(trade_id)
+
+    def cancel_orders_by_trade_id(self, trade_id):
+        """
+        Cancel all orders matching the given trade ID.
+        """
+        pass
+
+    def close_positions_by_trade(self, trade_id):
+        """
+        """
+        self.pf['trades'][t_id]['position']['size'] = 0
+
+    def calculate_pnl(self, trade_id):
+        """
+        Calculate pnl for the given trade.
+        """
+        pass
+
+    def post_trade_analysis(self, trade_id):
+        """
+        TODO: conduct post-trade analytics.
         """
         pass
 
@@ -339,11 +403,14 @@ class Portfolio:
         """
 
         if signal['stop_price'] is not None:
-            stop = signal['stop_price']
-        else:
-            stop = signal['entry_price'] / 100 * (100 - self.DEFAULT_STOP)
+            return signal['stop_price']
 
-        return stop
+        else:
+            if signal['direction'] == "LONG":
+                return signal['entry_price'] / 100 * (100 - self.DEFAULT_STOP)
+
+            elif signal['direction'] == "SHORT":
+                return signal['entry_price'] / 100 * (100 + self.DEFAULT_STOP)
 
     def calculate_position_size(self, stop, entry):
         """
@@ -363,10 +430,6 @@ class Portfolio:
         elif self.RISK_PER_TRADE.upper() == "KELLY":
             pass
 
-    def fees(self, trade):
-        """
-        Calculate total current fees paid for the given trade.
-        """
 
     def save_new_trades_to_db(self):
         """
