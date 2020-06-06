@@ -259,7 +259,7 @@ class Bitmex(Exchange):
 
         return final_ticks
 
-    def get_position(self, symbol):
+    def get_positions(self):
         prepared_request = Request(
             'GET',
             self.BASE_URL_TESTNET + self.POSITIONS_URL,
@@ -284,8 +284,37 @@ class Bitmex(Exchange):
                     'opening_size': pos['openingQty'],
                     'status': status}
 
-    def close_position(self, symbol, amount=None):
-        pass
+    def close_position(self, symbol):
+        positions = self.get_positions()
+        for pos in positions:
+            if pos['symbol'] == symbol:
+                position = pos
+                break
+        if position:
+            payload = {
+                'symbol': symbol,
+                'orderQty': -pos['currentQty'],
+                'ordType': "Market"}
+
+            prepared_request = Request(
+                'POST',
+                self.BASE_URL_TESTNET + self.ORDERS_URL,
+                json=payload,
+                params='').prepare()
+
+            request = generate_request_headers(
+                prepared_request,
+                self.api_key,
+                self.api_secret)
+
+            response = s.send(request).json()
+
+            if response['ordStatus'] == "Filled":
+                return True
+            else:
+                return False
+        else:
+            return False
 
     def get_orders(self):
         prepared_request = Request(
