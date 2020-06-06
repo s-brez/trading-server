@@ -284,17 +284,29 @@ class Bitmex(Exchange):
                     'opening_size': pos['openingQty'],
                     'status': status}
 
-    def close_position(self, symbol):
+    def close_position(self, symbol, qty, direction):
         positions = self.get_positions()
         for pos in positions:
             if pos['symbol'] == symbol:
                 position = pos
                 break
         if position:
-            payload = {
-                'symbol': symbol,
-                'orderQty': -pos['currentQty'],
-                'ordType': "Market"}
+
+            if direction == "LONG":
+                amt = -qty
+            elif direction == "SHORT":
+                amt = qty
+
+            if qty and direction:
+                payload = {
+                    'symbol': symbol,
+                    'orderQty': amt,
+                    'ordType': "Market"}
+            else:
+                payload = {
+                    'symbol': symbol,
+                    'orderQty': -pos['currentQty'],
+                    'ordType': "Market"}
 
             prepared_request = Request(
                 'POST',

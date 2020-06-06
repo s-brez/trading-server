@@ -61,13 +61,14 @@ class SingleInstrumentTrade(Trade):
     and stop loss orders.
     """
 
-    def __init__(self, logger, venue, symbol, model, s_ts=None, position=None,
-                 orders=None):
+    def __init__(self, logger, direction, venue, symbol, model, s_ts=None,
+                 position=None, orders=None):
         super().__init__()
         self.logger = logger
         self.type = "SINGLE_INSTRUMENT"
         self.venue_count = 1
         self.instrument_count = 1
+        self.direction = direction          # LONG or SHORT.
         self.signal_timestamp = s_ts        # Epoch timestamp of parent signal.
         self.venue = venue                  # Exchange or broker traded with.
         self.symbol = symbol                # Instrument ticker code.
@@ -84,6 +85,7 @@ class SingleInstrumentTrade(Trade):
             'venue_count': self.venue_count,
             'instrument_count': self.instrument_count,
             'model': self.model,
+            'direction': self.direction,
             'u_pnl': self.u_pnl,
             'r_pnl': self.r_pnl,
             'fees': self.fees,

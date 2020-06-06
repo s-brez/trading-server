@@ -137,6 +137,7 @@ class Portfolio:
                 # Parent trade object:
                 trade = SingleInstrumentTrade(
                     self.logger,
+                    signal['direction'],        # Direction
                     signal['venue'],            # Venue name.
                     signal['symbol'],           # Instrument ticker code.
                     signal['strategy'],         # Model name.
@@ -280,7 +281,7 @@ class Portfolio:
         venue = self.pf['trades'][t_id]['venue']
         cancel_confs = self.exchanges[venue].cancel_orders(v_ids)
 
-        # Update portfolio state based on cancellation messagfes
+        # Update portfolio state based on cancellation messages.
         for order_id in o_ids:
             for venue_id in v_ids:
 
@@ -295,9 +296,26 @@ class Portfolio:
 
     def close_position_by_trade_id(self, trade_id):
         """
+        This method will close only the remaining amount for the given trade -
+        it will not necessarily close an entire position, unless there is only
+        one open position in that particular instrument.
+
+        Use close_position_absolute() to completely close all positions in
+        for specifc instrument at a specific venue.
         """
 
-        
+        return self.exchanges[
+            self.pf['trades'][t_id]['venue']].close_position(
+                self.pf['trades'][t_id]['symbol'],
+                self.pf['trades'][t_id]['position']['size'],
+                self.pf['trades'][t_id]['direction'])
+
+    def close_position_absolute(self, venue, symbol):
+        """
+        Close ALL units of given instument symbol.
+        """
+
+        return self.exchanges[venue].close_position(symbol)
 
     def calculate_pnl(self, trade_id):
         """

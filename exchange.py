@@ -296,16 +296,17 @@ class Exchange(ABC):
         """
 
     @abstractmethod
-    def close_position(self, symbol):
+    def close_position(self, symbol, qty, direction):
         """
-        Close postion for the given symbol.
+        Close 'qty' units of 'symbol' instrument in 'direction' direction.
 
         Args:
             symbol: instrument symbol to close.
+            qty: number of units of instrument to close.
+            direction: LONG or SHORT
 
         Returns:
-            close_confirmation_dict.
-
+            True if successful close, False if not.
         Raises:
 
         """
