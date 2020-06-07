@@ -23,6 +23,8 @@ TICKS_URL = "/trade?symbol="
 POSITIONS_URL = "/position"
 ORDERS_URL = "/order"
 BULK_ORDERS_URL = "/order/bulk"
+TRADE_HIST_URL = "/execution/tradeHistory"
+
 symbol_min_increment = {
     'XBTUSD': 0.5,
     'ETHUSD': 0.05,
@@ -252,27 +254,136 @@ def place_bulk_orders(orders):
     return updated_orders
 
 
-orders = [{'trade_id': 47, 'position_id': None, 'order_id': 119131,
-           'venue': 'BitMEX', 'symbol': 'XBTUSD', 'direction': 'LONG',
-           'size': 334.0, 'price': 9172.5, 'order_type': 'MARKET',
-           'metatype': 'ENTRY', 'void_price': 8897.324999999999,
-           'trail': False, 'reduce_only': False, 'post_only': False,
-           'batch_size': 2, 'status': 'UNFILLED', 'timestamp': None,
-           'avg_fill_price': None, 'currency': None, 'venue_id': None},
-          {'trade_id': 47, 'position_id': None, 'order_id': 219131,
-           'venue': 'BitMEX', 'symbol': 'XBTUSD', 'direction': 'SHORT',
-           'size': 334.0, 'price': 9000, 'order_type': 'STOP',
-           'metatype': 'STOP', 'void_price': 8897.324999999999,
-           'trail': False, 'reduce_only': False, 'post_only': False,
-           'batch_size': 2, 'status': 'UNFILLED', 'timestamp': None,
-           'avg_fill_price': None, 'currency': None, 'venue_id': None},
-          {'trade_id': 47, 'position_id': None, 'order_id': 319131,
-           'venue': 'BitMEX', 'symbol': 'XBTUSD', 'direction': 'SHORT',
-           'size': 334.0, 'price': 10000.5, 'order_type': 'LIMIT',
-           'metatype': 'TAKE_PROFIT', 'void_price': 8897.324999999999,
-           'trail': False, 'reduce_only': False, 'post_only': False,
-           'batch_size': 2, 'status': 'UNFILLED', 'timestamp': None,
-           'avg_fill_price': None, 'currency': None, 'venue_id': None}]
+def cancel_orders(order_ids: list):
+    payload = {"orderID": order_ids}
+    print(payload)
+    s = Session()
+    prepared_request = Request(
+        "DELETE",
+        BASE_URL_TESTNET + ORDERS_URL,
+        json=payload,
+        params='').prepare()
+
+    request = generate_request_headers(
+        prepared_request,
+        api_key,
+        api_secret)
+
+    response = s.send(request).json()
+
+    return response
 
 
-print(place_bulk_orders(orders))
+def close_position(symbol: str):
+    positions = get_positions()
+    for pos in positions:
+        if pos['symbol'] == symbol:
+            position = pos
+            break
+
+    if position:
+        payload = {
+            'symbol': symbol,
+            'orderQty': -pos['currentQty'],
+            'ordType': "Market"}
+
+        s = Session()
+
+        prepared_request = Request(
+            'POST',
+            BASE_URL_TESTNET + ORDERS_URL,
+            json=payload,
+            params='').prepare()
+
+        request = generate_request_headers(
+            prepared_request,
+            api_key,
+            api_secret)
+
+        response = s.send(request).json()
+        if response['ordStatus'] == "Filled":
+            return True
+        else:
+            return False
+
+
+def get_executions(symbol, start_timestamp=None, count=500):
+    payload = {
+        'symbol': symbol,
+        'count': count,
+        'start': start_timestamp,
+        'reverse': True}
+
+    prepared_request = Request(
+        'GET',
+        BASE_URL_TESTNET + TRADE_HIST_URL,
+        json=payload,
+        params='').prepare()
+
+    request = generate_request_headers(
+        prepared_request,
+        api_key,
+        api_secret)
+
+    response = Session().send(request).json()
+
+    executions = []
+    for res in response:
+
+        fee_type = "TAKER" if res['lastLiquidityInd'] == "RemovedLiquidity" else "MAKER"
+        direction = "LONG" if res['side'] == "Buy" else "SHORT"
+
+        if res['ordStatus'] == "Filled":
+            fill = "FILLED"
+        elif res['ordStatus'] == "Cancelled":
+            fill = "CANCELLED"
+        elif res['ordStatus'] == "New":
+            fill = "NEW"
+        elif res['ordStatus'] == "PartiallyFilled":
+            fill = "PARTIAL"
+        else:
+            raise Exception(res['ordStatus'])
+
+        if res['ordType'] == "Limit":
+            order_type = "LIMIT"
+        elif res['ordType'] == "Market":
+            order_type = "MARKET"
+        elif res['ordType'] == "StopLimit":
+            order_type = "STOP_LIMIT"
+        elif res['ordType'] == "Stop":
+            order_type = "STOP"
+        else:
+            raise Exception(res['ordType'])
+
+        executions.append({
+                'order_id': res['clOrdID'],
+                'venue_id': res['orderID'],
+                'timestamp': int(parser.parse(res['timestamp']).timestamp()),
+                'avg_exc_price': res['avgPx'],
+                'currency': res['currency'],
+                'symbol': res['symbol'],
+                'direction': direction,
+                'size': res['lastQty'],
+                'order_type': res['ordType'],
+                'fee_type': fee_type,
+                'fee_amt': res['commission'],
+                'total_fee': res['execComm'] / res['avgPx'],
+                'status': fill})
+
+    return executions
+
+
+# id_pairs = {
+#     'e5f4bbcf-ec61-c2c5-0365-c0b1d57d4e57': '64-1',
+#     'd76349e3-4d27-3764-7c71-c58a8b6955f3': '63-1'}
+# v_ids = id_pairs.keys()
+
+executions = get_executions("XBTUSD")
+
+# sorted_executions = {i: [] for i in v_ids}
+# for exc in executions:
+#     if exc['venue_id'] in v_ids:
+#         sorted_executions[exc['venue_id']].append(exc)
+
+# print(json.dumps(sorted_executions, indent=2))
+print(json.dumps(executions, indent=2))
