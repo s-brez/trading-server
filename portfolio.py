@@ -256,15 +256,15 @@ class Portfolio:
         """
 
         # Cancel all orders marching trade ID.
-        self.cancel_orders_by_trade_id(trade_id)
+        self.cancel_orders_by_trade(trade_id)
 
         # Close positions, if still open.
         self.close_positions_by_trade(trade_id)
 
         # Calculate trade pnl.
-        self.calculate_pnl(trade_id)
+        self.calculate_pnl_by_trade(trade_id)
 
-        # Save portfolio state.
+        # Save updated portfolio state to DB.
         self.save_porfolio(self.pf)
 
         # Run post-trade analytics.
@@ -272,11 +272,12 @@ class Portfolio:
 
     def cancel_orders_by_trade_id(self, t_id):
         """
-        Cancel all orders matching the given trade ID.
+        Cancel all orders matching the given trade ID and update
+        local portfolio state.
         """
 
         o_ids = self.pf['trades'][t_id]['orders'].keys()
-        v_ids = [i['venue_id'] for i in self.pf['trades'][t_id]['orders']]
+        v_ids = [order['venue_id'] for order in o_ids]
 
         venue = self.pf['trades'][t_id]['venue']
         cancel_confs = self.exchanges[venue].cancel_orders(v_ids)
@@ -294,34 +295,60 @@ class Portfolio:
 
                     self.pf['trades'][t_id]['active'] = False
 
-    def close_position_by_trade_id(self, trade_id):
+    def close_position_by_trade(self, trade_id):
         """
         This method will close only the remaining amount for the given trade -
         it will not necessarily close an entire position, unless there is only
         one open position in that particular instrument.
 
+        Then, update local portfolio state.
+
         Use close_position_absolute() to completely close all positions in
         for specifc instrument at a specific venue.
         """
 
-        return self.exchanges[
+        close = self.exchanges[
             self.pf['trades'][t_id]['venue']].close_position(
                 self.pf['trades'][t_id]['symbol'],
                 self.pf['trades'][t_id]['position']['size'],
                 self.pf['trades'][t_id]['direction'])
 
+        if close:
+            self.pf['trades'][t_id]['position']['size'] = 0
+            self.pf['trades'][t_id]['position']['status'] = "CLOSED"
+
     def close_position_absolute(self, venue, symbol):
         """
-        Close ALL units of given instument symbol.
+        Close ALL units of given instrument symbol indiscriminately.
         """
 
         return self.exchanges[venue].close_position(symbol)
 
-    def calculate_pnl(self, trade_id):
+    def calculate_pnl_by_trade(self, t_id):
         """
-        Calculate pnl for the given trade.
+        Calculate pnl for the given trade and update local portfolio state.
         """
-        pass
+
+        # Match internal order ids with venue ids {venue id: order id}
+        id_pairs = {i['venue_id']: i for i in self.pf['trades'][t_id]['orders'].keys()}
+        v_ids = id_pairs.keys()
+
+        # Fetch all balance affecting executions.
+        executions = self.exchanges[self.pf['trades'][t_id][
+            'venue']].get_executions(self.pf['trades'][t_id]['symbol'])
+
+        # Sort child orders by venue id, for the given trade id.
+        sorted_executions = {i: [] for i in keys()}
+        for exc in executions:
+            if exc['venue_id'] in v_ids:
+                sorted_executions[exc['venue_id']].append(exc)
+
+        # TODO: finish pnl calc after system is closing trades by itself.
+
+        # Fee (USD) = ((size / exec price) * fee multiplicand) * exec price
+        # or just use execComm converted to usd.
+
+        # PNL = entry and exit difference - total fees.
 
     def post_trade_analysis(self, trade_id):
         """
