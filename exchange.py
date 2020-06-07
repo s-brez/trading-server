@@ -327,6 +327,37 @@ class Exchange(ABC):
         """
 
     @abstractmethod
+    def get_executions(self, symbol, start_timestamp, count):
+        """
+        Args:
+            symbol: instrument ticker code (string)
+            start_timestamp: epoch timestamp (int)
+            count: amount of results to fetch (int)
+
+        Returns:
+            List of balance-affecting executions for the given symbol.
+            Each execution should be a dict with the following format:
+                {
+                    'order_id': ???,
+                    'venue_id': ???,
+                    'timestamp': ???,       epooch timestamp (int)
+                    'avg_exc_price': ???,
+                    'currency': ???,
+                    'symbol': ???,
+                    'direction': ???,       LONG or SHORT
+                    'size': ???,
+                    'order_type': ???,
+                    'fee_type': ???,
+                    'fee_amt': ???,         multiplicand to find total fee cost
+                    'total_fee': ???,       fees charged for transaction in USD
+                    'status' ???:           FILLED, CANCELLED, NEW, PARTIAL
+                }
+
+        Raises:
+            None.
+        """
+
+    @abstractmethod
     def get_bars_in_period(self, symbol: str, start_time: int, total: int):
         """
         Args:

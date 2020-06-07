@@ -43,6 +43,7 @@ class Bitmex(Exchange):
     POSITIONS_URL = "/position"
     ORDERS_URL = "/order"
     BULK_ORDERS_URL = "/order/bulk"
+    TRADE_HIST_URL = "/execution/tradeHistory"
 
     def __init__(self, logger):
         super()
@@ -62,6 +63,11 @@ class Bitmex(Exchange):
             "XBTUSD": 1483228800,
             "ETHUSD": 1533200520,
             "XRPUSD": 1580875200}
+
+        self.symbol_min_increment = {
+            'XBTUSD': 0.5,
+            'ETHUSD': 0.05,
+            'XRPUSD': 0.0001}
 
         self.api_key, self.api_secret = self.load_api_keys()
 
@@ -284,7 +290,72 @@ class Bitmex(Exchange):
                     'opening_size': pos['openingQty'],
                     'status': status}
 
-    def close_position(self, symbol, qty, direction):
+    def get_executions(self, symbol, start_timestamp=None, count=500):
+        payload = {
+            'symbol': symbol,
+            'count': count,
+            'start': start_timestamp,
+            'reverse': True}
+
+        prepared_request = Request(
+            'GET',
+            self.BASE_URL_TESTNET + self.TRADE_HIST_URL,
+            json=payload,
+            params='').prepare()
+
+        request = generate_request_headers(
+            prepared_request,
+            self.api_key,
+            self.api_secret)
+
+        response = self.session.send(request).json()
+
+        executions = []
+        for res in response:
+
+            fee_type = "TAKER" if res['lastLiquidityInd'] == "RemovedLiquidity" else "MAKER"
+            direction = "LONG" if res['side'] == "Buy" else "SHORT"
+
+            if res['ordStatus'] == "Filled":
+                fill = "FILLED"
+            elif res['ordStatus'] == "Cancelled":
+                fill = "CANCELLED"
+            elif res['ordStatus'] == "New":
+                fill = "NEW"
+            elif res['ordStatus'] == "PartiallyFilled":
+                fill = "PARTIAL"
+            else:
+                raise Exception(res['ordStatus'])
+
+            if res['ordType'] == "Limit":
+                order_type = "LIMIT"
+            elif res['ordType'] == "Market":
+                order_type = "MARKET"
+            elif res['ordType'] == "StopLimit":
+                order_type = "STOP_LIMIT"
+            elif res['ordType'] == "Stop":
+                order_type = "STOP"
+            else:
+                raise Exception(res['ordType'])
+
+            executions.append({
+                    'order_id': res['clOrdID'],
+                    'venue_id': res['orderID'],
+                    'timestamp': int(parser.parse(res['timestamp']).timestamp()),
+                    'avg_exc_price': res['avgPx'],
+                    'currency': res['currency'],
+                    'symbol': res['symbol'],
+                    'direction': direction,
+                    'size': res['lastQty'],
+                    'order_type': res['ordType'],
+                    'fee_type': fee_type,
+                    'fee_amt': res['commission'],
+                    'total_fee': res['execComm'] / res['avgPx'],
+                    'status': fill})
+
+        return executions
+
+    def close_position(self, symbol, qty=None, direction=None):
         positions = self.get_positions()
         for pos in positions:
             if pos['symbol'] == symbol:
@@ -296,6 +367,8 @@ class Bitmex(Exchange):
                 amt = -qty
             elif direction == "SHORT":
                 amt = qty
+            else:
+                raise Exception(direction)
 
             if qty and direction:
                 payload = {
@@ -319,7 +392,7 @@ class Bitmex(Exchange):
                 self.api_key,
                 self.api_secret)
 
-            response = s.send(request).json()
+            response = self.session.send(request).json()
 
             if response['ordStatus'] == "Filled":
                 return True
