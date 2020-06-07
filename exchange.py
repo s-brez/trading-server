@@ -430,13 +430,13 @@ class Exchange(ABC):
         """
 
     @abstractmethod
-    def get_positions(self):
+    def get_position(self, symbol):
         """
         Args:
-            None.
+            symbol:  Instrument ticker code (string).
 
         Returns:
-            List containing open positions.
+            Position dict for the specified symbol.
 
         Raises:
             None.

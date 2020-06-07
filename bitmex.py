@@ -265,7 +265,7 @@ class Bitmex(Exchange):
 
         return final_ticks
 
-    def get_positions(self):
+    def get_position(self, symbol):
         prepared_request = Request(
             'GET',
             self.BASE_URL_TESTNET + self.POSITIONS_URL,

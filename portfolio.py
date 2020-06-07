@@ -243,7 +243,7 @@ class Portfolio:
 
             self.logger.debug(str(self.pf['trades'][t_id]['orders'][o_id]))
 
-            # Create a fill event if the order has already been filled.
+            # Create a fill event if order has already been filled.
             if conf['status'] == "FILLED":
                 events.put(FillEvent(conf))
 
@@ -391,19 +391,6 @@ class Portfolio:
         """
         Check stored portfolio data matches actual positions and orders.
         """
-
-        trades = self.db_other['trades'].find({"active": "True"}, {"_id": 0})
-
-        # If trades marked active exist (in DB), check their orders and
-        # positions match actual trade state, update portfoilio if disparate.
-        if trades:
-            self.logger.debug("Verifying trade records match trade state.")
-            for venue in [trade['venue'] for trade in trades]:
-                print("Fetched positions and orders.")
-                positions = self.exchanges[venue].get_positions()
-                orders = self.exchanges[venue].get_orders()
-
-                # TODO: state checking.
 
         self.save_porfolio(portfolio)
         self.logger.debug("Portfolio verification complete.")
