@@ -487,34 +487,44 @@ class Bitmex(Exchange):
         if order_confirmations:
             for res in order_confirmations:
                 for order in orders:
-                    if str(order['order_id']) == str(res['clOrdID']):
 
-                        if res['ordStatus'] == 'Filled':
+                    if order['order_id'] == res['clOrdID']:
+
+                        if res['ordStatus'] == "Filled":
                             fill = "FILLED"
-                        elif res['ordStatus'] == 'New':
+                        elif res['ordStatus'] == "Cancelled":
+                            fill = "CANCELLED"
+                        elif res['ordStatus'] == "New":
                             fill = "NEW"
+                        elif res['ordStatus'] == "PartiallyFilled":
+                            fill = "PARTIAL"
+                        else:
+                            raise Exception(res['ordStatus'])
 
-                        updated_orders.append({
+                        new = {
                             'trade_id': order['trade_id'],
                             'order_id': order['order_id'],
+                            'venue': order['venue'],
+                            'symbol': order['symbol'],
+                            'order_type': order['order_type'],
+                            'metatype': order['metatype'],
+                            'void_price': order['void_price'],
+                            'direction': order['direction'],
+                            'reduce_only': order['reduce_only'],
+                            'post_only': order['post_only'],
+                            'batch_size': order['batch_size'],
+                            'size': order['size'],
+                            'trail': order['trail'],
                             'timestamp': int(parser.parse(res['timestamp']).timestamp()),
                             'avg_fill_price': res['avgPx'],
                             'currency': res['currency'],
                             'venue_id': res['orderID'],
-                            'venue': order['venue'],
-                            'symbol': order['symbol'],
-                            'direction': order['direction'],
-                            'size': res['size'],
                             'price': res['price'],
-                            'order_type': order['order_type'],
-                            'metatype': order['metatype'],
-                            'void_price': order['void_price'],
-                            'trail': order['trail'],
-                            'reduce_only': order['reduce_only'],
-                            'post_only': order['post_only'],
-                            'batch_size': order['batch_size'],
-                            'status': fill})
+                            'status': fill}
 
+                        updated_orders.append(new)
+
+        print(updated_orders)
         return updated_orders
 
     def cancel_orders(self, order_ids):
