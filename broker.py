@@ -8,7 +8,9 @@ Licensed under GNU General Public License 3.0 or later.
 
 Some rights reserved. See LICENSE.md, AUTHORS.md.
 """
+from time import sleep
 import traceback
+import datetime
 
 
 class Broker:
@@ -26,8 +28,11 @@ class Broker:
         self.db_client = db_client
         self.live_trading = live_trading
 
-        # Container for order batches. {trade_id: [order objects]}
+        # Container for order batches {trade_id: [order objects]}.
         self.orders = {}
+
+        # Start FillAgent.
+        self.fill_agent = FillAgent(self.logger, self.pf, self.exchanges)
 
     def new_order(self, events, order_event):
         """
@@ -60,7 +65,6 @@ class Broker:
 
                 # If batch complete, submit order batch for execution.
                 if order_count == new_order['batch_size']:
-
                     self.logger.debug(
                         "Trade " + str(trade_id) + " order batch ready.")
 
@@ -83,5 +87,53 @@ class Broker:
             self.orders[new_order['trade_id']] = [new_order]
             # print(traceback.format_exc())
 
-    def check_fills(self):
-        pass
+    def check_fills(self, events):
+        """
+        Check orders have been filled by comparing portfolio and venue order
+        states. Create fill events when orders have been filled.
+        """
+
+        if self.fill_agent.fills:
+            for fill_event in self.fill_agent.fills:
+                events.put(fill_event)
+
+        return events
+
+
+class FillAgent:
+    """
+    Check for new fills in separate thread on specified intervals/conditions.
+    """
+
+    # Check every (60 - CHECK_INTERVAL)th second of each minute.
+    CHECK_INTERVAL = 20
+
+    def __init__(self, logger, portfolio, exchanges):
+        self.logger = logger
+        self.pf = portfolio
+        self.exchanges = exchanges
+
+        self.fills = []
+
+        thread = Thread(target=lambda: self.start(), daemon=True)
+        thread.start()
+
+        self.logger.debug("Started FillAgent daemon.")
+
+    def start(self):
+        """
+        """
+
+        sleep(self.seconds_til_next_minute())
+
+        while True:
+            sleep(self.seconds_til_next_minute() - self.CHECK_INTERVAL)
+
+            # Check active trades, get orders from relevant venues.
+
+            # Identify order state changes and create fill events accordingly.
+
+    def seconds_til_next_minute(self: int):
+        now = datetime.datetime.utcnow().second
+        delay = 60 - now
+        return delay
