@@ -27,9 +27,9 @@ class Portfolio:
     """
 
     MAX_SIMULTANEOUS_POSITIONS = 20
-    MAX_CORRELATED_TRADES = 1
-    MAX_ACCEPTED_DRAWDOWN = 15  # Percentage as integer.
-    RISK_PER_TRADE = 1          # Percentage as integer OR 'KELLY'
+    MAX_CORRELATED_TRADES = 2
+    MAX_ACCEPTED_DRAWDOWN = 25  # Percentage as integer.
+    RISK_PER_TRADE = 2          # Percentage as integer OR 'KELLY'
     DEFAULT_STOP = 3            # Default (%) stop distance if none provided.
 
     def __init__(self, exchanges, logger, db_other, db_client, models):
@@ -59,7 +59,6 @@ class Portfolio:
         """
 
         signal = event.get_signal_dict()
-
         if self.within_risk_limits(signal):
 
             orders = []
@@ -193,7 +192,6 @@ class Portfolio:
             # Create a position record and set trade to active.
             self.pf['trades'][t_id]['position'] = position
             self.pf['trades'][t_id]['active'] = True
-            self.calculate_pnl(t_id)
 
         elif fill_conf['metatype'] == "STOP":
 
@@ -212,7 +210,7 @@ class Portfolio:
             if new_size == 0:
                 self.trade_complete(t_id)
             else:
-                self.calculate_pnl(t_id)
+                self.calculate_pnl_by_trade(t_id)
 
         elif fill_conf['metatype'] == "FINAL_TAKE_PROFIT":
 
@@ -240,8 +238,6 @@ class Portfolio:
             t_id = str(conf['trade_id'])
             o_id = str(conf['order_id'])
             self.pf['trades'][t_id]['orders'][o_id] = conf
-
-            self.logger.debug(str(self.pf['trades'][t_id]['orders'][o_id]))
 
             # Create a fill event if order has already been filled.
             if conf['status'] == "FILLED":
@@ -330,7 +326,8 @@ class Portfolio:
         """
 
         # Match internal order ids with venue ids {venue id: order id}
-        id_pairs = {i['venue_id']: i for i in self.pf['trades'][t_id]['orders'].keys()}
+        o_ids = self.pf['trades'][t_id]['orders'].keys()
+        id_pairs = {self.pf['trades'][t_id]['orders'][i]['venue_id']: i for i in o_ids}
         v_ids = id_pairs.keys()
 
         # Fetch all balance affecting executions.
@@ -356,6 +353,16 @@ class Portfolio:
         """
         pass
 
+    def verify_portfolio_state(self, portfolio):
+        """
+        Check stored portfolio data matches actual positions and orders.
+        """
+
+        self.save_porfolio(portfolio)
+        self.logger.debug("Portfolio verification complete.")
+
+        return portfolio
+
     def load_portfolio(self, ID=1):
         """
         Load portfolio matching ID from database or return empty portfolio.
@@ -372,8 +379,17 @@ class Portfolio:
                 'id': ID,
                 'start_date': int(time.time()),
                 'initial_funds': 1000,
-                'current_value': 1000,
+                'current_funds': 1000,
                 'current_drawdown': 0,
+                'avg_r_per_winner': 0,
+                'avg_r_per_loser': 0,
+                'avg_r_per_trade': 0,
+                'total_winning_trades': 0,
+                'total_losing_trades': 0,
+                'total_consecutive_wins': 0,
+                'total_consecutive_losses': 0,
+                'win_loss_ratio': 0,
+                'gain_to_pain_ration': 0,
                 'risk_per_trade': self.RISK_PER_TRADE,
                 'max_correlated_trades': self.MAX_CORRELATED_TRADES,
                 'max_accepted_drawdown': self.MAX_ACCEPTED_DRAWDOWN,
@@ -386,16 +402,6 @@ class Portfolio:
             self.save_porfolio(default_portfolio)
 
             return default_portfolio
-
-    def verify_portfolio_state(self, portfolio):
-        """
-        Check stored portfolio data matches actual positions and orders.
-        """
-
-        self.save_porfolio(portfolio)
-        self.logger.debug("Portfolio verification complete.")
-
-        return portfolio
 
     def save_porfolio(self, portfolio):
         """
