@@ -303,7 +303,7 @@ class Bitmex(Exchange):
             json=payload,
             params='').prepare()
 
-        request = generate_request_headers(
+        request = self.generate_request_headers(
             prepared_request,
             self.api_key,
             self.api_secret)
@@ -575,7 +575,6 @@ class Bitmex(Exchange):
 
                         updated_orders.append(new)
 
-        print(updated_orders)
         return updated_orders
 
     def cancel_orders(self, order_ids):
