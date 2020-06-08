@@ -443,13 +443,16 @@ class Exchange(ABC):
         """
 
     @abstractmethod
-    def get_orders(self):
+    def get_orders(self, symbol):
         """
+        Final versions of this method in subclasses should only return orders
+        placed by this program. Fetch only orders with venue ids.
+
         Args:
-            None.
+            symbol: Instrument ticker code (string).
 
         Returns:
-            List containing all orders, both active and inactive.
+            List containing all active and inactive orders for symbol.
 
         Raises:
             None.

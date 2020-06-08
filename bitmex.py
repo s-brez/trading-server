@@ -318,7 +318,7 @@ class Bitmex(Exchange):
 
             if res['ordStatus'] == "Filled":
                 fill = "FILLED"
-            elif res['ordStatus'] == "Cancelled":
+            elif res['ordStatus'] == "Canceled":
                 fill = "CANCELLED"
             elif res['ordStatus'] == "New":
                 fill = "NEW"
@@ -401,16 +401,67 @@ class Bitmex(Exchange):
         else:
             return False
 
-    def get_orders(self):
+    def get_orders(self, symbol, start_timestamp=None, count=500):
+        payload = {
+            'symbol': symbol,
+            'count': count,
+            'start': start_timestamp,
+            'reverse': True}
+
         prepared_request = Request(
             'GET',
             self.BASE_URL_TESTNET + self.ORDERS_URL,
-            params='').prepare()
+            params='', json=payload).prepare()
+
         request = self.generate_request_headers(prepared_request, self.api_key,
                                                 self.api_secret)
         response = self.session.send(request).json()
 
-        return response
+        orders = []
+        for res in response:
+            if res['clOrdID']:
+
+                direction = "LONG" if res['side'] == "Buy" else "SHORT"
+
+                if res['ordStatus'] == "Filled":
+                    fill = "FILLED"
+                elif res['ordStatus'] == "Canceled":
+                    fill = "CANCELLED"
+                elif res['ordStatus'] == "New":
+                    fill = "NEW"
+                elif res['ordStatus'] == "PartiallyFilled":
+                    fill = "PARTIAL"
+                else:
+                    raise Exception(res['ordStatus'])
+
+                if res['ordType'] == "Limit":
+                    order_type = "LIMIT"
+                elif res['ordType'] == "Market":
+                    order_type = "MARKET"
+                elif res['ordType'] == "StopLimit":
+                    order_type = "STOP_LIMIT"
+                elif res['ordType'] == "Stop":
+                    order_type = "STOP"
+                else:
+                    raise Exception(res['ordType'])
+
+                orders.append({
+                    'order_id': res['clOrdID'],
+                    'venue_id': res['orderID'],
+                    'timestamp': int(parser.parse(res['timestamp']).timestamp()),
+                    'price': res['price'],
+                    'avg_fill_price': res['avgPx'],
+                    'currency': res['currency'],
+                    'venue': "BitMEX",
+                    'symbol': res['symbol'],
+                    'direction': direction,
+                    'size': res['orderQty'],
+                    'order_type': order_type,
+                    'metatype': res['text'],
+                    'void_price': res['stopPx'],
+                    'status': fill})
+
+        return orders
 
     def place_single_order(self, order):
         payload = self.format_orders([order])[0]
