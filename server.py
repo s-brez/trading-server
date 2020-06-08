@@ -62,17 +62,11 @@ class Server:
 
         self.exchanges = self.load_exchanges(self.logger)
 
-        # Database.
         self.db_client = MongoClient(
             self.DB_URL,
             serverSelectionTimeoutMS=self.DB_TIMEOUT_MS)
-
-        # Price data database.
         self.db_prices = self.db_client[self.DB_PRICES]
-
-        # Non-price data database.
         self.db_other = self.db_client[self.DB_OTHER]
-
         self.check_db_connection()
 
         # Main event queue.
@@ -123,10 +117,12 @@ class Server:
                 if self.cycle_count >= 1 and self.data.ready:
                     self.start_processing = time.time()
 
+                    # Queue new fill events.
+                    self.events = self.broker.check_fills(self.events)
+                    self.clear_event_queue()
+
                     # Parse and queue market data (new Market Events).
                     self.events = self.data.update_market_data(self.events)
-
-                    # Market data is ready, route events to worker classes.
                     self.clear_event_queue()
 
                     # Run diagnostics at 3 and 7 mins to be sure missed
