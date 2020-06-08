@@ -64,11 +64,6 @@ class Bitmex(Exchange):
             "ETHUSD": 1533200520,
             "XRPUSD": 1580875200}
 
-        self.symbol_min_increment = {
-            'XBTUSD': 0.5,
-            'ETHUSD': 0.05,
-            'XRPUSD': 0.0001}
-
         self.api_key, self.api_secret = self.load_api_keys()
 
         # Connect to trade websocket.
