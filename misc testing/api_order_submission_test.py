@@ -1,4 +1,5 @@
 from datetime import timezone, datetime, timedelta
+from pymongo import MongoClient, errors
 from requests import Request, Session
 from requests.auth import AuthBase
 from urllib.parse import urlparse
@@ -25,10 +26,21 @@ ORDERS_URL = "/order"
 BULK_ORDERS_URL = "/order/bulk"
 TRADE_HIST_URL = "/execution/tradeHistory"
 
+DB_URL = 'mongodb://127.0.0.1:27017/'
+DB_PRICES = 'asset_price_master'
+DB_OTHER = 'holdings_trades_signals_master'
+DB_TIMEOUT_MS = 10
+
 symbol_min_increment = {
     'XBTUSD': 0.5,
     'ETHUSD': 0.05,
     'XRPUSD': 0.0001}
+
+db_client = MongoClient(
+    DB_URL,
+    serverSelectionTimeoutMS=DB_TIMEOUT_MS)
+db_prices = db_client[DB_PRICES]
+db_other = db_client[DB_OTHER]
 
 
 def load_api_keys():
@@ -373,12 +385,81 @@ def get_executions(symbol, start_timestamp=None, count=500):
     return executions
 
 
+def get_orders(symbol, start_timestamp=None, count=500):
+    payload = {
+        'symbol': symbol,
+        'count': count,
+        'start': start_timestamp,
+        'reverse': True}
+
+    prepared_request = Request(
+        'GET',
+        BASE_URL_TESTNET + ORDERS_URL,
+        params='', json=payload).prepare()
+
+    request = generate_request_headers(
+        prepared_request,
+        api_key,
+        api_secret)
+
+    response = Session().send(request).json()
+
+    # return response
+
+    orders = []
+    for res in response:
+        # if res['clOrdID']:
+
+        direction = "LONG" if res['side'] == "Buy" else "SHORT"
+
+        if res['ordStatus'] == "Filled":
+            fill = "FILLED"
+        elif res['ordStatus'] == "Canceled":
+            fill = "CANCELLED"
+        elif res['ordStatus'] == "New":
+            fill = "NEW"
+        elif res['ordStatus'] == "PartiallyFilled":
+            fill = "PARTIAL"
+        else:
+            raise Exception(res['ordStatus'])
+
+        if res['ordType'] == "Limit":
+            order_type = "LIMIT"
+        elif res['ordType'] == "Market":
+            order_type = "MARKET"
+        elif res['ordType'] == "StopLimit":
+            order_type = "STOP_LIMIT"
+        elif res['ordType'] == "Stop":
+            order_type = "STOP"
+        else:
+            raise Exception(res['ordType'])
+
+        orders.append({
+            'order_id': res['clOrdID'],
+            'venue_id': res['orderID'],
+            'timestamp': int(parser.parse(res['timestamp']).timestamp()),
+            'price': res['price'],
+            'avg_fill_price': res['avgPx'],
+            'currency': res['currency'],
+            'venue': "BitMEX",
+            'symbol': res['symbol'],
+            'direction': direction,
+            'size': res['orderQty'],
+            'order_type': order_type,
+            'metatype': res['text'],
+            'void_price': res['stopPx'],
+            'status': fill})
+
+    return orders
+
 # id_pairs = {
 #     'e5f4bbcf-ec61-c2c5-0365-c0b1d57d4e57': '64-1',
 #     'd76349e3-4d27-3764-7c71-c58a8b6955f3': '63-1'}
 # v_ids = id_pairs.keys()
 
-executions = get_executions("XBTUSD")
+
+portfolio = db_other['portfolio'].find_one({"id": 1}, {"_id": 0})
+orders = get_orders("XBTUSD")
 
 # sorted_executions = {i: [] for i in v_ids}
 # for exc in executions:
@@ -386,4 +467,38 @@ executions = get_executions("XBTUSD")
 #         sorted_executions[exc['venue_id']].append(exc)
 
 # print(json.dumps(sorted_executions, indent=2))
-print(json.dumps(executions, indent=2))
+
+portfolio_order_snapshot = []
+for trade_id in portfolio['trades'].keys():
+    if portfolio['trades'][trade_id]['active']:
+        for order_id in portfolio['trades'][trade_id]['orders'].keys():
+            portfolio_order_snapshot.append((
+                portfolio['trades'][trade_id]['orders'][order_id]['venue_id'],
+                order_id,
+                portfolio['trades'][trade_id]['orders'][order_id]['status']))
+
+actual_order_snapshot = []
+for order in portfolio_order_snapshot:
+    print(order[0])
+    for conf in orders:
+        if conf['venue_id'] == order[0]:
+            print(conf['venue_id'])
+            actual_order_snapshot.append((
+                conf['venue_id'],
+                conf['order_id'],
+                conf['status']))
+
+# print(actual_order_snapshot)
+print(json.dumps(orders, indent=2))
+
+for port, actual in zip(portfolio_order_snapshot, actual_order_snapshot):
+    if port[0] == actual[0]:
+        if port[2] != actual[2]:
+
+            # Order has been filled/cancelled/partially filled.
+            pass
+
+    else:
+        # Something is critically wrong if theres a missing/wrong venue ID.
+        raise Exception("Order ID mistmatch. Portfolio v_id:", port[0],
+                        "Actual v_id:", actual[0])
