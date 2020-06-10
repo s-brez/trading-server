@@ -378,8 +378,8 @@ class Portfolio:
             default_portfolio = {
                 'id': ID,
                 'start_date': int(time.time()),
-                'initial_funds': 1000,
-                'current_funds': 1000,
+                'initial_balance': 1000,
+                'current_balance': 1000,
                 'current_drawdown': 0,
                 'avg_r_per_winner': 0,
                 'avg_r_per_loser': 0,
@@ -389,7 +389,7 @@ class Portfolio:
                 'total_consecutive_wins': 0,
                 'total_consecutive_losses': 0,
                 'win_loss_ratio': 0,
-                'gain_to_pain_ration': 0,
+                'gain_to_pain_ratio': 0,
                 'risk_per_trade': self.RISK_PER_TRADE,
                 'max_correlated_trades': self.MAX_CORRELATED_TRADES,
                 'max_accepted_drawdown': self.MAX_ACCEPTED_DRAWDOWN,
@@ -460,7 +460,7 @@ class Portfolio:
         # Fixed percentage per trade risk management.
         if isinstance(self.RISK_PER_TRADE, int):
 
-            account_size = self.pf['current_value']
+            account_size = self.pf['current_balance']
             risked_amt = (account_size / 100) * self.RISK_PER_TRADE
             position_size = risked_amt // ((stop - entry) / entry)
 
