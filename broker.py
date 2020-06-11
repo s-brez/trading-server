@@ -8,6 +8,9 @@ Licensed under GNU General Public License 3.0 or later.
 
 Some rights reserved. See LICENSE.md, AUTHORS.md.
 """
+
+from event_types import FillEvent
+from threading import Thread
 from time import sleep
 import traceback
 import datetime
@@ -97,6 +100,8 @@ class Broker:
             for fill_event in self.fill_agent.fills:
                 events.put(fill_event)
 
+            self.fill_agent.fills = []
+
         return events
 
 
@@ -105,7 +110,7 @@ class FillAgent:
     Check for new fills in separate thread on specified intervals/conditions.
     """
 
-    # Check every (60 - CHECK_INTERVAL)th second of each minute.
+    # (60 - CHECK_INTERVAL)th second of each minute.
     CHECK_INTERVAL = 20
 
     def __init__(self, logger, portfolio, exchanges):
@@ -127,13 +132,68 @@ class FillAgent:
         sleep(self.seconds_til_next_minute())
 
         while True:
-            sleep(self.seconds_til_next_minute() - self.CHECK_INTERVAL)
+            sleep(60 - self.CHECK_INTERVAL)
 
-            # Check active trades, get orders from relevant venues.
+            # Get snapshot of orders saved locally.
+            portfolio_order_snapshot = []
+            for t_id in self.pf['trades'].keys():
+                if self.pf['trades'][trade_id]['active']:
+                    for o_id in self.pf['trades'][trade_id]['orders'].keys():
+                        portfolio_order_snapshot.append((
+                            # (v_id, o_id, status, venue name)
+                            self.pf['trades'][t_id]['orders'][o_id]['venue_id'],
+                            o_id,
+                            self.pf['trades'][t_id]['orders'][o_id]['status']),
+                            self.pf['trades'][t_id]['orders'][o_id]['venue'])
 
-            # Identify order state changes and create fill events accordingly.
+            # Get orders from all venues with active trades.
+            orders = []
+            # Get list of unique venue names, call get_orders() once per venue
 
-    def seconds_til_next_minute(self: int):
+            # Snapshot actual order state.
+            actual_order_snapshot = []
+            for order in portfolio_order_snapshot:
+                print(order[0])
+                for conf in orders:
+                    if conf['venue_id'] == order[0]:
+                        print(conf['venue_id'])
+                        actual_order_snapshot.append((
+                            conf['venue_id'],
+                            conf['order_id'],
+                            conf['status'],
+                            conf))
+
+            # Compare actual order state to local portfolio state.
+            for port, actual in zip(
+                    portfolio_order_snapshot, actual_order_snapshot):
+                if port[0] == actual[0]:
+                    if port[2] != actual[2]:
+
+                        # Order has been filled or cancelled.
+                        if actual[2] == "FILLED" or actual[2] == "PARTIAL"
+                        or actual[2] == "CANCELLED":
+
+                            # Derive the trade ID from order id.
+                            fill_conf = actual[3]
+                            fill_conf['trade_id'] = actual[1].partition("-")[0]
+
+                            # Store the new fill event.
+                            self.fills.append(FillEvent(fill_conf))
+
+                        else:
+                            # Something wrong with code if status is wrong.
+                            raise Exception(
+                                "Order status code error:", actual[2])
+
+                else:
+                    # Something critically wrong if theres a missing venue ID.
+                    raise Exception("Order ID mistmatch. Portfolio v_id:",
+                                    port[0], "Actual v_id:", actual[0])
+
+            # Wait til next minute elapses.
+            sleep(self.seconds_til_next_minute())
+
+    def seconds_til_next_minute(self):
         now = datetime.datetime.utcnow().second
         delay = 60 - now
         return delay
