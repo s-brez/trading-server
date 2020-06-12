@@ -115,17 +115,17 @@ class FillAgent:
 
     def __init__(self, logger, portfolio, exchanges):
         self.logger = logger
-        self.pf = portfolio
+        self.pf = portfolio.load_portfolio()
         self.exchanges = exchanges
 
         self.fills = []
 
-        thread = Thread(target=lambda: self.start(), daemon=True)
+        thread = Thread(target=lambda: self.start(portfolio), daemon=True)
         thread.start()
 
         self.logger.debug("Started FillAgent daemon.")
 
-    def start(self):
+    def start(self, portfolio):
         """
         """
 
@@ -134,34 +134,43 @@ class FillAgent:
         while True:
             sleep(60 - self.CHECK_INTERVAL)
 
+            self.pf = portfolio.load_portfolio()
+
             # Get snapshot of orders saved locally.
+            active_venues = set()
             portfolio_order_snapshot = []
             for t_id in self.pf['trades'].keys():
-                if self.pf['trades'][trade_id]['active']:
-                    for o_id in self.pf['trades'][trade_id]['orders'].keys():
+                if self.pf['trades'][t_id]['active']:
+
+                    active_venues.add(self.pf['trades'][t_id]['venue'])
+
+                    for o_id in self.pf['trades'][t_id]['orders'].keys():
                         portfolio_order_snapshot.append((
                             # (v_id, o_id, status, venue name)
-                            self.pf['trades'][t_id]['orders'][o_id]['venue_id'],
+                            self.pf['trades'][t_id]['orders'][o_id][
+                                'venue_id'],
                             o_id,
-                            self.pf['trades'][t_id]['orders'][o_id]['status']),
-                            self.pf['trades'][t_id]['orders'][o_id]['venue'])
+                            self.pf['trades'][t_id]['orders'][o_id]['status'],
+                            self.pf['trades'][t_id]['orders'][o_id]['venue']))
 
             # Get orders from all venues with active trades.
             orders = []
-            # Get list of unique venue names, call get_orders() once per venue
+            for venue in list(active_venues):
+                orders = orders + self.exchanges[venue].get_orders()
 
             # Snapshot actual order state.
             actual_order_snapshot = []
             for order in portfolio_order_snapshot:
-                print(order[0])
                 for conf in orders:
                     if conf['venue_id'] == order[0]:
-                        print(conf['venue_id'])
                         actual_order_snapshot.append((
                             conf['venue_id'],
                             conf['order_id'],
                             conf['status'],
                             conf))
+
+            print("Portfolio:", portfolio_order_snapshot)
+            print("Actual:", actual_order_snapshot)
 
             # Compare actual order state to local portfolio state.
             for port, actual in zip(
@@ -170,8 +179,9 @@ class FillAgent:
                     if port[2] != actual[2]:
 
                         # Order has been filled or cancelled.
-                        if actual[2] == "FILLED" or actual[2] == "PARTIAL"
-                        or actual[2] == "CANCELLED":
+                        if (
+                            actual[2] == "FILLED" or actual[2] == "PARTIAL"
+                                or actual[2] == "CANCELLED"):
 
                             # Derive the trade ID from order id.
                             fill_conf = actual[3]
