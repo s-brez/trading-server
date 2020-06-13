@@ -217,6 +217,9 @@ class Portfolio:
             # Update the now closed postiion, trade is done.
             self.trade_complete(t_id)
 
+        else:
+            raise Exception("Order metatype error:", fill_conf['metatype'])
+
         self.save_porfolio(self.pf)
 
     def new_order_conf(self, order_confs: list, events):
@@ -252,10 +255,10 @@ class Portfolio:
         """
 
         # Cancel all orders marching trade ID.
-        self.cancel_orders_by_trade(trade_id)
+        self.cancel_orders_by_trade_id(trade_id)
 
         # Close positions, if still open.
-        self.close_positions_by_trade(trade_id)
+        self.close_position_by_trade_id(trade_id)
 
         # Calculate trade pnl.
         self.calculate_pnl_by_trade(trade_id)
@@ -291,7 +294,7 @@ class Portfolio:
 
                     self.pf['trades'][t_id]['active'] = False
 
-    def close_position_by_trade(self, trade_id):
+    def close_position_by_trade_id(self, trade_id):
         """
         This method will close only the remaining amount for the given trade -
         it will not necessarily close an entire position, unless there is only

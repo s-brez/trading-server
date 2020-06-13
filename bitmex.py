@@ -396,7 +396,7 @@ class Bitmex(Exchange):
         else:
             return False
 
-    def get_orders(self, symbol, start_timestamp=None, count=500):
+    def get_orders(self, symbol=None, start_timestamp=None, count=500):
         payload = {
             'symbol': symbol,
             'count': count,
@@ -440,6 +440,19 @@ class Bitmex(Exchange):
                 else:
                     raise Exception(res['ordType'])
 
+                # If "\n" in response text field, use substring after "\n".
+                if "\n" in res['text']:
+                    text = res['text'].split("\n")
+                    metatype = text[1]
+                elif (
+                    res['text'] == "ENTRY" or res['text'] == "STOP" or
+                        res['text'] == "TAKE_PROFIT" or
+                        res['text'] == "FINAL_TAKE_PROFIT"):
+                    metatype = res['text']
+                else:
+                    # raise Exception("Order metatype error:", res['text'])
+                    metatype = None
+
                 orders.append({
                     'order_id': res['clOrdID'],
                     'venue_id': res['orderID'],
@@ -452,7 +465,7 @@ class Bitmex(Exchange):
                     'direction': direction,
                     'size': res['orderQty'],
                     'order_type': order_type,
-                    'metatype': res['text'],
+                    'metatype': metatype,
                     'void_price': res['stopPx'],
                     'status': fill})
 
@@ -538,7 +551,7 @@ class Bitmex(Exchange):
 
                         if res['ordStatus'] == "Filled":
                             fill = "FILLED"
-                        elif res['ordStatus'] == "Cancelled":
+                        elif res['ordStatus'] == "Canceled":
                             fill = "CANCELLED"
                         elif res['ordStatus'] == "New":
                             fill = "NEW"
