@@ -13,8 +13,10 @@ from trade_types import SingleInstrumentTrade, Order, Position, TradeID
 from event_types import OrderEvent, FillEvent
 from pymongo import MongoClient, errors
 import pymongo
-import time
 import queue
+import time
+import json
+import sys
 
 
 class Portfolio:
@@ -109,8 +111,14 @@ class Portfolio:
 
                 # Take profit order(s).
                 if signal['targets']:
+
+                    count = 1
                     for target in signal['targets']:
-                        tp_size = (size / 100) * target[1]
+
+                        # Label final TP order as "FINAL_TAKE_PROFIT".
+                        tp_type = "TAKE_PROFIT" if count != len(signal['targets']) else "FINAL_TAKE_PROFIT"
+                        count += 1
+
                         orders.append(Order(
                             self.logger,
                             trade_id,
@@ -118,10 +126,10 @@ class Portfolio:
                             signal['symbol'],
                             signal['venue'],
                             event.inverse_direction(),
-                            tp_size,
+                            (size / 100) * target[1],
                             target[0],
                             "LIMIT",
-                            "TAKE_PROFIT",
+                            tp_type,
                             stop[0],
                             False,
                             True,
@@ -196,17 +204,24 @@ class Portfolio:
         elif fill_conf['metatype'] == "STOP":
 
             # Update the now closed postiion, trade is done.
+            size = self.pf['trades'][t_id]['position']['size']
+            new_size = size - fill_conf['size']
+            self.pf['trades'][t_id]['position']['size'] = new_size
+            self.pf['trades'][t_id]['position']['status'] = "CLOSED"
+
+            if new_size != 0:
+                raise Exception(
+                    "Position close size error:", new_size)
+
             self.trade_complete(t_id)
 
         elif fill_conf['metatype'] == "TAKE_PROFIT":
 
             # Update the modified position.
-            direction = self.pf['trades'][t_id]['position']['direction']
             size = self.pf['trades'][t_id]['position']['size']
-
-            # Update position size.
             new_size = size - fill_conf['size']
             self.pf['trades'][t_id]['position']['size'] = new_size
+
             if new_size == 0:
                 self.trade_complete(t_id)
             else:
@@ -215,6 +230,15 @@ class Portfolio:
         elif fill_conf['metatype'] == "FINAL_TAKE_PROFIT":
 
             # Update the now closed postiion, trade is done.
+            size = self.pf['trades'][t_id]['position']['size']
+            new_size = size - fill_conf['size']
+            self.pf['trades'][t_id]['position']['size'] = new_size
+            self.pf['trades'][t_id]['position']['status'] = "CLOSED"
+
+            if new_size != 0:
+                raise Exception(
+                    "Position close size error:", new_size)
+
             self.trade_complete(t_id)
 
         else:
@@ -258,7 +282,8 @@ class Portfolio:
         self.cancel_orders_by_trade_id(trade_id)
 
         # Close positions, if still open.
-        self.close_position_by_trade_id(trade_id)
+        if self.check_position_open(trade_id):
+            self.close_position_by_trade_id(trade_id)
 
         # Calculate trade pnl.
         self.calculate_pnl_by_trade(trade_id)
@@ -276,25 +301,58 @@ class Portfolio:
         """
 
         o_ids = self.pf['trades'][t_id]['orders'].keys()
-        v_ids = [order['venue_id'] for order in o_ids]
+        v_ids = [
+            self.pf['trades'][t_id]['orders'][o]['venue_id'] for o in o_ids if
+            self.pf['trades'][t_id]['orders'][o]['status'] != "FILLED"]
 
         venue = self.pf['trades'][t_id]['venue']
+
+        print("v_ids to cancel", v_ids)
+
         cancel_confs = self.exchanges[venue].cancel_orders(v_ids)
 
-        # Update portfolio state based on cancellation messages.
-        for order_id in o_ids:
-            for venue_id in v_ids:
+        print("cancel_confs", cancel_confs)
 
-                if self.pf['trades'][t_id]['orders'][order_id][
-                    'venue_id'] == venue_id and cancel_confs[
-                        venue_id] == "SUCCESS":
+        try:
+            if cancel_confs['error']["message"] == 'Not Found':
+                self.pf['trades'][t_id]['active'] = False
+                for o in o_ids:
+                    self.pf['trades'][t_id]['orders'][o]['status'] == "FILLED"
+                # Handle other error messages here
 
-                    self.pf['trades'][t_id]['orders']['order_id'][
-                        'status'] = "CANCELLED"
+        except KeyError as ke:
+            # print(traceback.format_exc(), ke)
+            # Update portfolio state based on cancellation message.
+            for order_id in o_ids:
+                for venue_id in v_ids:
+                    # Handle active orders actually cancelled.
+                    if self.pf['trades'][t_id]['orders'][order_id][
+                        'venue_id'] == venue_id and cancel_confs[
+                            venue_id] == "SUCCESS":
 
-                    self.pf['trades'][t_id]['active'] = False
+                        self.pf['trades'][t_id]['orders']['order_id'][
+                            'status'] = "CANCELLED"
 
-    def close_position_by_trade_id(self, trade_id):
+                        self.pf['trades'][t_id]['active'] = False
+                    else:
+                        raise Exception(
+                                "Order id mismatch:", cancel_confs[v_id])
+
+    def check_position_open(self, trade_id):
+        """
+        Return true if position is still open according to local portfolio.
+        """
+
+        if self.pf['trades'][trade_id]['position']['status'] == "OPEN":
+            return True
+        elif self.pf['trades'][trade_id]['position']['status'] == "CLOSED":
+            return False
+        else:
+            raise Exception(
+                "Position status error:",
+                self.pf['trades'][trade_id]['position']['status'])
+
+    def close_position_by_trade_id(self, t_id):
         """
         This method will close only the remaining amount for the given trade -
         it will not necessarily close an entire position, unless there is only
@@ -337,11 +395,20 @@ class Portfolio:
         executions = self.exchanges[self.pf['trades'][t_id][
             'venue']].get_executions(self.pf['trades'][t_id]['symbol'])
 
-        # Sort child orders by venue id, for the given trade id.
-        sorted_executions = {i: [] for i in keys()}
+        unique_v_ids = list(set([i['venue_id'] for i in executions]))
+
+        print(unique_v_ids)
+
+        # Sort {{venue_id: [exc1, exc2, exc3, etc]}, ... }
+        # sorted_executions = {i: [] for i in v_ids}
+        sorted_executions = {i: [] for i in unique_v_ids}
         for exc in executions:
-            if exc['venue_id'] in v_ids:
-                sorted_executions[exc['venue_id']].append(exc)
+            # if exc['venue_id'] in v_ids:
+            sorted_executions[exc['venue_id']].append(exc)
+
+        print(json.dumps(sorted_executions, indent=2))
+
+        sys.exit(1)
 
         # TODO: finish pnl calc after system is closing trades by itself.
 
