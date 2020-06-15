@@ -351,38 +351,39 @@ class Bitmex(Exchange):
         return executions
 
     def close_position(self, symbol, qty=None, direction=None):
-        positions = self.get_positions()
-        for pos in positions:
-            if pos['symbol'] == symbol:
-                position = pos
-                break
-        if position:
+        position = self.get_position(symbol)
 
-            if direction == "LONG":
-                amt = -qty
-            elif direction == "SHORT":
-                amt = qty
-            else:
-                raise Exception(direction)
+        print(position)
+        print(symbol, qty, direction)
 
-            if qty and direction:
-                payload = {
-                    'symbol': symbol,
-                    'orderQty': amt,
-                    'ordType': "Market"}
-            else:
-                payload = {
-                    'symbol': symbol,
-                    'orderQty': -pos['currentQty'],
-                    'ordType': "Market"}
+        if direction == "LONG":
+            amt = -qty
+        elif direction == "SHORT":
+            amt = qty
+        else:
+            raise Exception(direction)
 
+        if qty and direction:
+            payload = {
+                'symbol': symbol,
+                'orderQty': amt,
+                'ordType': "Market"}
+        else:
+            payload = {
+                'symbol': symbol,
+                'orderQty': -position['currentQty'],
+                'ordType': "Market"}
+
+        # Don't do anything if closing size or position size is 0.
+        print(payload)
+        if payload['orderQty'] != 0 and position['currentQty'] != 0:
             prepared_request = Request(
                 'POST',
                 self.BASE_URL_TESTNET + self.ORDERS_URL,
                 json=payload,
                 params='').prepare()
 
-            request = generate_request_headers(
+            request = self.generate_request_headers(
                 prepared_request,
                 self.api_key,
                 self.api_secret)
@@ -587,25 +588,34 @@ class Bitmex(Exchange):
 
     def cancel_orders(self, order_ids):
         payload = {"orderID": order_ids}
+
         prepared_request = Request(
             "DELETE",
             self.BASE_URL_TESTNET + self.ORDERS_URL,
             json=payload,
             params='').prepare()
 
-        request = generate_request_headers(
+        request = self.generate_request_headers(
             prepared_request,
             self.api_key,
             self.api_secret)
 
         response = self.session.send(request).json()
 
+        response = [response] if not isinstance(response, list) else response
+
         cancel_confs = {}
+
+        print(response)
         for i in response:
             try:
-                cancel_confs[i['orderID']] = i['error']
+                if i['orderID'] is not None:
+                    cancel_confs[i['orderID']] = "SUCCESS"
+                elif i['error'] is not None:
+                    cancel_confs[i['orderID']] = i['error']
             except KeyError as ke:
-                cancel_confs[i['orderID']] = "SUCCESS"
+                cancel_confs = i
+                print(traceback.format_exc(), ke)
 
         return cancel_confs
 
