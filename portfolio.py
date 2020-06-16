@@ -395,18 +395,35 @@ class Portfolio:
         executions = self.exchanges[self.pf['trades'][t_id][
             'venue']].get_executions(self.pf['trades'][t_id]['symbol'])
 
-        unique_v_ids = list(set([i['venue_id'] for i in executions]))
+        unique_o_ids = list(set([i['order_id'] for i in executions]))
 
-        print(unique_v_ids)
-
-        # Sort {{venue_id: [exc1, exc2, exc3, etc]}, ... }
-        # sorted_executions = {i: [] for i in v_ids}
-        sorted_executions = {i: [] for i in unique_v_ids}
+        # Sort execs {{order_id: [exc1, exc2, exc3, etc]}, ... }
+        s_exc = {i: [] for i in unique_o_ids if i in o_ids}
         for exc in executions:
-            # if exc['venue_id'] in v_ids:
-            sorted_executions[exc['venue_id']].append(exc)
+            if exc['order_id'] in o_ids:
+                s_exc[exc['order_id']].append(exc)
 
-        print(json.dumps(sorted_executions, indent=2))
+        print(json.dumps(s_exc, indent=2))
+
+        # Avg total long and short for the trade.
+        avg_long, long_total, avg_short, short_total = 0, 0, 0, 0
+
+        for o_id in o_ids:
+            for sub_order in s_exc[o_id]:
+
+                if sub_order['direction'] == "LONG":
+                    avg_long += sub_order['avg_exc_price'] * sub_order['size']
+                    long_total += sub_order['size']
+
+                elif sub_order['direction'] == "SHORT":
+                    avg_short += sub_order['avg_exc_price'] * sub_order['size']
+                    short_total += sub_order['size']
+
+        avg_long /= long_total
+        avg_short /= short_total
+
+        print("avg long:", avg_long)
+        print("avg short:", avg_short)
 
         sys.exit(1)
 

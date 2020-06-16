@@ -169,8 +169,8 @@ class FillAgent:
                             conf['status'],
                             conf))
 
-            print("Portfolio:", portfolio_order_snapshot)
-            print("Actual:", actual_order_snapshot)
+            # print("Portfolio:", portfolio_order_snapshot)
+            # print("Actual:", actual_order_snapshot)
 
             # Compare actual order state to local portfolio state.
             for port, actual in zip(
