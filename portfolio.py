@@ -32,7 +32,7 @@ class Portfolio:
     MAX_CORRELATED_TRADES = 2
     MAX_ACCEPTED_DRAWDOWN = 25  # Percentage as integer.
     RISK_PER_TRADE = 2          # Percentage as integer OR 'KELLY'
-    DEFAULT_STOP = 3            # Default (%) stop distance if none provided.
+    DEFAULT_STOP = 2            # Default (%) stop distance if none provided.
 
     def __init__(self, exchanges, logger, db_other, db_client, models):
         self.exchanges = {i.get_name(): i for i in exchanges}
@@ -41,9 +41,10 @@ class Portfolio:
         self.db_client = db_client
         self.models = models
 
+        self.trades_save_to_db = queue.Queue(0)
         self.id_gen = TradeID(db_other)
         self.pf = self.load_portfolio()
-        self.trades_save_to_db = queue.Queue(0)
+        self.verify_portfolio_state(self.pf)
 
     def new_signal(self, events, event):
         """
@@ -267,7 +268,7 @@ class Portfolio:
             o_id = str(conf['order_id'])
             self.pf['trades'][t_id]['orders'][o_id] = conf
 
-            # Create a fill event if order has already been filled.
+            # Create a fill event if order already filled (e.g. market orders).
             if conf['status'] == "FILLED":
                 events.put(FillEvent(conf))
 
@@ -289,11 +290,11 @@ class Portfolio:
         # Calculate trade pnl.
         self.calculate_pnl_by_trade(trade_id)
 
-        # Save updated portfolio state to DB.
-        self.save_porfolio(self.pf)
-
         # Run post-trade analytics.
         self.post_trade_analysis(trade_id)
+
+        # Save updated portfolio state to DB.
+        self.save_porfolio(self.pf)
 
     def cancel_orders_by_trade_id(self, t_id):
         """
@@ -455,10 +456,10 @@ class Portfolio:
         Check stored portfolio data matches actual positions and orders.
         """
 
+        # TODO.
+
         self.save_porfolio(portfolio)
         self.logger.debug("Portfolio verification complete.")
-
-        return portfolio
 
     def load_portfolio(self, ID=1):
         """
@@ -468,7 +469,6 @@ class Portfolio:
         portfolio = self.db_other['portfolio'].find_one({"id": ID}, {"_id": 0})
 
         if portfolio:
-            self.verify_portfolio_state(portfolio)
             return portfolio
 
         else:
@@ -524,11 +524,11 @@ class Portfolio:
         # TODO: Finish after signal > order > fill logic is done.
 
         # Position limit check.
-        if self.pf['total_active_trades'] < self.MAX_SIMULTANEOUS_POSITIONS:
+        if self.pf['total_active_trades'] < self.pf['max_simultaneous_positions']:
 
             if (  # Drawdown check.
                 (self.pf['current_drawdown'] / self.pf['current_balance'])
-                    * 100) >= self.max_accepted_drawdown:
+                    * 100) >= self.pf['max_accepted_drawdown']:
 
                 if not self.correlated(signal):  # Correlation check.
                     return True
