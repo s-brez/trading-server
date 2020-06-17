@@ -28,7 +28,7 @@ class Portfolio:
     Capital allocations to strategies and risk parameters are defined here.
     """
 
-    MAX_SIMULTANEOUS_POSITIONS = 20
+    MAX_SIMULTANEOUS_POSITIONS = 1
     MAX_CORRELATED_TRADES = 2
     MAX_ACCEPTED_DRAWDOWN = 25  # Percentage as integer.
     RISK_PER_TRADE = 2          # Percentage as integer OR 'KELLY'
@@ -200,18 +200,19 @@ class Portfolio:
             # Create a position record and set trade to active.
             self.pf['trades'][t_id]['position'] = position
             self.pf['trades'][t_id]['active'] = True
+            self.pf['trades']['total_active_trades'] += 1
 
         elif fill_conf['metatype'] == "STOP":
 
             # Update the now closed postiion, trade is done.
             size = self.pf['trades'][t_id]['position']['size']
             new_size = size - fill_conf['size']
-            self.pf['trades'][t_id]['position']['size'] = new_size
-            self.pf['trades'][t_id]['position']['status'] = "CLOSED"
 
             if new_size != 0:
-                raise Exception(
-                    "Position close size error:", new_size)
+                raise Exception(new_size)
+
+            self.pf['trades'][t_id]['position']['size'] = new_size
+            self.pf['trades'][t_id]['position']['status'] = "CLOSED"
 
             self.trade_complete(t_id)
 
@@ -323,6 +324,7 @@ class Portfolio:
         except KeyError as ke:
             # print(traceback.format_exc(), ke)
             # Update portfolio state based on cancellation message.
+            self.pf['trades'][t_id]['active'] = False
             for order_id in o_ids:
                 for venue_id in v_ids:
                     # Handle active orders actually cancelled.
@@ -333,7 +335,6 @@ class Portfolio:
                         self.pf['trades'][t_id]['orders']['order_id'][
                             'status'] = "CANCELLED"
 
-                        self.pf['trades'][t_id]['active'] = False
                     else:
                         raise Exception(
                                 "Order id mismatch:", cancel_confs[v_id])
@@ -406,7 +407,7 @@ class Portfolio:
         print(json.dumps(s_exc, indent=2))
 
         # Avg total long and short for the trade.
-        avg_long, long_total, avg_short, short_total = 0, 0, 0, 0
+        avg_long, long_total, avg_short, short_total, total_fee = 0, 0, 0, 0, 0
 
         for o_id in o_ids:
             for sub_order in s_exc[o_id]:
@@ -414,25 +415,34 @@ class Portfolio:
                 if sub_order['direction'] == "LONG":
                     avg_long += sub_order['avg_exc_price'] * sub_order['size']
                     long_total += sub_order['size']
+                    total_fee += sub_order['total_fee']
 
                 elif sub_order['direction'] == "SHORT":
                     avg_short += sub_order['avg_exc_price'] * sub_order['size']
                     short_total += sub_order['size']
+                    total_fee += sub_order['total_fee']
 
         avg_long /= long_total
         avg_short /= short_total
 
-        print("avg long:", avg_long)
-        print("avg short:", avg_short)
+        if self.pf['trades'][t_id]['direction'] == "LONG":
+            pnl = avg_short - avg_long
+        elif self.pf['trades'][t_id]['direction'] == "SHORT":
+            pnl = avg_long - avg_short
+        else:
+            raise Exception(self.pf['trades'][t_id]['direction'])
 
-        sys.exit(1)
+        print("avg long exec:", avg_long)
+        print("avg short exec:", avg_short)
+        print("pnl:", pnl)
+        print("total_fee:", total_fee)
 
-        # TODO: finish pnl calc after system is closing trades by itself.
+        self.pf['current_balance'] += (pnl + total_fee)
+        self.pf['balance_hsitory'][str(int(time.time()))] = {
+            'amt': pnl + total_fee,
+            'trade_id': t_id}
 
-        # Fee (USD) = ((size / exec price) * fee multiplicand) * exec price
-        # or just use execComm converted to usd.
-
-        # PNL = entry and exit difference - total fees.
+        print("New balance:", self.pf['current_balance'])
 
     def post_trade_analysis(self, trade_id):
         """
@@ -464,8 +474,10 @@ class Portfolio:
         else:
             default_portfolio = {
                 'id': ID,
-                'start_date': int(time.time()),
-                'initial_balance': 1000,
+                'balance_history': {
+                    str(int(time.time())): {
+                        'amt': 1000,
+                        'trade_id': "Initial deposit."}},
                 'current_balance': 1000,
                 'current_drawdown': 0,
                 'avg_r_per_winner': 0,
@@ -484,6 +496,7 @@ class Portfolio:
                 'default_stop': self.DEFAULT_STOP,
                 'model_allocations': {  # Equal allocation by default.
                     i.get_name(): (100 / len(self.models)) for i in self.models},
+                'total_active_trades': 0,
                 'trades': {}}
 
             self.save_porfolio(default_portfolio)
@@ -499,9 +512,9 @@ class Portfolio:
             {"id": portfolio['id']}, portfolio, upsert=True)
 
         if result.acknowledged:
-            self.logger.debug("Portfolio update successful.")
+            self.logger.debug("Portfolio save successful.")
         else:
-            self.logger.debug("Portfolio update unsuccessful.")
+            self.logger.debug("Portfolio save unsuccessful.")
 
     def within_risk_limits(self, signal):
         """
@@ -510,7 +523,25 @@ class Portfolio:
 
         # TODO: Finish after signal > order > fill logic is done.
 
-        return True
+        # Position limit check.
+        if self.pf['total_active_trades'] < self.MAX_SIMULTANEOUS_POSITIONS:
+
+            if (  # Drawdown check.
+                (self.pf['current_drawdown'] / self.pf['current_balance'])
+                    * 100) >= self.max_accepted_drawdown:
+
+                if not self.correlated(signal):  # Correlation check.
+                    return True
+                else:
+                    self.logger.debug(
+                        "Trade skipped. Correlated positions limit reached.")
+                    return False
+            else:
+                self.logger.debug("Trade skipped. Drawdown limit reached.")
+                return False
+        else:
+            self.logger.debug("Trade skipped. Position limit reached.")
+            return False
 
     def calculate_exposure(self, trade):
         """
@@ -518,9 +549,10 @@ class Portfolio:
         """
         pass
 
-    def correlated(self, instrument):
+    def correlated(self, signal):
         """
-        Return true if any active trades are correlated with 'instrument'.
+        Return true if any active trades would be correlated with trades
+        produced by the incoming signal.
         """
         pass
 
@@ -548,7 +580,7 @@ class Portfolio:
         if isinstance(self.RISK_PER_TRADE, int):
 
             account_size = self.pf['current_balance']
-            risked_amt = (account_size / 100) * self.RISK_PER_TRADE
+            risked_amt = (account_size / 1000) * self.RISK_PER_TRADE
             position_size = risked_amt // ((stop - entry) / entry)
 
             return abs(position_size)
@@ -604,7 +636,6 @@ class Portfolio:
                     # Store signal in relevant db collection.
                     try:
                         self.db_other['trades'].insert_one(trade)
-
                     # Skip duplicates if they exist.
                     except pymongo.errors.DuplicateKeyError:
                         continue
