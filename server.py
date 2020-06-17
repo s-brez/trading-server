@@ -62,17 +62,11 @@ class Server:
 
         self.exchanges = self.load_exchanges(self.logger)
 
-        # Database.
         self.db_client = MongoClient(
             self.DB_URL,
             serverSelectionTimeoutMS=self.DB_TIMEOUT_MS)
-
-        # Price data database.
         self.db_prices = self.db_client[self.DB_PRICES]
-
-        # Non-price data database.
         self.db_other = self.db_client[self.DB_OTHER]
-
         self.check_db_connection()
 
         # Main event queue.
@@ -88,8 +82,8 @@ class Server:
         self.portfolio = Portfolio(self.exchanges, self.logger, self.db_other,
                                    self.db_client, self.strategy.models)
 
-        self.broker = Broker(self.exchanges, self.logger, self.db_other,
-                             self.db_client, self.live_trading)
+        self.broker = Broker(self.exchanges, self.logger, self.portfolio,
+                             self.db_other, self.db_client, self.live_trading)
 
         # Processing performance tracking variables.
         self.start_processing = None
@@ -123,10 +117,9 @@ class Server:
                 if self.cycle_count >= 1 and self.data.ready:
                     self.start_processing = time.time()
 
-                    # Parse and queue market data (new Market Events).
+                    # Fetch and queue events for processing.
+                    self.events = self.broker.check_fills(self.events)
                     self.events = self.data.update_market_data(self.events)
-
-                    # Market data is ready, route events to worker classes.
                     self.clear_event_queue()
 
                     # Run diagnostics at 3 and 7 mins to be sure missed
@@ -195,18 +188,24 @@ class Server:
 
                     # Order Event generation.
                     elif event.type == "SIGNAL":
-                        self.logger.debug("Start processing signals.")
+                        self.logger.debug("Processing signal event.")
                         self.portfolio.new_signal(self.events, event)
 
                     # Order placement and Fill Event generation.
                     elif event.type == "ORDER":
-                        self.logger.debug("Started order execution.")
-                        self.broker.new_order(self.events, event)
+                        self.logger.debug("Processing order event.")
+
+                        # Do order confirmation and placement in new thread as
+                        # confirmation requires user input.
+                        thread = Thread(target=lambda: self.broker.new_order(
+                                self.events, event))
+                        thread.daemon = True
+                        thread.start()
 
                     # Final portolio update.
                     elif event.type == "FILL":
-                        self.logger.debug("Start processing fills.")
-                        self.portfolio.new_fill(self.events, event)
+                        self.logger.debug("Processing fill event.")
+                        self.portfolio.new_fill(event)
 
                 # Finished all jobs in queue.
                 self.events.task_done()

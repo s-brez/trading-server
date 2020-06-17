@@ -235,6 +235,128 @@ class Exchange(ABC):
 
         return key, secret
 
+    def round_increment(self, number, symbol):
+        """
+        Round a given number to its nearest minimum increment
+        """
+
+        inc = self.symbol_min_increment[symbol]
+
+        if number < 1:
+            quote = number
+        else:
+            quote = (number // inc) * inc
+
+        # print("Rounded quote:", quote)
+        return quote
+
+
+    @abstractmethod
+    def place_bulk_orders(self, orders: list):
+        """
+        Given a list of order events objects, place corresponding orders with
+        the respective trading venue.
+
+        Args:
+            orders: list of order objects
+
+        Returns:
+
+        Raises:
+
+        """
+
+    @abstractmethod
+    def place_single_order(self, order):
+        """
+        Place a single order with the respective trading venue.
+
+        Args:
+            order: order object
+
+        Returns:
+
+        Raises:
+
+        """
+
+    @abstractmethod
+    def cancel_orders(self, order_ids: list):
+        """
+        Cancel all orders matching list of given order IDs.
+
+        Args:
+            orders: list of orders.
+
+        Returns:
+            cancel_status: dict, {order_id: cancel succcess/fail message}
+
+        Raises:
+
+        """
+
+    @abstractmethod
+    def close_position(self, symbol, qty, direction):
+        """
+        Close 'qty' units of 'symbol' instrument in 'direction' direction.
+
+        Args:
+            symbol: instrument symbol to close.
+            qty: number of units of instrument to close.
+            direction: LONG or SHORT
+
+        Returns:
+            True if successful close, False if not.
+        Raises:
+
+        """
+
+    @abstractmethod
+    def format_orders(self, orders: list):
+        """
+        Converts internally formatted orders into relevant venue order format.
+
+        Args:
+            orders: list of order objects
+
+        Returns:
+            formatted_orders: new list of venue-appropirate formatted orders
+
+        Raises:
+
+        """
+
+    @abstractmethod
+    def get_executions(self, symbol, start_timestamp, count):
+        """
+        Args:
+            symbol: instrument ticker code (string)
+            start_timestamp: epoch timestamp (int)
+            count: amount of results to fetch (int)
+
+        Returns:
+            List of balance-affecting executions for the given symbol.
+            Each execution should be a dict with the following format:
+                {
+                    'order_id': ???,
+                    'venue_id': ???,
+                    'timestamp': ???,       epooch timestamp (int)
+                    'avg_exc_price': ???,
+                    'currency': ???,
+                    'symbol': ???,
+                    'direction': ???,       LONG or SHORT
+                    'size': ???,
+                    'order_type': ???,
+                    'fee_type': ???,
+                    'fee_amt': ???,         multiplicand to find total fee cost
+                    'total_fee': ???,       fees charged for transaction in USD
+                    'status' ???:           FILLED, CANCELLED, NEW, PARTIAL
+                }
+
+        Raises:
+            None.
+        """
+
     @abstractmethod
     def get_bars_in_period(self, symbol: str, start_time: int, total: int):
         """
@@ -308,26 +430,29 @@ class Exchange(ABC):
         """
 
     @abstractmethod
-    def get_positions(self):
+    def get_position(self, symbol):
         """
         Args:
-            None.
+            symbol:  Instrument ticker code (string).
 
         Returns:
-            List containing open positions.
+            Position dict for the specified symbol.
 
         Raises:
             None.
         """
 
     @abstractmethod
-    def get_orders(self):
+    def get_orders(self, symbol):
         """
+        Final versions of this method in subclasses should only return orders
+        placed by this program. Fetch only orders with venue ids.
+
         Args:
-            None.
+            symbol: Instrument ticker code (string).
 
         Returns:
-            List containing all orders, both active and inactive.
+            List containing all active and inactive orders for symbol.
 
         Raises:
             None.

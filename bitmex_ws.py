@@ -165,7 +165,7 @@ class Bitmex_WS:
         """
         Invoked when websocket encounters an error. Will attempt to
         reconnect websocket after an error.
-    
+
         Args:
             ws: WebSocketApp object
             msg: message object
@@ -188,7 +188,7 @@ class Bitmex_WS:
     def on_close(self, ws):
         """
         Invoked when websocket closes.
-        
+
         Args:
             ws: WebSocketApp object
 
@@ -204,7 +204,7 @@ class Bitmex_WS:
     def get_orderbook(self):
         """
         Returns the L2 orderbook.
-        
+
         Args:
             None.
 
@@ -220,7 +220,7 @@ class Bitmex_WS:
     def get_ticks(self):
         """
         Returns ticks for the recent minute.
-        
+
         Args:
             None.
 
@@ -236,7 +236,7 @@ class Bitmex_WS:
     def find_item_by_keys(self, keys, table, match_data):
         """
         Finds an item in the data table using the provided key.
-        
+
         Args:
             keys: key array object
             table: data table object
@@ -260,7 +260,7 @@ class Bitmex_WS:
     def get_channel_subscription_string(self):
         """
         Returns websocket channel subscription string.
-        
+
         Args:
             None.
 
