@@ -9,11 +9,14 @@ Licensed under GNU General Public License 3.0 or later.
 Some rights reserved. See LICENSE.md, AUTHORS.md.
 """
 
+from messaging_clients import Telegram
 from event_types import FillEvent
 from threading import Thread
 from time import sleep
 import traceback
 import datetime
+import json
+import sys
 
 
 class Broker:
@@ -30,6 +33,7 @@ class Broker:
         self.db_other = db_other
         self.db_client = db_client
         self.live_trading = live_trading
+        self.tg = Telegram(self.logger)
 
         # Container for order batches {trade_id: [order objects]}.
         self.orders = {}
@@ -70,6 +74,11 @@ class Broker:
                 if order_count == new_order['batch_size']:
                     self.logger.debug(
                         "Trade " + str(trade_id) + " order batch ready.")
+
+                    for order in self.orders[trade_id]:
+                        print(json.dumps(order))
+
+                    # TODO: Get trade confirmation from user.
 
                     # Place orders.
                     order_confs = self.exchanges[venue].place_bulk_orders(
