@@ -110,8 +110,8 @@ class FillAgent:
     Check for new fills in separate thread on specified intervals/conditions.
     """
 
-    # (60 - CHECK_INTERVAL)th second of each minute.
-    CHECK_INTERVAL = 20
+    # Check for fills on the (60 - CHECK_INTERVAL)th second of each minute.
+    CHECK_INTERVAL = 25
 
     def __init__(self, logger, portfolio, exchanges):
         self.logger = logger
