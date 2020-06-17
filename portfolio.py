@@ -13,24 +13,26 @@ from trade_types import SingleInstrumentTrade, Order, Position, TradeID
 from event_types import OrderEvent, FillEvent
 from pymongo import MongoClient, errors
 import pymongo
-import time
 import queue
+import time
+import json
+import sys
 
 
 class Portfolio:
     """
     Portfolio manages the net holdings for all models, issuing order events
-    and reacting to fill events to open and close positions and strategies
+    and reacting to fill events to open and close positions as strategies
     dictate.
 
-    Capital allocations to strategies and risk parameters defined here.
+    Capital allocations to strategies and risk parameters are defined here.
     """
 
-    MAX_SIMULTANEOUS_POSITIONS = 20
-    MAX_CORRELATED_TRADES = 1
-    MAX_ACCEPTED_DRAWDOWN = 15          # Percentage as integer.
-    RISK_PER_TRADE = 1                  # Percentage as integer OR 'KELLY'
-    DEFAULT_STOP = 3                    # % stop distance if none provided.
+    MAX_SIMULTANEOUS_POSITIONS = 1
+    MAX_CORRELATED_TRADES = 2
+    MAX_ACCEPTED_DRAWDOWN = 25  # Percentage as integer.
+    RISK_PER_TRADE = 2          # Percentage as integer OR 'KELLY'
+    DEFAULT_STOP = 2            # Default (%) stop distance if none provided.
 
     def __init__(self, exchanges, logger, db_other, db_client, models):
         self.exchanges = {i.get_name(): i for i in exchanges}
@@ -39,9 +41,10 @@ class Portfolio:
         self.db_client = db_client
         self.models = models
 
+        self.trades_save_to_db = queue.Queue(0)
         self.id_gen = TradeID(db_other)
         self.pf = self.load_portfolio()
-        self.trades_save_to_db = queue.Queue(0)
+        self.verify_portfolio_state(self.pf)
 
     def new_signal(self, events, event):
         """
@@ -59,26 +62,27 @@ class Portfolio:
         """
 
         signal = event.get_signal_dict()
-
         if self.within_risk_limits(signal):
+
             orders = []
 
-            # Prepare orders for single-instrument signals:
+            # Generate sequential trade ID for new trade.
+            trade_id = self.id_gen.new_id()
+
+            # Handle single-instrument signals:
             if signal['instrument_count'] == 1:
 
                 stop = self.calculate_stop_price(signal),
                 size = self.calculate_position_size(stop[0],
                                                     signal['entry_price'])
 
-                # Generate sequential trade ID for order and trade objects.
-                trade_id = self.id_gen.new_id()
-
                 # Entry order.
                 orders.append(Order(
                     self.logger,
                     trade_id,               # Parent trade ID.
-                    None,                   # Related position ID.
                     None,                   # Order ID as used by venue.
+                    signal['symbol'],       # Instrument ticker code.
+                    signal['venue'],        # Venue name.
                     signal['direction'],    # LONG or SHORT.
                     size,                   # Size in native denomination.
                     signal['entry_price'],  # Order price.
@@ -94,11 +98,12 @@ class Portfolio:
                     self.logger,
                     trade_id,
                     None,
-                    None,
+                    signal['symbol'],
+                    signal['venue'],
                     event.inverse_direction(),
                     size,
                     stop[0],
-                    "STOP_MARKET",
+                    "STOP",
                     "STOP",
                     None,
                     signal['trail'],
@@ -107,52 +112,74 @@ class Portfolio:
 
                 # Take profit order(s).
                 if signal['targets']:
+
+                    count = 1
                     for target in signal['targets']:
-                        tp_size = (size / 100) * target[1]
+
+                        # Label final TP order as "FINAL_TAKE_PROFIT".
+                        tp_type = "TAKE_PROFIT" if count != len(signal['targets']) else "FINAL_TAKE_PROFIT"
+                        count += 1
+
                         orders.append(Order(
                             self.logger,
                             trade_id,
                             None,
-                            None,
+                            signal['symbol'],
+                            signal['venue'],
                             event.inverse_direction(),
-                            tp_size,
+                            (size / 100) * target[1],
                             target[0],
                             "LIMIT",
-                            "TAKE_PROFIT",
+                            tp_type,
                             stop[0],
                             False,
                             True,
                             False))
 
+                # Set sequential order ID's, based on trade ID.
+                count = 1
+                for order in orders:
+                    order.order_id = str(trade_id) + "-" + str(count)
+                    count += 1
+
                 # Parent trade object:
                 trade = SingleInstrumentTrade(
                     self.logger,
-                    signal['venue'],        # Exchange or broker traded with.
-                    signal['symbol'],       # Instrument ticker code.
-                    signal['strategy'],     # Model name.
-                    None,                   # Position object.
-                    [i.get_order_dict() for i in orders],  # Open orders dicts.
-                    None)                   # Filled order dicts.
+                    signal['direction'],        # Direction
+                    signal['venue'],            # Venue name.
+                    signal['symbol'],           # Instrument ticker code.
+                    signal['strategy'],         # Model name.
+                    signal['entry_timestamp'],  # Signal timestamp.
+                    None,                       # Position object.
+                    {str(i.get_order_dict()['order_id']): i.get_order_dict() for i in orders})  # noqa
 
-                # Set trade_id manually, since we already generated it above.
-                trade.trade_id = trade_id
+                # Finalise trade object. Must be called to set ID + order count
+                trade.set_batch_size_and_id(trade_id)
 
-                # Queue the trade for storage and update portfolio state.
+                # Queue the trade for DB storage and update portfolio state.
                 self.trades_save_to_db.put(trade.get_trade_dict())
-                self.pf['trades'].append(trade.get_trade_dict())
+                self.pf['trades'][str(trade_id)] = trade.get_trade_dict()
                 self.save_porfolio(self.pf)
 
-            # TODO: Other trade types (multi-instrument, multi-venue etc).
+            # TODO: handle multi-instrument, multi-venue trades.
+            elif signal['instrument_count'] == 2:
+                pass
 
-            # Queue orders for execution.
+            elif signal['instrument_count'] > 2:
+                pass
+
+            # Set order batch size and queue orders for execution.
+            batch_size = len(orders)
             for order in orders:
+                order.batch_size = batch_size
                 events.put(OrderEvent(order.get_order_dict()))
 
             self.logger.debug("Trade " + str(trade_id) + " registered.")
 
-    def new_fill(self, events, event):
+    def new_fill(self, fill_event):
         """
-        Process incoming fill event and update position records accordingly.
+        Process incoming fill event, update position, trade and order state
+        accordingly.
 
         Args:
             events: event queue object.
@@ -164,7 +191,404 @@ class Portfolio:
         Raises:
             None.
         """
+
+        fill_conf = fill_event.get_order_conf()
+        position = Position(fill_conf).get_pos_dict()
+        t_id = str(position['trade_id'])
+
+        if fill_conf['metatype'] == "ENTRY":
+
+            # Create a position record and set trade to active.
+            self.pf['trades'][t_id]['position'] = position
+            self.pf['trades'][t_id]['active'] = True
+            self.pf['total_active_trades'] += 1
+
+        elif fill_conf['metatype'] == "STOP":
+
+            # Update the now closed postiion, trade is done.
+            size = self.pf['trades'][t_id]['position']['size']
+            new_size = size - fill_conf['size']
+
+            if new_size != 0:
+                raise Exception(new_size)
+
+            self.pf['trades'][t_id]['position']['size'] = new_size
+            self.pf['trades'][t_id]['position']['status'] = "CLOSED"
+
+            self.trade_complete(t_id)
+
+        elif fill_conf['metatype'] == "TAKE_PROFIT":
+
+            # Update the modified position.
+            size = self.pf['trades'][t_id]['position']['size']
+            new_size = size - fill_conf['size']
+            self.pf['trades'][t_id]['position']['size'] = new_size
+
+            if new_size == 0:
+                self.trade_complete(t_id)
+            else:
+                self.calculate_pnl_by_trade(t_id)
+
+        elif fill_conf['metatype'] == "FINAL_TAKE_PROFIT":
+
+            # Update the now closed postiion, trade is done.
+            size = self.pf['trades'][t_id]['position']['size']
+            new_size = size - fill_conf['size']
+            self.pf['trades'][t_id]['position']['size'] = new_size
+            self.pf['trades'][t_id]['position']['status'] = "CLOSED"
+
+            if new_size != 0:
+                raise Exception(
+                    "Position close size error:", new_size)
+
+            self.trade_complete(t_id)
+
+        else:
+            raise Exception("Order metatype error:", fill_conf['metatype'])
+
+        self.save_porfolio(self.pf)
+
+    def new_order_conf(self, order_confs: list, events):
+        """
+        Update stored trade and order state to match given order confirmations.
+
+        Args:
+            order_confs: list of order dicts containing updated details.
+            events:  event queue object.
+        Returns:
+           None.
+
+        Raises:
+            None.
+        """
+
+        # Update portfolio state.
+        for conf in order_confs:
+            t_id = str(conf['trade_id'])
+            o_id = str(conf['order_id'])
+            self.pf['trades'][t_id]['orders'][o_id] = conf
+
+            # Create a fill event if order already filled (e.g. market orders).
+            if conf['status'] == "FILLED":
+                events.put(FillEvent(conf))
+
+        self.save_porfolio(self.pf)
+
+    def trade_complete(self, trade_id):
+        """
+        Check all orders and positions are closed, calculate pnl, run post
+        trade checks/analytics.
+        """
+
+        # Cancel all orders marching trade ID.
+        self.cancel_orders_by_trade_id(trade_id)
+
+        # Close positions, if still open.
+        if self.check_position_open(trade_id):
+            self.close_position_by_trade_id(trade_id)
+
+        # Calculate trade pnl.
+        self.calculate_pnl_by_trade(trade_id)
+
+        # Run post-trade analytics.
+        self.post_trade_analysis(trade_id)
+
+        # Save updated portfolio state to DB.
+        self.save_porfolio(self.pf)
+
+    def cancel_orders_by_trade_id(self, t_id):
+        """
+        Cancel all orders matching the given trade ID and update
+        local portfolio state.
+        """
+
+        o_ids = self.pf['trades'][t_id]['orders'].keys()
+        v_ids = [
+            self.pf['trades'][t_id]['orders'][o]['venue_id'] for o in o_ids if
+            self.pf['trades'][t_id]['orders'][o]['status'] != "FILLED"]
+
+        venue = self.pf['trades'][t_id]['venue']
+
+        print("v_ids to cancel", v_ids)
+
+        cancel_confs = self.exchanges[venue].cancel_orders(v_ids)
+
+        print("cancel_confs", cancel_confs)
+
+        try:
+            if cancel_confs['error']["message"] == 'Not Found':
+                self.pf['trades'][t_id]['active'] = False
+                for o in o_ids:
+                    self.pf['trades'][t_id]['orders'][o]['status'] == "FILLED"
+                # Handle other error messages here
+
+        except KeyError as ke:
+            # print(traceback.format_exc(), ke)
+            # Update portfolio state based on cancellation message.
+            self.pf['trades'][t_id]['active'] = False
+            for order_id in o_ids:
+                for venue_id in v_ids:
+                    # Handle active orders actually cancelled.
+                    if self.pf['trades'][t_id]['orders'][order_id][
+                        'venue_id'] == venue_id and cancel_confs[
+                            venue_id] == "SUCCESS":
+
+                        self.pf['trades'][t_id]['orders']['order_id'][
+                            'status'] = "CANCELLED"
+
+                    else:
+                        raise Exception(
+                                "Order id mismatch:", cancel_confs[v_id])
+
+    def check_position_open(self, trade_id):
+        """
+        Return true if position is still open according to local portfolio.
+        """
+
+        if self.pf['trades'][trade_id]['position']['status'] == "OPEN":
+            return True
+        elif self.pf['trades'][trade_id]['position']['status'] == "CLOSED":
+            return False
+        else:
+            raise Exception(
+                "Position status error:",
+                self.pf['trades'][trade_id]['position']['status'])
+
+    def close_position_by_trade_id(self, t_id):
+        """
+        This method will close only the remaining amount for the given trade -
+        it will not necessarily close an entire position, unless there is only
+        one open position in that particular instrument.
+
+        Then, update local portfolio state.
+
+        Use close_position_absolute() to completely close all positions in
+        for specifc instrument at a specific venue.
+        """
+
+        close = self.exchanges[
+            self.pf['trades'][t_id]['venue']].close_position(
+                self.pf['trades'][t_id]['symbol'],
+                self.pf['trades'][t_id]['position']['size'],
+                self.pf['trades'][t_id]['direction'])
+
+        if close:
+            self.pf['trades'][t_id]['position']['size'] = 0
+            self.pf['trades'][t_id]['position']['status'] = "CLOSED"
+
+    def close_position_absolute(self, venue, symbol):
+        """
+        Close ALL units of given instrument symbol indiscriminately.
+        """
+
+        return self.exchanges[venue].close_position(symbol)
+
+    def calculate_pnl_by_trade(self, t_id):
+        """
+        Calculate pnl for the given trade and update local portfolio state.
+        """
+
+        # Match internal order ids with venue ids {venue id: order id}
+        o_ids = self.pf['trades'][t_id]['orders'].keys()
+        id_pairs = {self.pf['trades'][t_id]['orders'][i]['venue_id']: i for i in o_ids}
+        v_ids = id_pairs.keys()
+
+        # Fetch all balance affecting executions.
+        executions = self.exchanges[self.pf['trades'][t_id][
+            'venue']].get_executions(self.pf['trades'][t_id]['symbol'])
+
+        unique_o_ids = list(set([i['order_id'] for i in executions]))
+
+        # Sort execs {{order_id: [exc1, exc2, exc3, etc]}, ... }
+        s_exc = {i: [] for i in unique_o_ids if i in o_ids}
+        for exc in executions:
+            if exc['order_id'] in o_ids:
+                s_exc[exc['order_id']].append(exc)
+
+        print(json.dumps(s_exc, indent=2))
+
+        # Avg total long and short for the trade.
+        avg_long, long_total, avg_short, short_total, total_fee = 0, 0, 0, 0, 0
+
+        for o_id in o_ids:
+            for sub_order in s_exc[o_id]:
+
+                if sub_order['direction'] == "LONG":
+                    avg_long += sub_order['avg_exc_price'] * sub_order['size']
+                    long_total += sub_order['size']
+                    total_fee += sub_order['total_fee']
+
+                elif sub_order['direction'] == "SHORT":
+                    avg_short += sub_order['avg_exc_price'] * sub_order['size']
+                    short_total += sub_order['size']
+                    total_fee += sub_order['total_fee']
+
+        avg_long /= long_total
+        avg_short /= short_total
+
+        if self.pf['trades'][t_id]['direction'] == "LONG":
+            pnl = avg_short - avg_long
+        elif self.pf['trades'][t_id]['direction'] == "SHORT":
+            pnl = avg_long - avg_short
+        else:
+            raise Exception(self.pf['trades'][t_id]['direction'])
+
+        print("avg long exec:", avg_long)
+        print("avg short exec:", avg_short)
+        print("pnl:", pnl)
+        print("total_fee:", total_fee)
+
+        self.pf['current_balance'] += (pnl + total_fee)
+        self.pf['balance_hsitory'][str(int(time.time()))] = {
+            'amt': pnl + total_fee,
+            'trade_id': t_id}
+
+        print("New balance:", self.pf['current_balance'])
+
+    def post_trade_analysis(self, trade_id):
+        """
+        TODO: conduct post-trade analytics.
+        """
         pass
+
+    def verify_portfolio_state(self, portfolio):
+        """
+        Check stored portfolio data matches actual positions and orders.
+        """
+
+        # TODO.
+
+        self.save_porfolio(portfolio)
+        self.logger.debug("Portfolio verification complete.")
+
+    def load_portfolio(self, ID=1):
+        """
+        Load portfolio matching ID from database or return empty portfolio.
+        """
+
+        portfolio = self.db_other['portfolio'].find_one({"id": ID}, {"_id": 0})
+
+        if portfolio:
+            return portfolio
+
+        else:
+            default_portfolio = {
+                'id': ID,
+                'balance_history': {
+                    str(int(time.time())): {
+                        'amt': 1000,
+                        'trade_id': "Initial deposit."}},
+                'current_balance': 1000,
+                'current_drawdown': 0,
+                'avg_r_per_winner': 0,
+                'avg_r_per_loser': 0,
+                'avg_r_per_trade': 0,
+                'total_winning_trades': 0,
+                'total_losing_trades': 0,
+                'total_consecutive_wins': 0,
+                'total_consecutive_losses': 0,
+                'win_loss_ratio': 0,
+                'gain_to_pain_ratio': 0,
+                'risk_per_trade': self.RISK_PER_TRADE,
+                'max_correlated_trades': self.MAX_CORRELATED_TRADES,
+                'max_accepted_drawdown': self.MAX_ACCEPTED_DRAWDOWN,
+                'max_simultaneous_positions': self.MAX_SIMULTANEOUS_POSITIONS,
+                'default_stop': self.DEFAULT_STOP,
+                'model_allocations': {  # Equal allocation by default.
+                    i.get_name(): (100 / len(self.models)) for i in self.models},
+                'total_active_trades': 0,
+                'trades': {}}
+
+            self.save_porfolio(default_portfolio)
+
+            return default_portfolio
+
+    def save_porfolio(self, portfolio):
+        """
+        Save portfolio state to DB.
+        """
+
+        result = self.db_other['portfolio'].replace_one(
+            {"id": portfolio['id']}, portfolio, upsert=True)
+
+        if result.acknowledged:
+            self.logger.debug("Portfolio save successful.")
+        else:
+            self.logger.debug("Portfolio save unsuccessful.")
+
+    def within_risk_limits(self, signal):
+        """
+        Return true if the new signal would be within risk limits if traded.
+        """
+
+        # TODO: Finish after signal > order > fill logic is done.
+
+        # Position limit check.
+        if self.pf['total_active_trades'] < self.pf['max_simultaneous_positions']:
+
+            if (  # Drawdown check.
+                (self.pf['current_drawdown'] / self.pf['current_balance'])
+                    * 100) >= self.pf['max_accepted_drawdown'] or (
+                    self.pf['current_drawdown'] == 0):
+
+                if not self.correlated(signal):  # Correlation check.
+                    return True
+                else:
+                    self.logger.debug(
+                        "Trade skipped. Correlated positions limit reached.")
+                    return False
+            else:
+                self.logger.debug("Trade skipped. Drawdown limit reached.")
+                return False
+        else:
+            self.logger.debug("Trade skipped. Position limit reached.")
+            return False
+
+    def calculate_exposure(self, trade):
+        """
+        Calculate the currect capital at risk for the given trade.
+        """
+        pass
+
+    def correlated(self, signal):
+        """
+        Return true if any active trades would be correlated with trades
+        produced by the incoming signal.
+        """
+        pass
+
+    def calculate_stop_price(self, signal):
+        """
+        Find the stop price for the given signal.
+        """
+
+        if signal['stop_price'] is not None:
+            return signal['stop_price']
+
+        else:
+            if signal['direction'] == "LONG":
+                return signal['entry_price'] / 100 * (100 - self.DEFAULT_STOP)
+
+            elif signal['direction'] == "SHORT":
+                return signal['entry_price'] / 100 * (100 + self.DEFAULT_STOP)
+
+    def calculate_position_size(self, stop, entry):
+        """
+        Find appropriate position size for the given parameters.
+        """
+
+        # Fixed percentage per trade risk management.
+        if isinstance(self.RISK_PER_TRADE, int):
+
+            account_size = self.pf['current_balance']
+            risked_amt = (account_size / 1000) * self.RISK_PER_TRADE
+            position_size = risked_amt // ((stop - entry) / entry)
+
+            return abs(position_size)
+
+        # TOOD: Kelly criteron risk management.
+        elif self.RISK_PER_TRADE.upper() == "KELLY":
+            pass
 
     def update_price(self, events, market_event):
         """
@@ -181,129 +605,6 @@ class Portfolio:
             None.
         """
         pass
-
-    def load_portfolio(self, ID=1):
-        """
-        Load portfolio matching ID from database or return empty portfolio.
-        """
-
-        portfolio = self.db_other['portfolio'].find_one({"id": ID}, {"_id": 0})
-
-        if portfolio:
-            self.verify_portfolio_state(portfolio)
-            return portfolio
-
-        else:
-            empty_portfolio = {
-                'id': ID,
-                'start_date': int(time.time()),
-                'initial_funds': 0,
-                'current_value': 0,
-                'current_drawdown': 0,
-                'trades': [],
-                'model_allocations': {  # Equal allocation by default.
-                    i.get_name(): (100 / len(self.models)) for i in self.models},
-                'risk_per_trade': self.RISK_PER_TRADE,
-                'max_correlated_trades': self.MAX_CORRELATED_TRADES,
-                'max_accepted_drawdown': self.MAX_ACCEPTED_DRAWDOWN,
-                'max_simultaneous_positions': self.MAX_SIMULTANEOUS_POSITIONS,
-                'default_stop': self.DEFAULT_STOP}
-
-            self.save_porfolio(empty_portfolio)
-            return empty_portfolio
-
-    def verify_portfolio_state(self, portfolio):
-        """
-        Check stored portfolio data matches actual positions and orders.
-        """
-
-        trades = self.db_other['trades'].find({"active": "True"}, {"_id": 0})
-
-        # If trades marked active exist (in DB), check their orders and
-        # positions match actual trade state, update portfoilio if disparate.
-        if trades:
-            self.logger.debug("Verifying trade records match trade state.")
-            for venue in [trade['venue'] for trade in trades]:
-
-                print("Fetched positions and orders.")
-                positions = self.exchanges[venue].get_positions()
-                orders = self.exchanges[venue].get_orders()
-
-                # TODO: state checking.
-
-        self.save_porfolio(portfolio)
-        self.logger.debug("Portfolio verification complete.")
-
-        return portfolio
-
-    def save_porfolio(self, portfolio):
-        """
-        Save portfolio state to DB.
-        """
-
-        result = self.db_other['portfolio'].replace_one(
-            {"id": portfolio['id']}, portfolio, upsert=True)
-
-        if result.acknowledged:
-            self.logger.debug("Portfolio update successful.")
-        else:
-            self.logger.debug("Portfolio update unsuccessful.")
-
-    def within_risk_limits(self, signal):
-        """
-        Return true if the new signal would be within risk limits if traded.
-        """
-
-        # TODO: Finish after signal > order > fill logic is done.
-
-        return True
-
-    def calculate_exposure(self, trade):
-        """
-        Calculate the currect capital at risk for the given trade.
-        """
-        pass
-
-    def correlated(self, instrument):
-        """
-        Return true if any active trades are correlated with 'instrument'.
-        """
-        pass
-
-    def calculate_stop_price(self, signal):
-        """
-        Find the stop price for the given signal.
-        """
-
-        if signal['stop_price'] is not None:
-            stop = signal['stop_price']
-        else:
-            stop = signal['entry_price'] / 100 * (100 - self.DEFAULT_STOP)
-
-        return stop
-
-    def calculate_position_size(self, stop, entry):
-        """
-        Find appropriate position size for the given parameters.
-        """
-
-        # Fixed percentage per trade risk management.
-        if isinstance(self.RISK_PER_TRADE, int):
-
-            account_size = self.pf['current_value']
-            risked_amt = (account_size / 100) * self.RISK_PER_TRADE
-            position_size = risked_amt // ((stop - entry) / entry)
-
-            return abs(position_size)
-
-        # TOOD: Kelly criteron risk management.
-        elif self.RISK_PER_TRADE.upper() == "KELLY":
-            pass
-
-    def fees(self, trade):
-        """
-        Calculate total current fees paid for the given trade object.
-        """
 
     def save_new_trades_to_db(self):
         """
@@ -336,7 +637,6 @@ class Portfolio:
                     # Store signal in relevant db collection.
                     try:
                         self.db_other['trades'].insert_one(trade)
-
                     # Skip duplicates if they exist.
                     except pymongo.errors.DuplicateKeyError:
                         continue
