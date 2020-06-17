@@ -117,11 +117,8 @@ class Server:
                 if self.cycle_count >= 1 and self.data.ready:
                     self.start_processing = time.time()
 
-                    # Queue new fill events.
+                    # Fetch and queue events for processing.
                     self.events = self.broker.check_fills(self.events)
-                    self.clear_event_queue()
-
-                    # Parse and queue market data (new Market Events).
                     self.events = self.data.update_market_data(self.events)
                     self.clear_event_queue()
 
