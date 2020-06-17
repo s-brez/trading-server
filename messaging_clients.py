@@ -10,6 +10,8 @@ Some rights reserved. See LICENSE.md, AUTHORS.md.
 """
 
 from abc import ABC, abstractmethod
+from telegram.ext import Updater, MessageHandler, Filters
+import os
 
 
 class MessagingClient(ABC):
@@ -24,6 +26,18 @@ class Telegram(MessagingClient):
     """
     """
 
-    def __init__(self):
+    def __init__(self, logger):
         super().__init__()
-        pass
+        self.logger = logger
+        self.token = self.get_token()
+        self.updater = Updater(token=self.token, use_context=True)
+
+    def get_token(self):
+        """
+        Load bot token from environment variable.
+        """
+
+        if os.environ['TELEGRAM_BOT_TOKEN']:
+            return os.environ['TELEGRAM_BOT_TOKEN']
+        else:
+            raise Exception("Telegram bot token missing.")
