@@ -3,7 +3,6 @@ trading-server is a multi-asset, multi-strategy, event-driven trade execution
 and backtesting platform (OEMS) for trading common markets.
 
 Copyright (C) 2020  Sam Breznikar <sam@sdbgroup.io>
-Copyright (C) 2020  Marc Goulding <gouldingmarc@gmail.com>
 
 Licensed under GNU General Public License 3.0 or later.
 
@@ -26,7 +25,7 @@ class Trade(ABC):
 
     def __init__(self):
         self.trade_id = None            # Must be set before saving to DB.
-        self.order_count = 0           # Number of component orders.
+        self.order_count = 0            # Number of component orders.
         self.signal_timestamp = None    # Epoch timestamp of parent signal.
         self.active = False             # True/False.
         self.venue_count = 0            # Number of venues in use.
