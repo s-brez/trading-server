@@ -528,7 +528,8 @@ class Portfolio:
 
             if (  # Drawdown check.
                 (self.pf['current_drawdown'] / self.pf['current_balance'])
-                    * 100) >= self.pf['max_accepted_drawdown']:
+                    * 100) >= self.pf['max_accepted_drawdown'] or (
+                    self.pf['current_drawdown'] == 0):
 
                 if not self.correlated(signal):  # Correlation check.
                     return True
