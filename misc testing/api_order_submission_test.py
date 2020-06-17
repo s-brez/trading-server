@@ -434,6 +434,19 @@ def get_orders(symbol, start_timestamp=None, count=500):
         else:
             raise Exception(res['ordType'])
 
+        # If "\n" in response text field, use substring after "\n".
+        if "\n" in res['text']:
+            text = res['text'].split("\n")
+            metatype = text[1]
+        elif (
+            res['text'] == "ENTRY" or res['text'] == "STOP" or res['text'] ==
+                "TAKE_PROFIT" or res['text'] == "FINAL_TAKE_PROFIT"):
+            metatype = res['text']
+        else:
+            # raise Exception("Order metatype error:", res['text'])
+            print("Order metatype error:", res['text'])
+            metatype = res['text']
+
         orders.append({
             'order_id': res['clOrdID'],
             'venue_id': res['orderID'],
@@ -446,7 +459,7 @@ def get_orders(symbol, start_timestamp=None, count=500):
             'direction': direction,
             'size': res['orderQty'],
             'order_type': order_type,
-            'metatype': res['text'],
+            'metatype': metatype,
             'void_price': res['stopPx'],
             'status': fill})
 
@@ -455,50 +468,14 @@ def get_orders(symbol, start_timestamp=None, count=500):
 # id_pairs = {
 #     'e5f4bbcf-ec61-c2c5-0365-c0b1d57d4e57': '64-1',
 #     'd76349e3-4d27-3764-7c71-c58a8b6955f3': '63-1'}
-# v_ids = id_pairs.keys()
+
+# ids_for_cancellation = [
+#     'e5f4bbcf-ec61-c2c5-0365-c0b1d57d4e57',
+#     'd76349e3-4d27-3764-7c71-c58a8b6955f3']
+
+# print(cancel_orders(ids_for_cancellation))
 
 
 portfolio = db_other['portfolio'].find_one({"id": 1}, {"_id": 0})
-orders = get_orders("XBTUSD")
 
-# sorted_executions = {i: [] for i in v_ids}
-# for exc in executions:
-#     if exc['venue_id'] in v_ids:
-#         sorted_executions[exc['venue_id']].append(exc)
-
-# print(json.dumps(sorted_executions, indent=2))
-
-portfolio_order_snapshot = []
-for trade_id in portfolio['trades'].keys():
-    if portfolio['trades'][trade_id]['active']:
-        for order_id in portfolio['trades'][trade_id]['orders'].keys():
-            portfolio_order_snapshot.append((
-                portfolio['trades'][trade_id]['orders'][order_id]['venue_id'],
-                order_id,
-                portfolio['trades'][trade_id]['orders'][order_id]['status']))
-
-actual_order_snapshot = []
-for order in portfolio_order_snapshot:
-    print(order[0])
-    for conf in orders:
-        if conf['venue_id'] == order[0]:
-            print(conf['venue_id'])
-            actual_order_snapshot.append((
-                conf['venue_id'],
-                conf['order_id'],
-                conf['status']))
-
-# print(actual_order_snapshot)
-print(json.dumps(orders, indent=2))
-
-for port, actual in zip(portfolio_order_snapshot, actual_order_snapshot):
-    if port[0] == actual[0]:
-        if port[2] != actual[2]:
-
-            # Order has been filled/cancelled/partially filled.
-            pass
-
-    else:
-        # Something is critically wrong if theres a missing/wrong venue ID.
-        raise Exception("Order ID mistmatch. Portfolio v_id:", port[0],
-                        "Actual v_id:", actual[0])
+print(json.dumps(portfolio, indent=2))
