@@ -12,9 +12,8 @@ Some rights reserved. See LICENSE.md, AUTHORS.md.
 from abc import ABC, abstractmethod
 from features import Features as f
 from event_types import SignalEvent
-import matplotlib.pyplot as plt
-import plotly.graph_objects as go
 import numpy as np
+import os
 import re
 
 
@@ -212,79 +211,11 @@ class EMACrossTestingOnly(Model):
                     signal = True
 
                 if signal:
-
-                    # Plot the signal.
-                    chart = go.Figure(
-                        data=[
-
-                            # Bars.
-                            go.Ohlc(
-                                x=op_data[timeframe].index,
-                                open=op_data[timeframe]['open'],
-                                high=op_data[timeframe]['high'],
-                                low=op_data[timeframe]['low'],
-                                close=op_data[timeframe]['close'],
-                                name="Bars",
-                                increasing_line_color='black',
-                                decreasing_line_color='black'),
-
-                            # EMA10.
-                            go.Scatter(
-                                x=op_data[timeframe].index,
-                                y=op_data[timeframe].EMA10,
-                                line=dict(color='gray', width=1),
-                                name="EMA10"),
-
-                            # EMA20.
-                            go.Scatter(
-                                x=op_data[timeframe].index,
-                                y=op_data[timeframe].EMA20,
-                                line=dict(color='black', width=1),
-                                name="EMA20"),
-
-                            # Longs.
-                            go.Scatter(
-                                x=longs['time'],
-                                y=longs['price'],
-                                mode='markers',
-                                name="Long",
-                                marker_color="green",
-                                marker_size=10),
-
-                            # Shorts.
-                            go.Scatter(
-                                x=shorts['time'],
-                                y=shorts['price'],
-                                mode='markers',
-                                name="Short",
-                                marker_color="red",
-                                marker_size=10)])
-
-                    title = str(
-                        timeframe + " " + self.get_name() + " " +
-                        symbol + " " + exchange.get_name())
-
-                    chart.update_layout(
-                        title_text=title,
-                        title={
-                            'y': 0.9,
-                            'x': 0.5,
-                            'xanchor': 'center',
-                            'yanchor': 'top'},
-                        xaxis_rangeslider_visible=False,
-                        xaxis_title="Time",
-                        yaxis_title="Price (USD)",
-                        paper_bgcolor='white',
-                        plot_bgcolor='white',
-                        xaxis_showgrid=True,
-                        yaxis_showgrid=True)
-
-                    chart.show()
-
                     return SignalEvent(symbol, int(entry_ts.timestamp()),
                                        direction, timeframe, self.name,
                                        exchange, entry_price, "Market", None,
-                                       None, None, False, None)
+                                       None, None, False, None,
+                                       op_data[timeframe])
                 else:
                     return None
 
