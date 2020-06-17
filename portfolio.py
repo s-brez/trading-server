@@ -12,11 +12,13 @@ Some rights reserved. See LICENSE.md, AUTHORS.md.
 from trade_types import SingleInstrumentTrade, Order, Position, TradeID
 from event_types import OrderEvent, FillEvent
 from pymongo import MongoClient, errors
+import matplotlib.pyplot as plt
 import pymongo
 import queue
 import time
 import json
 import sys
+import os
 
 
 class Portfolio:
@@ -62,119 +64,125 @@ class Portfolio:
         """
 
         signal = event.get_signal_dict()
-        if self.within_risk_limits(signal):
+        orders = []
 
-            orders = []
+        # Generate sequential trade ID for new trade.
+        trade_id = self.id_gen.new_id()
 
-            # Generate sequential trade ID for new trade.
-            trade_id = self.id_gen.new_id()
+        # Handle single-instrument signals:
+        if signal['instrument_count'] == 1:
 
-            # Handle single-instrument signals:
-            if signal['instrument_count'] == 1:
+            stop = self.calculate_stop_price(signal),
+            size = self.calculate_position_size(stop[0],
+                                                signal['entry_price'])
+            # Entry order.
+            orders.append(Order(
+                self.logger,
+                trade_id,               # Parent trade ID.
+                None,                   # Order ID as used by venue.
+                signal['symbol'],       # Instrument ticker code.
+                signal['venue'],        # Venue name.
+                signal['direction'],    # LONG or SHORT.
+                size,                   # Size in native denomination.
+                signal['entry_price'],  # Order price.
+                signal['entry_type'],   # LIMIT MARKET STOP_LIMIT/MARKET.
+                "ENTRY",                # ENTRY, TAKE_PROFIT, STOP.
+                stop[0],                # Order invalidation price.
+                False,                  # Trail.
+                False,                  # Reduce-only order.
+                False))                 # Post-only order.
 
-                stop = self.calculate_stop_price(signal),
-                size = self.calculate_position_size(stop[0],
-                                                    signal['entry_price'])
+            # Stop order.
+            orders.append(Order(
+                self.logger,
+                trade_id,
+                None,
+                signal['symbol'],
+                signal['venue'],
+                event.inverse_direction(),
+                size,
+                stop[0],
+                "STOP",
+                "STOP",
+                None,
+                signal['trail'],
+                True,
+                False))
 
-                # Entry order.
-                orders.append(Order(
-                    self.logger,
-                    trade_id,               # Parent trade ID.
-                    None,                   # Order ID as used by venue.
-                    signal['symbol'],       # Instrument ticker code.
-                    signal['venue'],        # Venue name.
-                    signal['direction'],    # LONG or SHORT.
-                    size,                   # Size in native denomination.
-                    signal['entry_price'],  # Order price.
-                    signal['entry_type'],   # LIMIT MARKET STOP_LIMIT/MARKET.
-                    "ENTRY",                # ENTRY, TAKE_PROFIT, STOP.
-                    stop[0],                # Order invalidation price.
-                    False,                  # Trail.
-                    False,                  # Reduce-only order.
-                    False))                 # Post-only order.
+            # Take profit order(s).
+            if signal['targets']:
 
-                # Stop order.
-                orders.append(Order(
-                    self.logger,
-                    trade_id,
-                    None,
-                    signal['symbol'],
-                    signal['venue'],
-                    event.inverse_direction(),
-                    size,
-                    stop[0],
-                    "STOP",
-                    "STOP",
-                    None,
-                    signal['trail'],
-                    True,
-                    False))
-
-                # Take profit order(s).
-                if signal['targets']:
-
-                    count = 1
-                    for target in signal['targets']:
-
-                        # Label final TP order as "FINAL_TAKE_PROFIT".
-                        tp_type = "TAKE_PROFIT" if count != len(signal['targets']) else "FINAL_TAKE_PROFIT"
-                        count += 1
-
-                        orders.append(Order(
-                            self.logger,
-                            trade_id,
-                            None,
-                            signal['symbol'],
-                            signal['venue'],
-                            event.inverse_direction(),
-                            (size / 100) * target[1],
-                            target[0],
-                            "LIMIT",
-                            tp_type,
-                            stop[0],
-                            False,
-                            True,
-                            False))
-
-                # Set sequential order ID's, based on trade ID.
                 count = 1
-                for order in orders:
-                    order.order_id = str(trade_id) + "-" + str(count)
+                for target in signal['targets']:
+
+                    # Label final TP order as "FINAL_TAKE_PROFIT".
+                    tp_type = "TAKE_PROFIT" if count != len(signal['targets']) else "FINAL_TAKE_PROFIT"
                     count += 1
 
-                # Parent trade object:
-                trade = SingleInstrumentTrade(
-                    self.logger,
-                    signal['direction'],        # Direction
-                    signal['venue'],            # Venue name.
-                    signal['symbol'],           # Instrument ticker code.
-                    signal['strategy'],         # Model name.
-                    signal['entry_timestamp'],  # Signal timestamp.
-                    None,                       # Position object.
-                    {str(i.get_order_dict()['order_id']): i.get_order_dict() for i in orders})  # noqa
+                    orders.append(Order(
+                        self.logger,
+                        trade_id,
+                        None,
+                        signal['symbol'],
+                        signal['venue'],
+                        event.inverse_direction(),
+                        (size / 100) * target[1],
+                        target[0],
+                        "LIMIT",
+                        tp_type,
+                        stop[0],
+                        False,
+                        True,
+                        False))
 
-                # Finalise trade object. Must be called to set ID + order count
-                trade.set_batch_size_and_id(trade_id)
+            # Set sequential order ID's, based on trade ID.
+            count = 1
+            for order in orders:
+                order.order_id = str(trade_id) + "-" + str(count)
+                count += 1
 
-                # Queue the trade for DB storage and update portfolio state.
-                self.trades_save_to_db.put(trade.get_trade_dict())
-                self.pf['trades'][str(trade_id)] = trade.get_trade_dict()
-                self.save_porfolio(self.pf)
+            # Parent trade object:
+            trade = SingleInstrumentTrade(
+                self.logger,
+                signal['direction'],        # Direction
+                signal['venue'],            # Venue name.
+                signal['symbol'],           # Instrument ticker code.
+                signal['strategy'],         # Model name.
+                signal['entry_timestamp'],  # Signal timestamp.
+                None,                       # Position object.
+                {str(i.get_order_dict()['order_id']): i.get_order_dict() for i in orders})  # noqa
 
-            # TODO: handle multi-instrument, multi-venue trades.
-            elif signal['instrument_count'] == 2:
-                pass
+            # Finalise trade object. Must be called to set ID + order count
+            trade.set_batch_size_and_id(trade_id)
 
-            elif signal['instrument_count'] > 2:
-                pass
+            # Queue the trade for storage.
+            self.trades_save_to_db.put(trade.get_trade_dict())
 
             # Set order batch size and queue orders for execution.
             batch_size = len(orders)
             for order in orders:
                 order.batch_size = batch_size
-                events.put(OrderEvent(order.get_order_dict()))
 
-            self.logger.debug("Trade " + str(trade_id) + " registered.")
+            # Generate static image of trade setup.
+            t_dict = trade.get_trade_dict()
+            self.generate_trade_setup_image(
+                t_dict, signal['op_data'])
+
+            # Only raise orders and add to portfilio if within risk limits.
+            if self.within_risk_limits(signal):
+                self.pf['trades'][str(trade_id)] = t_dict
+                self.save_porfolio(self.pf)
+                for order in orders:
+                    events.put(OrderEvent(order.get_order_dict()))
+
+        # TODO: handle multi-instrument, multi-venue trades.
+        elif signal['instrument_count'] == 2:
+            pass
+
+        elif signal['instrument_count'] > 2:
+            pass
+
+        self.logger.debug("Trade " + str(trade_id) + " registered.")
 
     def new_fill(self, fill_event):
         """
@@ -640,3 +648,16 @@ class Portfolio:
                         continue
 
                 self.trades_save_to_db.task_done()
+
+    def generate_trade_setup_image(self, trade, op_data):
+
+        if not os.path.exists("setup_images"):
+            os.mkdir("setup_images")
+
+        print(json.dumps(trade, indent=2))
+        print(op_data)
+        op_data.to_csv('op_data.csv')
+
+        sys.exit(0)
+
+        # Create the plot
