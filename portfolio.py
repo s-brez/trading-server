@@ -201,7 +201,7 @@ class Portfolio:
             # Create a position record and set trade to active.
             self.pf['trades'][t_id]['position'] = position
             self.pf['trades'][t_id]['active'] = True
-            self.pf['trades']['total_active_trades'] += 1
+            self.pf['total_active_trades'] += 1
 
         elif fill_conf['metatype'] == "STOP":
 
