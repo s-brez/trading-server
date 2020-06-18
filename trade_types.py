@@ -61,7 +61,7 @@ class SingleInstrumentTrade(Trade):
     """
 
     def __init__(self, logger, direction, venue, symbol, model, s_ts=None,
-                 position=None, orders=None):
+                 timeframe=None, position=None, orders=None):
         super().__init__()
         self.logger = logger
         self.type = "SINGLE_INSTRUMENT"
@@ -85,6 +85,7 @@ class SingleInstrumentTrade(Trade):
             'instrument_count': self.instrument_count,
             'model': self.model,
             'direction': self.direction,
+            'timeframe': self.timeframe,
             'u_pnl': self.u_pnl,
             'r_pnl': self.r_pnl,
             'fees': self.fees,

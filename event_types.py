@@ -90,6 +90,7 @@ class SignalEvent(Event):
             'venue': self.venue.get_name(),
             'symbol': self.symbol,
             'entry_timestamp': self.entry_ts,
+            'timeframe': self.timeframe,
             'direction': self.direction,
             'entry_price': self.entry_price,
             'entry_type': self.entry_type,
