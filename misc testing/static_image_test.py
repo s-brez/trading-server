@@ -4,6 +4,7 @@ from requests import Request, Session
 from requests.auth import AuthBase
 from urllib.parse import urlparse
 
+
 import mplfinance as mpl
 from io import BytesIO
 from PIL import Image, ImageGrab, ImageDraw
@@ -12,6 +13,7 @@ import IPython.display as IPydisplay
 from dateutil import parser
 import pandas as pd
 import numpy as np
+
 import traceback
 import requests
 import hashlib
@@ -25,6 +27,25 @@ DB_URL = 'mongodb://127.0.0.1:27017/'
 DB_PRICES = 'asset_price_master'
 DB_OTHER = 'holdings_trades_signals_master'
 DB_TIMEOUT_MS = 10
+
+
+db_client = MongoClient(
+    DB_URL,
+    serverSelectionTimeoutMS=DB_TIMEOUT_MS)
+db_prices = db_client[DB_PRICES]
+db_other = db_client[DB_OTHER]
+
+df = pd.read_csv('op_data.csv')
+
+# Format time column.
+df['timestamp'] = df['timestamp'].apply(
+    lambda x: parser.parse(x))
+
+# Set index
+df.set_index("timestamp", inplace=True)
+
+# Pad any null bars forward.
+df.fillna(method="pad", inplace=True)
 
 trade = {
   "trade_id": 91,
