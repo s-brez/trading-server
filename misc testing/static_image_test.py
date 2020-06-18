@@ -4,7 +4,6 @@ from requests import Request, Session
 from requests.auth import AuthBase
 from urllib.parse import urlparse
 
-
 import mplfinance as mpl
 from io import BytesIO
 from PIL import Image, ImageGrab, ImageDraw
@@ -46,6 +45,15 @@ df.set_index("timestamp", inplace=True)
 
 # Pad any null bars forward.
 df.fillna(method="pad", inplace=True)
+
+# Rename columns for mpl.
+df.rename({'open': 'Open', 'high': 'High', 'low': 'Low',
+           'close': 'Close', 'volume': 'Volume'}, axis=1, inplace=True)
+
+# Use only the last x bars for the image.
+df = df.tail(75)
+
+print(df)
 
 trade = {
   "trade_id": 91,
@@ -208,5 +216,6 @@ plot = mpl.plot(df, type='candle', addplot=adp, style=style, hlines=hlines,
                 title="\n" + trade['model'] + ", " + trade['timeframe'],
                 datetime_format='%d-%m %H:%M', figscale=1, savefig=imgbuffer,
                 tight_layout=False)
+
 
 img = Image.open(imgbuffer).show()
