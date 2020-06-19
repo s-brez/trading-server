@@ -5,9 +5,12 @@ from requests.auth import AuthBase
 from urllib.parse import urlparse
 
 import mplfinance as mpl
+from io import BytesIO
+from PIL import Image, ImageGrab
 
 from dateutil import parser
 import pandas as pd
+import numpy as np
 import traceback
 import requests
 import hashlib
@@ -22,34 +25,6 @@ DB_PRICES = 'asset_price_master'
 DB_OTHER = 'holdings_trades_signals_master'
 DB_TIMEOUT_MS = 10
 
-
-db_client = MongoClient(
-    DB_URL,
-    serverSelectionTimeoutMS=DB_TIMEOUT_MS)
-db_prices = db_client[DB_PRICES]
-db_other = db_client[DB_OTHER]
-
-df = pd.read_csv('op_data.csv')
-
-# Format time column.
-df['timestamp'] = df['timestamp'].apply(
-    lambda x: parser.parse(x))
-
-# Set index
-df.set_index("timestamp", inplace=True)
-
-# Pad any null bars forward.
-df.fillna(method="pad", inplace=True)
-
-# Rename columns for mpl.
-df.rename({'open': 'Open', 'high': 'High', 'low': 'Low',
-           'close': 'Close', 'volume': 'Volume'}, axis=1, inplace=True)
-
-# Use only the last x bars for the image.
-df = df.tail(75)
-
-print(df)
-
 trade = {
   "trade_id": 91,
   "signal_timestamp": 1592390100,
@@ -63,6 +38,7 @@ trade = {
   "r_pnl": 0,
   "fees": 0,
   "timeframe": "1Min",
+  "entry_price": 9481.5,
   "exposure": None,
   "venue": "BitMEX",
   "symbol": "XBTUSD",
@@ -114,31 +90,97 @@ trade = {
   }
 }
 
+SNAPSHOT_SIZE = 50
+
+db_client = MongoClient(
+    DB_URL,
+    serverSelectionTimeoutMS=DB_TIMEOUT_MS)
+db_prices = db_client[DB_PRICES]
+db_other = db_client[DB_OTHER]
+
+df = pd.read_csv('op_data.csv')
+
+# Format time column.
+df['timestamp'] = df['timestamp'].apply(
+    lambda x: parser.parse(x))
+
+# Set index
+df.set_index("timestamp", inplace=True)
+
+# Pad any null bars forward.
+df.fillna(method="pad", inplace=True)
+
+# Rename columns for mpl.
+df.rename({'open': 'Open', 'high': 'High', 'low': 'Low',
+           'close': 'Close', 'volume': 'Volume'}, axis=1, inplace=True)
+
+# Use only the last x bars for the image.
+df = df.tail(SNAPSHOT_SIZE)
+
+entry = datetime.utcfromtimestamp(trade['signal_timestamp'])
+
+# Add entry marker
+entry_marker = [np.nan for i in range(SNAPSHOT_SIZE)]
+entry_marker[-1] = trade['entry_price']
+
+print(df)
+
 
 def create_addplots(df, mpl):
     """
     """
-    adps = []
+
+    adps, hlines = [], {'hlines': [], 'colors': [], 'linestyle': '--',
+                        'linewidths': 0.75}
+
+    # Add technical feature data (indicator values, etc).
     for col in list(df):
         if (
             col != "Open" and col != "High" and col != "Low"
                 and col != "Close" and col != "Volume"):
             adps.append(mpl.make_addplot(df[col]))
 
-    # Add markers for entry by creating a new series from DF
+    # Add entry marker
+    color = 'limegreen' if trade['direction'] == "LONG" else 'crimson'
+    adps.append(mpl.make_addplot(
+        entry_marker, type='scatter', markersize=200, marker='.', color=color))
 
-    return adps
+    # Plotting Stop and TP levels cause incorrect scaling when stop/TP are
+    # far away from entry. Fix later. Not urgent or required
+
+    # # Add stop and TP levels.
+    # o_ids = [i for i in trade['orders'].keys()]
+    # for o_id in o_ids:
+    #     if trade['orders'][o_id]['metatype'] == "STOP":
+    #         hlines['hlines'].append(trade['orders'][o_id]['price'])
+    #         hlines['colors'].append('crimson')
+
+    #     elif trade['orders'][o_id]['metatype'] == "TAKE_PROFIT":
+    #         hlines['hlines'].append(trade['orders'][o_id]['price'])
+    #         hlines['colors'].append('limegreen')
+
+    #     elif trade['orders'][o_id]['metatype'] == "FINAL_TAKE_PROFIT":
+    #         hlines['hlines'].append(trade['orders'][o_id]['price'])
+    #         hlines['colors'].append('limegreen')
+
+    # # Add an invisible hline to re-scale, in case stop/TP is far away.
+    # difference = max([abs(trade['entry_price'] - i) for i in hlines['hlines']])
+    # if max(hlines['hlines']) > difference:
+    #     hlines['hlines'].append(trade['entry_price'] - difference)
+    #     hlines['colors'].append('white')
+    # elif max(hlines['hlines']) < differe7nce:
+    #     hlines['hlines'].append(trade['entry_price'] + difference)
+    #     hlines['colors'].append('white')
+
+    return adps, hlines
 
 
-adp = create_addplots(df, mpl)
+adp, hlines = create_addplots(df, mpl)
+style = mpl.make_mpf_style(gridstyle='')
 
-entry = datetime.utcfromtimestamp(trade['signal_timestamp'])
+filename = str(trade['trade_id']) + "_" + trade['model'] + "_" + trade['timeframe']
 
-print(entry)
-print(df.iloc[-1]['Close'])
-print(df.index[-1])
+mpl.plot(df, type='candle', addplot=adp, style=style, hlines=hlines,
+         title="\n" + trade['model'] + ", " + trade['timeframe'],
+         datetime_format='%d-%m %H:%M', figscale=0.75, savefig=filename)
 
-if entry == df.index[-1]:
-    print("yes")
-
-mpl.plot(df, type='candle', addplot=adp)
