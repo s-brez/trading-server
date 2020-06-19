@@ -27,34 +27,6 @@ DB_PRICES = 'asset_price_master'
 DB_OTHER = 'holdings_trades_signals_master'
 DB_TIMEOUT_MS = 10
 
-
-db_client = MongoClient(
-    DB_URL,
-    serverSelectionTimeoutMS=DB_TIMEOUT_MS)
-db_prices = db_client[DB_PRICES]
-db_other = db_client[DB_OTHER]
-
-df = pd.read_csv('op_data.csv')
-
-# Format time column.
-df['timestamp'] = df['timestamp'].apply(
-    lambda x: parser.parse(x))
-
-# Set index
-df.set_index("timestamp", inplace=True)
-
-# Pad any null bars forward.
-df.fillna(method="pad", inplace=True)
-
-# Rename columns for mpl.
-df.rename({'open': 'Open', 'high': 'High', 'low': 'Low',
-           'close': 'Close', 'volume': 'Volume'}, axis=1, inplace=True)
-
-# Use only the last x bars for the image.
-df = df.tail(75)
-
-print(df)
-
 trade = {
   "trade_id": 91,
   "signal_timestamp": 1592390100,
