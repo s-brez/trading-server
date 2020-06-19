@@ -61,7 +61,7 @@ class SingleInstrumentTrade(Trade):
     """
 
     def __init__(self, logger, direction, venue, symbol, model, s_ts=None,
-                 timeframe=None, position=None, orders=None):
+                 timeframe=None, entry_price=None, position=None, orders=None):
         super().__init__()
         self.logger = logger
         self.type = "SINGLE_INSTRUMENT"
@@ -69,6 +69,8 @@ class SingleInstrumentTrade(Trade):
         self.instrument_count = 1
         self.direction = direction          # LONG or SHORT.
         self.signal_timestamp = s_ts        # Epoch timestamp of parent signal.
+        self.timeframe = timeframe          # Trade timeframe.
+        self.entry_price = entry_price      # Trade entry price.
         self.venue = venue                  # Exchange or broker traded with.
         self.symbol = symbol                # Instrument ticker code.
         self.model = model                  # Name of triggerstrategy.
@@ -86,6 +88,7 @@ class SingleInstrumentTrade(Trade):
             'model': self.model,
             'direction': self.direction,
             'timeframe': self.timeframe,
+            'entry_price': self.entry_price,
             'u_pnl': self.u_pnl,
             'r_pnl': self.r_pnl,
             'fees': self.fees,
