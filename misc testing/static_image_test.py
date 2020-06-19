@@ -6,7 +6,8 @@ from urllib.parse import urlparse
 
 import mplfinance as mpl
 from io import BytesIO
-from PIL import Image, ImageGrab
+from PIL import Image, ImageGrab, ImageDraw
+import IPython.display as IPydisplay
 
 from dateutil import parser
 import pandas as pd
@@ -180,7 +181,10 @@ style = mpl.make_mpf_style(gridstyle='')
 
 filename = str(trade['trade_id']) + "_" + trade['model'] + "_" + trade['timeframe']
 
+imgbuffer = BytesIO()
+
 mpl.plot(df, type='candle', addplot=adp, style=style, hlines=hlines,
          title="\n" + trade['model'] + ", " + trade['timeframe'],
-         datetime_format='%d-%m %H:%M', figscale=0.75, savefig=filename)
+         datetime_format='%d-%m %H:%M', figscale=0.75, savefig=imgbuffer)
 
+img = Image.open(imgbuffer).show()
