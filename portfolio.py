@@ -149,7 +149,8 @@ class Portfolio:
                 signal['symbol'],           # Instrument ticker code.
                 signal['strategy'],         # Model name.
                 signal['entry_timestamp'],  # Signal timestamp.
-                signal['timeframe']         # Signal timeframe.
+                signal['timeframe'],        # Signal timeframe.
+                signal['entry_price'],       # Entry price.
                 None,                       # Position object.
                 {str(i.get_order_dict()['order_id']): i.get_order_dict() for i in orders})  # noqa
 
