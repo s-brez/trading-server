@@ -10,7 +10,8 @@ Some rights reserved. See LICENSE.md, AUTHORS.md.
 """
 
 from abc import ABC, abstractmethod
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+from telegram.ext import (Updater, CommandHandler, MessageHandler, Filters,
+                          BasePersistence)
 import os
 
 
@@ -26,12 +27,25 @@ class Telegram(MessagingClient):
     """
     """
 
-    def __init__(self, logger):
+    def __init__(self, logger, portfolio):
         super().__init__()
         self.logger = logger
-        self.main(self.get_token())
+        self.token = self.get_token()
 
-        self.PIN = "1234"
+        self.whitelist = [410309133]
+        self.attempted_access = []
+
+        self.updater = Updater(token=self.token, use_context=True)
+        self.dp = self.updater.dispatcher
+
+        # Command message handler.
+        self.dp.add_handler(CommandHandler("start", self.start))
+
+        # Non-command message handlers.
+        self.dp.add_handler(MessageHandler(Filters.text, self.non_cmd))
+
+        self.updater.start_polling()
+        self.updater.idle()
 
     def get_token(self):
         """
@@ -45,42 +59,14 @@ class Telegram(MessagingClient):
 
     def start(self, update, context):
         """
-        Send a message when the command /start is issued.
+        Log start attempts.
         """
 
-        update.message.reply_text('Hi!')
+        self.attempted_access.append(update.message.from_user['id'])
+        if update.message.from_user['id'] in self.whitelist:
+            update.message.reply_text("User authenticated.")
 
-    def help_command(self, update, context):
+    def non_cmd(self, update, context):
         """
-        Send a message when the command /help is issued.
         """
-        update.message.reply_text('Help!')
-
-    def echo(self, update, context):
-        """
-        Echo the user message.
-        """
-        update.message.reply_text(update.message.text)
-
-    def main(self, token):
-        """Start the bot."""
-
-        updater = Updater(token=token, use_context=True)
-
-        # Get the dispatcher to register handlers
-        dp = updater.dispatcher
-
-        # on different commands - answer in Telegram
-        dp.add_handler(CommandHandler("start", self.start))
-        dp.add_handler(CommandHandler("help", self.help_command))
-
-        # on noncommand i.e message - echo the message on Telegram
-        dp.add_handler(MessageHandler(Filters.text, self.echo))
-
-        # Start the Bot
-        updater.start_polling()
-
-        # Run the bot until you press Ctrl-C or the process receives SIGINT,
-        # SIGTERM or SIGABRT. This should be used most of the time, since
-        # start_polling() is non-blocking and will stop the bot gracefully.
-        updater.idle()
+        pass
