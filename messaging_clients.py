@@ -33,7 +33,8 @@ class Telegram(MessagingClient):
         self.token = self.get_token()
 
         self.whitelist = [410309133]
-        self.attempted_access = []
+        self.access_attempts = []
+        self.users = {}
 
         self.updater = Updater(token=self.token, use_context=True)
         self.dp = self.updater.dispatcher
@@ -58,15 +59,24 @@ class Telegram(MessagingClient):
             raise Exception("Telegram bot token missing.")
 
     def start(self, update, context):
-        """
-        Log start attempts.
-        """
 
+        # Log any user who calls /start.
         self.attempted_access.append(update.message.from_user['id'])
+
+        # Store the users updater for later messages.
+        self.users[update.message.from_user['id']] = update.message
+
         if update.message.from_user['id'] in self.whitelist:
             update.message.reply_text("User authenticated.")
 
     def non_cmd(self, update, context):
         """
+        """
+        pass
+
+    def request_confirmation(self):
+        """
+        Send trade setup snapshot to authenticated users and ask for
+        permission to execute.
         """
         pass
