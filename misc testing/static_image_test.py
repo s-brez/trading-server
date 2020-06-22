@@ -189,5 +189,4 @@ plot = mpl.plot(df, type='candle', addplot=adp, style=style, hlines=hlines,
                 datetime_format='%d-%m %H:%M', figscale=1, savefig=imgbuffer,
                 tight_layout=False)
 
-
 img = Image.open(imgbuffer).show()
