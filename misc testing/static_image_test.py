@@ -183,8 +183,9 @@ filename = str(trade['trade_id']) + "_" + trade['model'] + "_" + trade['timefram
 
 imgbuffer = BytesIO()
 
-mpl.plot(df, type='candle', addplot=adp, style=style, hlines=hlines,
-         title="\n" + trade['model'] + ", " + trade['timeframe'],
-         datetime_format='%d-%m %H:%M', figscale=0.75, savefig=imgbuffer)
+plot = mpl.plot(df, type='candle', addplot=adp, style=style, hlines=hlines,
+                title="\n" + trade['model'] + ", " + trade['timeframe'],
+                datetime_format='%d-%m %H:%M', figscale=1, savefig=imgbuffer,
+                tight_layout=False)
 
 img = Image.open(imgbuffer).show()
