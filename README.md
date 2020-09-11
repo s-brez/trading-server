@@ -12,7 +12,7 @@ Account multicasting - trade as many accounts on as many platforms as desired.
 
 Trade consent via Telegram - Accept, veto or tweak trade setups prior to triggering.
 
-Blockchain signal auditing - publish trade signals to IPFS and Ethereum to emperically prove a models win rate over time.
+Blockchain signal auditing - publish trade signals to IPFS and Ethereum to empirically prove a models win rate over time.
 
 Order-splitting same-asset trades across venues for large account sizes.
 
