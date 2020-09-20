@@ -90,7 +90,6 @@ class Server:
         self.end_processing = None
         self.cycle_count = 0
 
-        self.run()
 
     def run(self):
         """
