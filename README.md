@@ -1,42 +1,37 @@
 # trading-server
-Multi-asset, multi-strategy, event-driven trade execution and management platform (OEMS) for trading common markets.
+Multi-asset, multi-strategy, event-driven trade execution and management platform for trading common markets autonomously on 1min+ timeframes.
 
-## Planned features
-Trade crypto, FX, CFD's, traditional markets etc with unified portfolio management at any API-accessible venue.
+## Current features
+Trade FX, crypto, CFD's, traditional markets etc from differenct providers, all with unified portfolio management
 
-Allocation-based risk management (allocate x% market exposure to specific strategies).
+Allocation-based risk management (allocate x% exposure to specific models)
 
-Discrete strategy feature library - quickly assemble and test new strategies.
+Discrete strategy feature library - quickly assemble new strategies
 
-Account multicasting - trade as many accounts on as many platforms as desired.
+Trade consent via Telegram (or write your own messaging client) - Accept, veto or tweak trade setups prior to triggering
 
-Trade consent via Telegram - Accept, veto or tweak trade setups prior to triggering.
+## WIP features
 
-Blockchain signal auditing - publish trade signals to IPFS and Ethereum to empirically prove a models win rate over time.
+Account multicasting - trade as many accounts on as many platforms as desired
 
-Order-splitting same-asset trades across venues for large account sizes.
+Browser frontend - dashboard for portfolio stats and individual trade metrics
 
-Event-driven backtesting.
+Integration with Backtrader for testing
 
-Execution simulation (paper trading/forward testing).
+Blockchain model auditing - publish trade signals to IPFS and Ethereum or BSC to empirically prove a models win rate over time
 
-Walk forward optimisation (walk forward analysis).
-
-Back office: accounting and compliance reporting.
-
-Browser frontend.
+Back office - accounting and compliance reports for tax time
 
 ## Venue support
 
 Exchange |  Status   | Asset classes
 ---------|-----------|------------
 BitMEX | Complete | Crypto derivatives
-IC Markets | WIP | FX, equity, commodity & index CFD's
+Binance | NA | Crypto spot & derivatives
 FTX | NA | Crypto spot, options & derivatives
-Binance | NA | Crypto spot
+Deribit | NA | Crypto derivatives & options
 IG Markets | NA | FX, equity, commodity & index CFD's
 Interactive Brokers | NA | FX, equity, commodity & index CFD's
-Deribit | NA | Crypto derivatives & options
 Bitfinex | NA | Crypto spot
 OKEx | NA | Crypto spot
 Huobi Global | NA | Crypto spot
@@ -51,20 +46,23 @@ Poloniex| NA | Crypto spot
 Bitflyer | NA | Crypto spot
 
 ## Market data
-1 minute resolution OHLCV bars for all watched instruments are stored with MongoDB. 
+1 minute resolution OHLCV bars for all watched instruments are stored with MongoDB (or please write your own DB wrapper and submit a pull request). 
 
-Parses tick data where live tick data is available, but doesn't store ticks locally. Tick-based models can be used, but the system is designed for 1Min+ resolution strategies.
-
+Software currently works for 1Min+ resolution strategies with tick-resolution strategy support planned later. With this in mind, the software converts tick data to 1 min bars where live tick data is available, but doesn't store ticks locally (i.e. it can handle tick data but doesnt yet use it).
+ 
 ## Strategy modelling
 Strategy implementations are not included. A simple moving average cross model is included as a guide only. 
+Custom strategy implementations, collaboration or any other enquiries: sam@sdbgroup.io.
 
-Custom strategy implementations or any other enquiries: sam@sdbgroup.io.
+## Collaboration
+Pull requests and discussion regarding new features are very welcome, please reach out.
 
 ## External libraries
-TA-LIB - https://mrjbq7.github.io/ta-lib/.
+TA-LIB - https://mrjbq7.github.io/ta-lib/
+Backtrader - https://www.backtrader.com/
 
 ## Acknowledgements
-Based on architecture described by Michael Halls-Moore at QuantStart.com (qsTrader), with inspiration from the writings of E. Chan and M. Lopez de Prado. Thanks all.
+Based on architecture described by Michael Halls-Moore at QuantStart.com (qsTrader), and written works by E. Chan and M. Lopez de Prado. Thanks all.
 
 ## License
 GNU GPLv3
