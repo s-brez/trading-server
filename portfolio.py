@@ -499,8 +499,6 @@ class Portfolio:
                 'total_active_trades': 0,
                 'trades': {}}
 
-            self.save_porfolio(default_portfolio)
-
             return default_portfolio
 
     def save_porfolio(self, portfolio):
