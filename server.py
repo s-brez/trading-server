@@ -18,17 +18,19 @@ from data import Datahandler
 from broker import Broker
 from bitmex import Bitmex
 from time import sleep
-import pymongo
-import time
-import logging
-import queue
 import datetime
+import pymongo
+import logging
+import time
+import queue
+import sys
+import json
 
 
 class Server:
     """
     Server routes system events amongst worker components via a queue in
-    an event handling loop. The queue is processed at the start of each minute.
+    an event handling loop. Objects in queue processed at start of each minute.
 
     Event loop lifecycle:
         1. A new minute begins - Tick data is parsed into 1 min bars.
@@ -49,6 +51,9 @@ class Server:
     DB_OTHER = 'holdings_trades_signals_master'
     DB_TIMEOUT_MS = 10
 
+    VENUES = ["Binance", "BitMEX"]
+    DB_OTHER_COLLS = ['trades', 'portfolio', 'signals']
+
     # Mins between recurring data diagnostics.
     DIAG_DELAY = 45
 
@@ -60,14 +65,15 @@ class Server:
         self.log_level = logging.DEBUG
         self.logger = self.setup_logger()
 
-        self.exchanges = self.load_exchanges(self.logger)
-
+        # Check DB state OK before connecting to any exchanges
         self.db_client = MongoClient(
             self.DB_URL,
             serverSelectionTimeoutMS=self.DB_TIMEOUT_MS)
         self.db_prices = self.db_client[self.DB_PRICES]
         self.db_other = self.db_client[self.DB_OTHER]
-        self.check_db_connection()
+        self.check_db(self.VENUES)
+
+        self.exchanges = self.exchange_wrappers(self.logger, self.VENUES)
 
         # Main event queue.
         self.events = queue.Queue(0)
@@ -89,7 +95,6 @@ class Server:
         self.start_processing = None
         self.end_processing = None
         self.cycle_count = 0
-
 
     def run(self):
         """
@@ -241,25 +246,26 @@ class Server:
 
         return logger
 
-    def load_exchanges(self, logger):
+    def exchange_wrappers(self, logger, op_venues):
         """
-        Create and return list of all exchange object.
+        Create and return a list of exchange wrappers.
 
         Args:
-            None.
+            op_venues: list of exchange/venue names to int.
 
         Returns:
-            exchanges: list of exchange objects.
+            exchanges: list of exchange connector objects.
 
         Raises:
             None.
         """
 
-        exchanges = []
-        exchanges.append(Bitmex(logger))
-        self.logger.debug("Initialised exchanges.")
+        # TODO: load exchange wrappers from 'op_venues' list param
 
-        return exchanges
+        venues = [Bitmex(logger)]
+        self.logger.debug("Initialised exchange connectors.")
+
+        return venues
 
     def seconds_til_next_minute(self: int):
         """
@@ -277,12 +283,12 @@ class Server:
         delay = 60 - now
         return delay
 
-    def check_db_connection(self):
+    def check_db(self, op_venues):
         """
-        Raise exception if DB connection not active.
+        Check DB connection, set up collections and indexing.
 
         Args:
-            None.
+            op_venues: list of operating venue names.
 
         Returns:
             None.
@@ -292,15 +298,65 @@ class Server:
         """
 
         try:
+
+            # If no exception, DBs exist
             time.sleep(self.DB_TIMEOUT_MS)
             self.db_client.server_info()
-            self.logger.debug(
-                "Connected to " + self.DB_PRICES + " at " +
-                self.DB_URL + ".")
+            self.logger.debug("Connected to DB client at " + self.DB_URL + ".")
+
+            price_colls = self.db_prices.list_collection_names()
+            other_colls = self.db_other.list_collection_names()
+
+            # Check price DB collections and indexing
+            for venue_name in op_venues:
+                if venue_name not in price_colls:
+
+                    self.logger.debug("Creating indexing for " + venue_name +
+                                      " in " + self.DB_PRICES + ".")
+
+                    self.db_prices[venue_name].create_index(
+                        [('timestamp', 1), ('symbol', 1)],
+                        name='timestamp_1_symbol_1',
+                        **{'unique': True, 'background': False})
+
+            # Check other DB collections and indexing
+            for coll_name in self.DB_OTHER_COLLS:
+                if coll_name not in other_colls:
+
+                    self.logger.debug("Creating indexing for " + coll_name +
+                                      " in " + self.DB_OTHER + ".")
+
+                    # No indexing required for other DB categories (yet)
+                    # Add here if required later
+
         except errors.ServerSelectionTimeoutError as e:
-            self.logger.debug(
-                "Failed to connect to " + self.DB_PRICES + " at " +
-                self.DB_URL + ".")
+            self.logger.debug("Failed to connect to " + self.DB_PRICES +
+                              " at " + self.DB_URL + ".")
             raise Exception()
 
-        # TODO: Create indexing if not present.
+    def db_indices(self):
+        """
+        Return index information as a list of dicts.
+
+        """
+
+        indices = []
+        for venue_name in self.VENUES:
+            for name, index_info in self.db_prices[venue_name].index_information().items():
+                keys = index_info['key']
+                del(index_info['ns'])
+                del(index_info['v'])
+                del(index_info['key'])
+                indices.append({'db': self.DB_PRICES, 'collection': venue_name,
+                                'keys': keys, 'info': index_info})
+
+        for coll_name in self.DB_OTHER_COLLS:
+            for name, index_info in self.db_prices[coll_name].index_information().items():
+                keys = index_info['key']
+                del(index_info['ns'])
+                del(index_info['v'])
+                del(index_info['key'])
+                indices.append({'db': self.DB_OTHER, 'collection': coll_name,
+                                'keys': keys, 'info': index_info})
+
+        return indices
