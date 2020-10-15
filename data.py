@@ -363,7 +363,7 @@ class Datahandler:
                 poll_count += 1
 
             # Sanity check, check that the retreived bars match gaps.
-            # self.logger.debug("Verifying new data...")
+            self.logger.debug("Verifying new data...")
             timestamps = [i['timestamp'] for i in bars_to_store]
             timestamps = sorted(timestamps)
             bars = sorted(report['gaps'])
@@ -373,8 +373,8 @@ class Datahandler:
                 doc_count_before = (
                     self.db_collections[report[
                         'exchange'].get_name()].count_documents(query))
-                # self.logger.debug("Storing new data...")
 
+                self.logger.debug("Storing new data...")
                 for bar in bars_to_store:
                     try:
                         self.db_collections[
