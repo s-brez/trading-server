@@ -319,9 +319,9 @@ class Datahandler:
 
             total_polls = str(len(bins))
 
-            delay = 1.5  # Wait time before attmepting to re-poll after error.
-            stagger = 2  # Delay co-efficient, increment with each failed poll.
-            timeout = 10  # Number of times to repoll before exception raised.
+            delay = 1.5     # Wait time before attempting re-poll after error.
+            stagger = 2     # Stagger request polls, increment failed polls.
+            timeout = 10    # No. of times to repoll before exception raised.
 
             # Poll venue API for replacement bars.
             bars_to_store = []
@@ -340,7 +340,7 @@ class Datahandler:
                         bars_to_store.append(bar)
                     # Reset stagger to base after successful poll.
                     stagger = 2
-                    time.sleep(stagger + 1)
+                    time.sleep(stagger + 0.3)
 
                 except Exception as e:
                     # Retry polling with an exponential delay.
