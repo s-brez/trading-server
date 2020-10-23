@@ -33,7 +33,7 @@ class Broker:
         self.db_other = db_other
         self.db_client = db_client
         self.live_trading = live_trading
-        self.tg = Telegram(self.logger)
+        self.tg = Telegram(logger, portfolio)
 
         # Container for order batches {trade_id: [order objects]}.
         self.orders = {}
