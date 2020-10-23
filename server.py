@@ -11,13 +11,9 @@ Some rights reserved. See LICENSE.md, AUTHORS.md.
 
 from pymongo import MongoClient, errors
 from multiprocessing import Process
-from portfolio import Portfolio
-from strategy import Strategy
 from threading import Thread
-from data import Datahandler
-from broker import Broker
-from bitmex import Bitmex
 from time import sleep
+import subprocess
 import datetime
 import pymongo
 import logging
@@ -25,6 +21,12 @@ import time
 import queue
 import sys
 import json
+
+from portfolio import Portfolio
+from strategy import Strategy
+from data import Datahandler
+from broker import Broker
+from bitmex import Bitmex
 
 
 class Server:
@@ -90,6 +92,10 @@ class Server:
 
         self.broker = Broker(self.exchanges, self.logger, self.portfolio,
                              self.db_other, self.db_client, self.live_trading)
+
+        # Start flask api in separate process
+        p = subprocess.Popen(["python", "api.py"])
+        self.logger.debug("Started flask API.")
 
         # Processing performance tracking variables.
         self.start_processing = None
@@ -233,7 +239,7 @@ class Server:
         ch = logging.StreamHandler()
         formatter = logging.Formatter(
             "%(asctime)s:%(levelname)s:%(module)s - %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S")
+            datefmt="%d-%m-%Y %H:%M:%S")
         ch.setFormatter(formatter)
         logger.addHandler(ch)
 

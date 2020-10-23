@@ -2,11 +2,11 @@
 Multi-asset, multi-strategy, event-driven trade execution and management platform for trading common markets autonomously on 1min+ timeframes.
 
 ## Current features
-Trade FX, crypto, CFD's, traditional markets etc from differenct providers, all with unified portfolio management
+Trade FX, crypto, CFD's, traditional markets etc (any venue with an API) with unified portfolio management
 
-Allocation-based risk management (allocate x% exposure to specific models)
+Allocation-based risk management (allocate x% exposure to specific strategies)
 
-Discrete strategy feature library - quickly assemble new strategies
+Strategy feature library - assemble new strategies from existing features
 
 Trade consent via Telegram (or write your own messaging client) - Accept, veto or tweak trade setups prior to triggering
 
@@ -14,13 +14,13 @@ Trade consent via Telegram (or write your own messaging client) - Accept, veto o
 
 Account multicasting - trade as many accounts on as many platforms as desired
 
-Browser frontend - dashboard for portfolio stats and individual trade metrics
+UI - web dashboard for portfolio stats and individual trade metrics 
 
-Integration with Backtrader for testing
+Integration with Backtrader
 
-Blockchain model auditing - publish trade signals to IPFS and Ethereum or BSC to empirically prove a models win rate over time
+Blockchain-based strategy auditing - publish trade signals to IPFS and Ethereum/BSC to empirically prove win rate over time
 
-Back office - accounting and compliance reports for tax time
+Accounting and compliance reporting
 
 ## Venue support
 
@@ -59,6 +59,7 @@ Pull requests and discussion regarding new features are very welcome, please rea
 
 ## External libraries
 TA-LIB - https://mrjbq7.github.io/ta-lib/
+
 Backtrader - https://www.backtrader.com/
 
 ## Acknowledgements
