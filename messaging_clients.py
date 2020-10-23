@@ -11,7 +11,8 @@ Some rights reserved. See LICENSE.md, AUTHORS.md.
 
 from abc import ABC, abstractmethod
 from telegram.ext import (Updater, CommandHandler, MessageHandler, Filters,
-                          BasePersistence)
+                          DictPersistence)
+import json
 import os
 
 
@@ -24,29 +25,37 @@ class MessagingClient(ABC):
 
 
 class Telegram(MessagingClient):
-    """
-    """
 
     def __init__(self, logger, portfolio):
         super().__init__()
         self.logger = logger
         self.token = self.get_token()
+        self.whitelist = self.get_whitelist()
 
-        self.whitelist = [410309133]
-        self.access_attempts = []
-        self.users = {}
-
-        self.updater = Updater(token=self.token, use_context=True)
+    def run(self):
+        p_dict_str = str(json.dumps({"whitelist": self.whitelist, "active": None}))
+        print(p_dict_str)
+        self.p = DictPersistence(bot_data_json=p_dict_str)
+        self.updater = Updater(token=self.token, persistence=self.p,
+                               use_context=True)
         self.dp = self.updater.dispatcher
-
-        # Command message handler.
         self.dp.add_handler(CommandHandler("start", self.start))
-
-        # Non-command message handlers.
-        self.dp.add_handler(MessageHandler(Filters.text, self.non_cmd))
+        # self.dp.add_handler(MessageHandler(Filters.text, self.non_cmd))
 
         self.updater.start_polling()
-        self.updater.idle()
+        # Do not use this if bot is running in another thread.
+        # self.updater.idle()
+
+    def start(self, update, context):
+
+        if update.message.from_user['id'] in context.bot_data['whitelist']:
+            update.message.reply_text("User authenticated.")
+            context.bot_data['active'] = {
+                "user_id": update.message.from_user['id'],
+                "chat_id": update.message['chat']['id']}
+
+            # print(update.message)
+            # print(context.bot_data['active'])
 
     def get_token(self):
         """
@@ -58,25 +67,12 @@ class Telegram(MessagingClient):
         else:
             raise Exception("Telegram bot token missing.")
 
-    def start(self, update, context):
-
-        # Log any user who calls /start.
-        self.attempted_access.append(update.message.from_user['id'])
-
-        # Store the users updater for later messages.
-        self.users[update.message.from_user['id']] = update.message
-
-        if update.message.from_user['id'] in self.whitelist:
-            update.message.reply_text("User authenticated.")
-
-    def non_cmd(self, update, context):
+    def get_whitelist(self):
         """
+        Load whitelist from environment variable.
         """
-        pass
 
-    def request_confirmation(self):
-        """
-        Send trade setup snapshot to authenticated users and ask for
-        permission to execute.
-        """
-        pass
+        if os.environ['TELEGRAM_BOT_WHITELIST']:
+            return os.environ['TELEGRAM_BOT_WHITELIST']
+        else:
+            raise Exception("Telegram bot token missing.")

@@ -4,11 +4,14 @@ from requests import Request, Session
 from requests.auth import AuthBase
 from urllib.parse import urlparse
 
+
 import mplfinance as mpl
 from io import BytesIO
 from PIL import Image, ImageGrab, ImageDraw
 import IPython.display as IPydisplay
 
+from time import sleep
+from threading import Thread
 from messaging_clients import Telegram
 import logging
 
@@ -185,16 +188,29 @@ adp, hlines = create_addplots(df, mpl)
 style = mpl.make_mpf_style(gridstyle='')
 
 filename = str(trade['trade_id']) + "_" + trade['model'] + "_" + trade['timeframe']
-
 imgbuffer = BytesIO()
+imgbuffer.name = filename
 
 plot = mpl.plot(df, type='candle', addplot=adp, style=style, hlines=hlines,
                 title="\n" + trade['model'] + ", " + trade['timeframe'],
                 datetime_format='%d-%m %H:%M', figscale=1, savefig=imgbuffer,
                 tight_layout=False)
 
-# img = Image.open(imgbuffer).show()
-
 portfolio = result
 
 tg_bot = Telegram(setup_logger(), portfolio)
+thread = Thread(target=lambda: tg_bot.run(), daemon=True)
+thread.start()
+
+print("Tg bot created in new thread")
+sleep(4)
+
+# hit /start in this time
+# image = Image.open(imgbuffer)
+# image.save(imgbuffer, "PNG")
+# imgbuffer.seek(0)
+
+bot_data = tg_bot.p.bot_data
+print(bot_data)
+
+# tg_bot.send_photo()
