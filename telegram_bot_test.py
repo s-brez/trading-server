@@ -4,7 +4,6 @@ from requests import Request, Session
 from requests.auth import AuthBase
 from urllib.parse import urlparse
 
-
 import mplfinance as mpl
 from io import BytesIO
 from PIL import Image, ImageGrab, ImageDraw
@@ -14,7 +13,6 @@ from time import sleep
 from threading import Thread
 from messaging_clients import Telegram
 import logging
-
 
 from dateutil import parser
 import pandas as pd
@@ -214,3 +212,4 @@ bot_data = tg_bot.p.bot_data
 print(bot_data)
 
 # tg_bot.send_photo()
+

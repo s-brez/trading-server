@@ -62,7 +62,6 @@ class SingleInstrumentTrade(Trade):
 
     def __init__(self, logger, direction, venue, symbol, model, s_ts=None,
                  timeframe=None, entry_price=None, position=None, orders=None):
-
         super().__init__()
         self.logger = logger
         self.type = "SINGLE_INSTRUMENT"
