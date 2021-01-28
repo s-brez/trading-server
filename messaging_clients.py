@@ -62,7 +62,7 @@ class Telegram(MessagingClient):
         Load bot token from environment variable.
         """
 
-        if os.environ['TELEGRAM_BOT_TOKEN']:
+        if os.environ['TELEGRAM_BOT_TOKEN'] is not None:
             return os.environ['TELEGRAM_BOT_TOKEN']
         else:
             raise Exception("Telegram bot token missing.")
@@ -72,7 +72,7 @@ class Telegram(MessagingClient):
         Load whitelist from environment variable.
         """
 
-        if os.environ['TELEGRAM_BOT_WHITELIST']:
+        if os.environ['TELEGRAM_BOT_WHITELIST'] is not None:
             return os.environ['TELEGRAM_BOT_WHITELIST']
         else:
             raise Exception("Telegram bot token missing.")
