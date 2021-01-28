@@ -589,7 +589,7 @@ class Strategy:
 
                         # Drop rows by index in-place.
                         self.data[venue][sym][tf].drop(
-                            self.data[venue][sym][tf].index[[to_drop]],
+                            self.data[venue][sym][tf].index[to_drop],
                             inplace=True)
 
                         # print("Timeframe:", tf, " \n", self.data[e][s][tf])
