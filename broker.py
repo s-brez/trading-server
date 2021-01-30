@@ -132,7 +132,7 @@ class FillAgent:
         thread = Thread(target=lambda: self.start(portfolio), daemon=True)
         thread.start()
 
-        self.logger.debug("Started FillAgent daemon.")
+        self.logger.debug("Started FillAgent.")
 
     def start(self, portfolio):
         """
