@@ -11,8 +11,6 @@ Some rights reserved. See LICENSE.md, AUTHORS.md.
 
 from trade_types import SingleInstrumentTrade, Order, Position, TradeID
 from event_types import OrderEvent, FillEvent
-from pymongo import MongoClient, errors
-import matplotlib.pyplot as plt
 import pymongo
 import queue
 import time
@@ -658,7 +656,11 @@ class Portfolio:
 
         print(json.dumps(trade, indent=2))
         print(op_data)
+
+        # dump trade data to file for ease of testing next stage
         op_data.to_csv('op_data.csv')
+        with open('trade.json', 'w') as outfile:
+            json.dump(trade, outfile)
 
         sys.exit(0)
 
