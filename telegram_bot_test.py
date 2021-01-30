@@ -5,7 +5,7 @@ from requests.auth import AuthBase
 from urllib.parse import urlparse
 
 import mplfinance as mpl
-from io import BytesIO
+from io import BytesIO, StringIO
 from PIL import Image, ImageGrab, ImageDraw
 # import IPython.display as IPydisplay
 
@@ -61,78 +61,10 @@ def setup_logger():
     return logger
 
 
-trade = {
-  "trade_id": 91,
-  "signal_timestamp": 1592390100,
-  "type": "SINGLE_INSTRUMENT",
-  "active": False,
-  "venue_count": 1,
-  "instrument_count": 1,
-  "model": "EMA Cross - Testing only",
-  "direction": "SHORT",
-  "u_pnl": 0,
-  "r_pnl": 0,
-  "fees": 0,
-  "timeframe": "1Min",
-  "entry_price": 9481.5,
-  "exposure": None,
-  "venue": "BitMEX",
-  "symbol": "XBTUSD",
-  "position": None,
-  "order_count": 2,
-  "orders": {
-    "91-1": {
-      "trade_id": 91,
-      "order_id": "91-1",
-      "timestamp": None,
-      "avg_fill_price": None,
-      "currency": None,
-      "venue_id": None,
-      "venue": "BitMEX",
-      "symbol": "XBTUSD",
-      "direction": "SHORT",
-      "size": 100.0,
-      "price": 9481.5,
-      "order_type": "MARKET",
-      "metatype": "ENTRY",
-      "void_price": 9671.13,
-      "trail": False,
-      "reduce_only": False,
-      "post_only": False,
-      "batch_size": 0,
-      "status": "UNFILLED"
-    },
-    "91-2": {
-      "trade_id": 91,
-      "order_id": "91-2",
-      "timestamp": None,
-      "avg_fill_price": None,
-      "currency": None,
-      "venue_id": None,
-      "venue": "BitMEX",
-      "symbol": "XBTUSD",
-      "direction": "LONG",
-      "size": 100.0,
-      "price": 9671.13,
-      "order_type": "STOP",
-      "metatype": "STOP",
-      "void_price": None,
-      "trail": False,
-      "reduce_only": True,
-      "post_only": False,
-      "batch_size": 0,
-      "status": "UNFILLED"
-    }
-  }
-}
-
 SNAPSHOT_SIZE = 50
 
-db_client = MongoClient(
-    DB_URL,
-    serverSelectionTimeoutMS=DB_TIMEOUT_MS)
-db_prices = db_client[DB_PRICES]
-db_other = db_client[DB_OTHER]
+with open('trade.json') as json_file:
+    trade = json.load(json_file)
 
 df = pd.read_csv('op_data.csv')
 
@@ -185,13 +117,11 @@ def create_addplots(df, mpl):
 adp, hlines = create_addplots(df, mpl)
 style = mpl.make_mpf_style(gridstyle='')
 
-filename = str(trade['trade_id']) + "_" + trade['model'] + "_" + trade['timeframe']
-imgbuffer = BytesIO()
-imgbuffer.name = filename
+filename = str(trade['trade_id']) + "_" + str(trade['signal_timestamp']) + '_' + trade['model'] + "_" + trade['timeframe']
 
 plot = mpl.plot(df, type='candle', addplot=adp, style=style, hlines=hlines,
                 title="\n" + trade['model'] + ", " + trade['timeframe'],
-                datetime_format='%d-%m %H:%M', figscale=1, savefig=imgbuffer,
+                datetime_format='%d-%m %H:%M', figscale=1, savefig=filename,
                 tight_layout=False)
 
 portfolio = result
@@ -204,9 +134,6 @@ print("Tg bot created in new thread")
 sleep(4)
 
 # hit /start in this time
-# image = Image.open(imgbuffer)
-# image.save(imgbuffer, "PNG")
-# imgbuffer.seek(0)
 
 bot_data = tg_bot.p.bot_data
 print(bot_data)
