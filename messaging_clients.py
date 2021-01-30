@@ -48,7 +48,8 @@ class Telegram(MessagingClient):
 
     def start(self, update, context):
 
-        if update.message.from_user['id'] in context.bot_data['whitelist']:
+        # print(update.message.from_user['id'])
+        if str(update.message.from_user['id']) in context.bot_data['whitelist']:
             update.message.reply_text("User authenticated.")
             context.bot_data['active'] = {
                 "user_id": update.message.from_user['id'],
