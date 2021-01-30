@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 import mplfinance as mpl
 from io import BytesIO
 from PIL import Image, ImageGrab, ImageDraw
-import IPython.display as IPydisplay
+# import IPython.display as IPydisplay
 
 from time import sleep
 from threading import Thread
