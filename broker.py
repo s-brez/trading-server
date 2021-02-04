@@ -9,14 +9,12 @@ Licensed under GNU General Public License 3.0 or later.
 Some rights reserved. See LICENSE.md, AUTHORS.md.
 """
 
-from messaging_clients import Telegram
+
 from event_types import FillEvent
 from threading import Thread
 from time import sleep
-import traceback
 import datetime
 import json
-import sys
 
 
 class Broker:
@@ -26,14 +24,14 @@ class Broker:
     """
 
     def __init__(self, exchanges, logger, portfolio, db_other, db_client,
-                 live_trading):
+                 live_trading, telegram):
         self.exchanges = {i.get_name(): i for i in exchanges}
         self.logger = logger
         self.pf = portfolio
         self.db_other = db_other
         self.db_client = db_client
         self.live_trading = live_trading
-        self.tg = Telegram(logger, portfolio)
+        self.tg = telegram
 
         # Container for order batches {trade_id: [order objects]}.
         self.orders = {}
@@ -72,7 +70,7 @@ class Broker:
 
                 # If batch complete, submit order batch for execution.
                 if order_count == new_order['batch_size']:
-                    self.logger.debug(
+                    self.logger.info(
                         "Trade " + str(trade_id) + " order batch ready.")
 
                     for order in self.orders[trade_id]:
@@ -95,9 +93,8 @@ class Broker:
             for t_id in to_remove:
                 del self.orders[t_id]
 
-        except KeyError as ke:
+        except KeyError:
             self.orders[new_order['trade_id']] = [new_order]
-            # print(traceback.format_exc())
 
     def check_fills(self, events):
         """
@@ -132,7 +129,7 @@ class FillAgent:
         thread = Thread(target=lambda: self.start(portfolio), daemon=True)
         thread.start()
 
-        self.logger.debug("Started FillAgent.")
+        self.logger.info("Started FillAgent.")
 
     def start(self, portfolio):
         """

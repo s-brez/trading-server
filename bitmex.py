@@ -71,7 +71,7 @@ class Bitmex(Exchange):
             self.logger, self.symbols, self.channels, self.WS_URL,
             self.api_key, self.api_secret)
         if not self.ws.ws.sock.connected:
-            self.logger.debug("Failed to to connect to BitMEX websocket.")
+            self.logger.info("Failed to to connect to BitMEX websocket.")
 
         # Set default https request retry behaviour.
         retries = Retry(
@@ -91,7 +91,7 @@ class Bitmex(Exchange):
     def parse_ticks(self):
 
         if not self.ws.ws:
-            self.logger.debug("BitMEX websocket disconnected.")
+            self.logger.info("BitMEX websocket disconnected.")
         else:
             all_ticks = self.ws.get_ticks()
             target_minute = datetime.now().minute - 1
@@ -105,7 +105,7 @@ class Bitmex(Exchange):
                     if type(ts) is not datetime:
                         ts = parser.parse(ts)
                 except Exception:
-                    self.logger.debug(traceback.format_exc())
+                    self.logger.info(traceback.format_exc())
 
                 # Scrape prev minutes ticks.
                 if ts.minute == target_minute:
@@ -148,7 +148,7 @@ class Bitmex(Exchange):
             f"startTime={start}&reverse=false")
 
         # Uncomment below line to manually verify results.
-        # self.logger.debug("API request string: " + payload)
+        # self.logger.info("API request string: " + payload)
 
         bars_to_parse = requests.get(payload).json()
 
@@ -178,7 +178,7 @@ class Bitmex(Exchange):
             response = requests.get(payload).json()[0]['timestamp']
             timestamp = int(parser.parse(response).timestamp())
 
-            self.logger.debug(
+            self.logger.info(
                 "BitMEX" + symbol + " origin timestamp: " + str(timestamp))
 
             return timestamp
@@ -533,15 +533,15 @@ class Bitmex(Exchange):
 
             elif 401 <= r.status_code <= 404:
                 # Syntax, auth or system limit error messages, raise exception.
-                # Code likely wrong if this occurs.
+                # Code or API keys likely wrong if this occurs.
                 raise Exception(r.status_code, r.json()['error']['message'])
 
             elif r.status_code == 503:
                 # Server overloaded, retry after 500ms, dont raise exception.
-                self.logger.debug(
+                self.logger.info(
                     str(r.status_code) + " " + r.json()['error']['message'])
             else:
-                self.logger.debug(str(r.status_code), str(r.json()))
+                self.logger.info(str(r.status_code), str(r.json()))
 
         updated_orders = []
         if order_confirmations:

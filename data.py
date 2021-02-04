@@ -89,14 +89,14 @@ class Datahandler:
         """
 
         # Record tick parse performance.
-        self.logger.debug("Started parsing new ticks.")
+        self.logger.info("Started parsing new ticks.")
         start_parse = time.time()
         for exchange in self.exchanges:
             exchange.parse_ticks()
         end_parse = time.time()
         duration = round(end_parse - start_parse, 5)
 
-        self.logger.debug(
+        self.logger.info(
             "Parsed " + str(self.total_instruments) +
             " instruments' ticks in " + str(duration) + " seconds.")
         self.track_tick_processing_performance(duration)
@@ -151,20 +151,20 @@ class Datahandler:
 
         # Get a status report for each symbols stored data.
         reports = []
-        self.logger.debug("Started data diagnostics.")
+        self.logger.info("Started data diagnostics.")
         for exchange in self.exchanges:
             for symbol in exchange.get_symbols():
                 reports.append(self.data_status_report(
                     exchange, symbol, output))
 
         # Resolve discrepancies in stored data.
-        self.logger.debug("Resolving missing data.")
+        self.logger.info("Resolving missing data.")
 
         for report in reports:
             self.backfill_gaps(report)
             self.replace_null_bars(report)
 
-        self.logger.debug("Data diagnostics complete.")
+        self.logger.info("Data diagnostics complete.")
         self.ready = True
 
     def save_new_bars_to_db(self):
@@ -186,7 +186,7 @@ class Datahandler:
                 bar = self.bars_save_to_db.get(False)
 
             except queue.Empty:
-                self.logger.debug(
+                self.logger.info(
                     "Wrote " + str(count) + " new bars to database " +
                     str(self.db.name) + ".")
                 break
@@ -328,7 +328,7 @@ class Datahandler:
             for i in bins:
                 # Progress indicator.
                 if poll_count:
-                    self.logger.debug(
+                    self.logger.info(
                         "Poll " + str(
                             poll_count) + " of " + total_polls + " " +
                         str(report['symbol']) + " " + str(
@@ -363,7 +363,7 @@ class Datahandler:
                 poll_count += 1
 
             # Sanity check, check that the retreived bars match gaps.
-            self.logger.debug("Verifying new data...")
+            self.logger.info("Verifying new data...")
             timestamps = [i['timestamp'] for i in bars_to_store]
             timestamps = sorted(timestamps)
             bars = sorted(report['gaps'])
@@ -374,14 +374,14 @@ class Datahandler:
                     self.db_collections[report[
                         'exchange'].get_name()].count_documents(query))
 
-                self.logger.debug("Storing new data...")
+                self.logger.info("Storing new data...")
                 for bar in bars_to_store:
                     try:
                         self.db_collections[
                             report['exchange'].get_name()].insert_one(bar)
                     except pymongo.errors.DuplicateKeyError:
                         # Skip duplicates that exist in DB.
-                        self.logger.debug(
+                        self.logger.info(
                             "Stored duplicate bars exist. Skipping.")
                         continue
 
@@ -391,7 +391,7 @@ class Datahandler:
 
                 doc_count = doc_count_after - doc_count_before
 
-                self.logger.debug(
+                self.logger.info(
                     "Saved " + str(doc_count) + " missing " +
                     report['symbol'] + " bars.")
                 return True
@@ -407,7 +407,7 @@ class Datahandler:
                     "Fetched bars do not match missing timestamps.")
         else:
             # Return false if there is no missing data.
-            self.logger.debug("No missing data.")
+            self.logger.info("No missing data.")
             return False
 
     def split_oversize_bins(self, original_bins, max_bin_size):
@@ -543,14 +543,14 @@ class Datahandler:
                     self.db_collections[report[
                         'exchange'].get_name()].count_documents(
                             {"symbol": report['symbol']}))
-                self.logger.debug(
+                self.logger.info(
                     "Replaced " + str(doc_count) + " " + report['symbol'] +
                     " null bars.")
                 return True
             else:
                 raise Exception(
                     "Fetched bars do not match missing timestamps.")
-                self.logger.debug(
+                self.logger.info(
                     "Bars length: " + str(len(bars)) +
                     " Timestamps length: " + str(len(timestamps)))
         else:
