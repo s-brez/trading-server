@@ -107,7 +107,7 @@ class Strategy:
             timestamp = event.get_bar()['timestamp']
             timeframes = self.get_relevant_timeframes(timestamp)
 
-            self.logger.debug("Event timestamp just in: " + str(
+            self.logger.info("Event timestamp just in: " + str(
                 datetime.utcfromtimestamp(timestamp)))
 
             # Store trigger timeframes (operating timeframes).
@@ -168,14 +168,14 @@ class Strategy:
                 self.data[venue][sym][tf] = self.data[venue][sym][tf].append(
                     new_row)
 
-                self.logger.debug(
+                self.logger.info(
                     "Appended new row to " + str(tf) + " dataset.")
 
             # If dataframe is empty, populate a new one.
             elif size == 0:
                 self.data[venue][sym][tf] = self.build_dataframe(
                     venue, sym, tf, bar)
-                self.logger.debug(
+                self.logger.info(
                     "Created new df for " + str(tf) + " dataset.")
 
             # Final pad in case of null bars.
@@ -192,11 +192,11 @@ class Strategy:
             inst = model.get_instruments()[venue][sym]
 
             if inst == sym:
-                self.logger.debug(
+                self.logger.info(
                     model.get_name() + ": " + venue + ": " + inst)
-                self.logger.debug(
+                self.logger.info(
                     "Operating timeframes: " + str(op_timeframes))
-                self.logger.debug(
+                self.logger.info(
                     "Required timeframes: " + str(timeframes))
 
     def calculate_features(self, event, timeframes):
@@ -488,7 +488,7 @@ class Strategy:
 
         models = []
         models.append(EMACrossTestingOnly(logger))
-        self.logger.debug("Initialised models.")
+        self.logger.info("Initialised models.")
         return models
 
     def init_dataframes(self, empty=False):
@@ -520,7 +520,7 @@ class Strategy:
 
         # Only log output if data is loaded.
         if not empty:
-            self.logger.debug(
+            self.logger.info(
                 "Initialised " + str(symbolcount * len(self.ALL_TIMEFRAMES)) +
                 " timeframe datasets in " + str(duration) + " seconds.")
 
@@ -619,7 +619,7 @@ class Strategy:
         timestamp = time - timedelta(hours=0, minutes=1)
         timeframes = []
 
-        self.logger.debug("Timestamp just elapsed: " + str(timestamp))
+        self.logger.info("Timestamp just elapsed: " + str(timestamp))
 
         for i in self.MINUTE_TIMEFRAMES:
             self.minute_timeframe(i, timestamp, timeframes)
@@ -683,7 +683,7 @@ class Strategy:
 
             except queue.Empty:
                 if count:
-                    self.logger.debug(
+                    self.logger.info(
                         "Wrote " + str(count) + " new signals to database " +
                         str(self.db_other.name) + ".")
                 break
@@ -693,8 +693,9 @@ class Strategy:
                     count += 1
                     # Store signal in relevant db collection.
                     try:
+
                         self.db_other['signals'].insert_one(
-                            signal.get_signal_dict())
+                            self.remove_element(signal.get_signal_dict(), "op_data"))
 
                     # Skip duplicates if they exist.
                     except pymongo.errors.DuplicateKeyError:
