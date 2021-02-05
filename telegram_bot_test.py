@@ -61,7 +61,7 @@ def setup_logger():
     return logger
 
 
-SNAPSHOT_SIZE = 50
+SNAPSHOT_SIZE = 100
 
 with open('trade.json') as json_file:
     trade = json.load(json_file)
@@ -78,18 +78,28 @@ df.set_index("timestamp", inplace=True)
 # Pad any null bars forward.
 df.fillna(method="pad", inplace=True)
 
-# Rename columns for mpl.
+# Rename columns for mplfinance.
 df.rename({'open': 'Open', 'high': 'High', 'low': 'Low',
            'close': 'Close', 'volume': 'Volume'}, axis=1, inplace=True)
 
 # Use only the last x bars for the image.
 df = df.tail(SNAPSHOT_SIZE)
 
-entry = datetime.utcfromtimestamp(trade['signal_timestamp'])
 
-# Add entry marker
+# Get markers for trades triggered by the current bar
+entry = datetime.utcfromtimestamp(trade['signal_timestamp'])
 entry_marker = [np.nan for i in range(SNAPSHOT_SIZE)]
 entry_marker[-1] = trade['entry_price']
+stop = None
+stop_marker = [np.nan for i in range(SNAPSHOT_SIZE)]
+for order in trade['orders'].values():
+    if order['order_type'] == "STOP":
+        stop = order['price']
+        stop_marker[-1] = stop
+
+# Get markers for trades triggered by interaction historic bars
+
+print(json.dumps(trade, indent=2))
 
 
 def create_addplots(df, mpl):
@@ -97,7 +107,7 @@ def create_addplots(df, mpl):
     """
 
     adps, hlines = [], {'hlines': [], 'colors': [], 'linestyle': '--',
-                        'linewidths': 0.75}
+                        'linewidths': 0.5}
 
     # Add technical feature data (indicator values, etc).
     for col in list(df):
@@ -107,36 +117,35 @@ def create_addplots(df, mpl):
             adps.append(mpl.make_addplot(df[col]))
 
     # Add entry marker
-    color = 'limegreen' if trade['direction'] == "LONG" else 'crimson'
     adps.append(mpl.make_addplot(
-        entry_marker, type='scatter', markersize=200, marker='.', color=color))
+        entry_marker, type='scatter', markersize=500, marker="_",
+        color='limegreen'))
+
+    # Add stop marker
+    if stop:
+        adps.append(mpl.make_addplot(
+            stop_marker, type='scatter', markersize=500, marker='_',
+            color='crimson'))
 
     return adps, hlines
 
 
 adp, hlines = create_addplots(df, mpl)
-style = mpl.make_mpf_style(gridstyle='')
-
-filename = str(trade['trade_id']) + "_" + str(trade['signal_timestamp']) + '_' + trade['model'] + "_" + trade['timeframe']
+mc = mpl.make_marketcolors(up='w', down='black', wick="w", edge='w')
+style = mpl.make_mpf_style(gridstyle='', base_mpf_style='nightclouds',
+                           marketcolors=mc)
+filename = "setup_images/" + str(trade['trade_id']) + "_" + str(trade['signal_timestamp']) + '_' + trade['model'] + "_" + trade['timeframe']
 
 plot = mpl.plot(df, type='candle', addplot=adp, style=style, hlines=hlines,
-                title="\n" + trade['model'] + ", " + trade['timeframe'],
+                title="\n" + trade['model'] + " - " + trade['timeframe'],
                 datetime_format='%d-%m %H:%M', figscale=1, savefig=filename,
+                # datetime_format='%d-%m %H:%M', figscale=1,
                 tight_layout=False)
 
 portfolio = result
 
-tg_bot = Telegram(setup_logger(), portfolio)
-thread = Thread(target=lambda: tg_bot.run(), daemon=True)
-thread.start()
+tg_bot = Telegram(setup_logger())
 
-print("Tg bot created in new thread")
-sleep(4)
+message = "Entry: " + str(trade['entry_price']) + " \nStop: " + str(stop) + "\n"
 
-# hit /start in this time
-
-bot_data = tg_bot.p.bot_data
-print(bot_data)
-
-# tg_bot.send_photo()
-
+tg_bot.send_image(filename + ".png", message)

@@ -9,11 +9,10 @@ Licensed under GNU General Public License 3.0 or later.
 Some rights reserved. See LICENSE.md, AUTHORS.md.
 """
 
-from abc import ABC, abstractmethod
-from telegram.ext import (Updater, CommandHandler, MessageHandler, Filters,
-                          DictPersistence)
+from abc import ABC
 import json
 import os
+import requests
 
 
 class MessagingClient(ABC):
@@ -26,37 +25,29 @@ class MessagingClient(ABC):
 
 class Telegram(MessagingClient):
 
-    def __init__(self, logger, portfolio):
+    URL = "https://api.telegram.org/bot"
+
+    def __init__(self, logger):
         super().__init__()
         self.logger = logger
         self.token = self.get_token()
         self.whitelist = self.get_whitelist()
 
-    def run(self):
-        p_dict_str = str(json.dumps({"whitelist": self.whitelist, "active": None}))
-        print(p_dict_str)
-        self.p = DictPersistence(bot_data_json=p_dict_str)
-        self.updater = Updater(token=self.token, persistence=self.p,
-                               use_context=True)
-        self.dp = self.updater.dispatcher
-        self.dp.add_handler(CommandHandler("start", self.start))
-        # self.dp.add_handler(MessageHandler(Filters.text, self.non_cmd))
+    def send_image(self, image_path, text):
+        print(image_path)
+        print(text)
 
-        self.updater.start_polling()
-        # Do not use this if bot is running in another thread.
-        # self.updater.idle()
+        print(self.whitelist)
 
-    def start(self, update, context):
-
-        # print(update.message.from_user['id'])
-        if str(update.message.from_user['id']) in context.bot_data['whitelist']:
-            update.message.reply_text("User authenticated.")
-            context.bot_data['active'] = {
-                "user_id": update.message.from_user['id'],
-                "chat_id": update.message['chat']['id']}
-
-            # print(update.message)
-            # print(context.bot_data['active'])
+        # Send image only to whitelisted users with active status
+        for user_id in json.loads(self.whitelist):
+            url = self.URL + self.token + "/sendPhoto"
+            print(url)
+            print(user_id)
+            files = {'photo': open(image_path, 'rb')}
+            data = {'chat_id': user_id}
+            r = requests.post(url, files=files, data=data)
+            print(r.status_code, r.reason, r.content)
 
     def get_token(self):
         """

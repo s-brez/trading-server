@@ -11,6 +11,12 @@ Some rights reserved. See LICENSE.md, AUTHORS.md.
 
 from trade_types import SingleInstrumentTrade, Order, Position, TradeID
 from event_types import OrderEvent, FillEvent
+
+import numpy as np
+import traceback
+
+from datetime import datetime
+import mplfinance as mpl
 import pymongo
 import queue
 import time
@@ -31,15 +37,18 @@ class Portfolio:
     MAX_SIMULTANEOUS_POSITIONS = 1
     MAX_CORRELATED_TRADES = 2
     MAX_ACCEPTED_DRAWDOWN = 25  # Percentage as integer.
-    RISK_PER_TRADE = 2          # Percentage as integer OR 'KELLY'
+    RISK_PER_TRADE = 1          # Percentage as integer OR 'KELLY'
     DEFAULT_STOP = 2            # Default (%) stop distance if none provided.
+    SNAPSHOT_SIZE = 100         # Lookback period for consent images
 
-    def __init__(self, exchanges, logger, db_other, db_client, models):
+    def __init__(self, exchanges, logger, db_other, db_client, models,
+                 telegram):
         self.exchanges = {i.get_name(): i for i in exchanges}
         self.logger = logger
         self.db_other = db_other
         self.db_client = db_client
         self.models = models
+        self.telegram = telegram
 
         self.trades_save_to_db = queue.Queue(0)
         self.id_gen = TradeID(db_other)
@@ -163,12 +172,12 @@ class Portfolio:
             for order in orders:
                 order.batch_size = batch_size
 
-            # Generate static image of trade setup.
+            # Send setup image to users for review
             t_dict = trade.get_trade_dict()
             self.generate_trade_setup_image(
                 t_dict, signal['op_data'])
 
-            # Only raise orders and add to portfilio if within risk limits.
+            # Only submit orders and update portfolio if within risk limits.
             if self.within_risk_limits(signal):
                 self.pf['trades'][str(trade_id)] = t_dict
                 self.save_porfolio(self.pf)
@@ -182,7 +191,7 @@ class Portfolio:
         elif signal['instrument_count'] > 2:
             pass
 
-        self.logger.debug("Trade " + str(trade_id) + " registered.")
+        self.logger.info("Trade " + str(trade_id) + " registered.")
 
     def new_fill(self, fill_event):
         """
@@ -467,7 +476,7 @@ class Portfolio:
         # TODO.
 
         self.save_porfolio(portfolio)
-        self.logger.debug("Portfolio verification complete.")
+        self.logger.info("Portfolio verification complete.")
 
     def load_portfolio(self, ID=1):
         """
@@ -518,9 +527,9 @@ class Portfolio:
             {"id": portfolio['id']}, portfolio, upsert=True)
 
         if result.acknowledged:
-            self.logger.debug("Portfolio save successful.")
+            self.logger.info("Portfolio save successful.")
         else:
-            self.logger.debug("Portfolio save unsuccessful.")
+            self.logger.info("Portfolio save unsuccessful.")
 
     def within_risk_limits(self, signal):
         """
@@ -540,19 +549,19 @@ class Portfolio:
                 if not self.correlated(signal):  # Correlation check.
                     return True
                 else:
-                    self.logger.debug(
+                    self.logger.info(
                         "Trade skipped. Correlated positions limit reached.")
                     return False
             else:
-                self.logger.debug("Trade skipped. Drawdown limit reached.")
+                self.logger.info("Trade skipped. Drawdown limit reached.")
                 return False
         else:
-            self.logger.debug("Trade skipped. Position limit reached.")
+            self.logger.info("Trade skipped. Position limit reached.")
             return False
 
     def calculate_exposure(self, trade):
         """
-        Calculate the currect capital at risk for the given trade.
+        Calculate capital at risk for the given trade.
         """
         pass
 
@@ -632,7 +641,7 @@ class Portfolio:
 
             except queue.Empty:
                 if count:
-                    self.logger.debug(
+                    self.logger.info(
                         "Wrote " + str(count) + " new trades to database " +
                         str(self.db_other.name) + ".")
                 break
@@ -651,17 +660,92 @@ class Portfolio:
 
     def generate_trade_setup_image(self, trade, op_data):
 
+        self.logger.INFO("Creating signal snapshot image")
+
+        # Create the image directory if it doesnt exist
         if not os.path.exists("setup_images"):
             os.mkdir("setup_images")
 
-        print(json.dumps(trade, indent=2))
-        print(op_data)
-
-        # dump trade data to file for ease of testing next stage
+        # Dump trade data to file for ease of testing next stage
+        # Remove from production
         op_data.to_csv('op_data.csv')
         with open('trade.json', 'w') as outfile:
             json.dump(trade, outfile)
 
-        sys.exit(0)
+        # Reformat dataframe for mplfinance compatibility
+        df = op_data
+        df.rename(
+            {'open': 'Open', 'high': 'High', 'low': 'Low',
+             'close': 'Close', 'volume': 'Volume'}, axis=1,
+            inplace=True)
+        df = df.tail(self.SNAPSHOT_SIZE)
 
-        # Create the plot
+        # Get markers for trades triggered by the current bar
+        entry_marker = [np.nan for i in range(self.SNAPSHOT_SIZE)]
+        entry_marker[-1] = trade['entry_price']
+        stop = None
+        stop_marker = [np.nan for i in range(self.SNAPSHOT_SIZE)]
+        for order in trade['orders'].values():
+            if order['order_type'] == "STOP":
+                stop = order['price']
+                stop_marker[-1] = stop
+
+        # TODO: Trades triggered by interaction with historic bars
+
+        # Create plot figures
+        adp, hlines = self.create_addplots(df, mpl, stop, entry_marker,
+                                           stop_marker)
+        mc = mpl.make_marketcolors(up='w', down='black', wick="w", edge='w')
+        style = mpl.make_mpf_style(gridstyle='', base_mpf_style='nightclouds',
+                                   marketcolors=mc)
+        filename = "setup_images/" + str(trade['trade_id']) + "_" + str(trade['signal_timestamp']) + '_' + trade['model'] + "_" + trade['timeframe']
+
+        print("attempting to send setup image")
+        try:
+            plot = mpl.plot(df, type='candle', addplot=adp, style=style, hlines=hlines,
+                            title="\n" + trade['model'] + " - " + trade['timeframe'],
+                            datetime_format='%d-%m %H:%M', figscale=1, savefig=filename,
+                            tight_layout=False)
+
+        except ValueError as ve:
+            print(ve)
+            traceback.print_exc()
+            print(df['Open'])
+            for i in df['Open']:
+                print(type(i), i)
+            sys.exit(0)
+
+        message = "Entry: " + str(trade['entry_price']) + " \nStop: " + str(stop) + "\n"
+
+        try:
+            self.telegram.send_image(filename + ".png", message)
+        except Exception as ex:
+            self.logger.info("Failed to send setup image via telegram.")
+            print(ex)
+
+    def create_addplots(self, df, mpl, stop, entry_marker, stop_marker):
+        """
+        """
+
+        adps, hlines = [], {'hlines': [], 'colors': [], 'linestyle': '--',
+                            'linewidths': 0.5}
+
+        # Add technical feature data (indicator values, etc).
+        for col in list(df):
+            if (
+                col != "Open" and col != "High" and col != "Low"
+                    and col != "Close" and col != "Volume"):
+                adps.append(mpl.make_addplot(df[col]))
+
+        # Add entry marker
+        adps.append(mpl.make_addplot(
+            entry_marker, type='scatter', markersize=500, marker="_",
+            color='limegreen'))
+
+        # Add stop marker
+        if stop:
+            adps.append(mpl.make_addplot(
+                stop_marker, type='scatter', markersize=500, marker='_',
+                color='crimson'))
+
+        return adps, hlines

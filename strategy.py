@@ -273,6 +273,9 @@ class Strategy:
             None.
 
         """
+
+        self.logger.info("Running models.")
+
         sym = event.get_bar()['symbol']
         exc = event.get_exchange()
 
