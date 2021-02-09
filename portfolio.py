@@ -699,7 +699,6 @@ class Portfolio:
                                    marketcolors=mc)
         filename = "setup_images/" + str(trade['trade_id']) + "_" + str(trade['signal_timestamp']) + '_' + trade['model'] + "_" + trade['timeframe']
 
-        print("attempting to send setup image")
         try:
             plot = mpl.plot(df, type='candle', addplot=adp, style=style, hlines=hlines,
                             title="\n" + trade['model'] + " - " + trade['timeframe'],
