@@ -34,20 +34,18 @@ class Telegram(MessagingClient):
         self.whitelist = self.get_whitelist()
 
     def send_image(self, image_path, text):
-        print(image_path)
-        print(text)
-
-        print(self.whitelist)
 
         # Send image only to whitelisted users with active status
         for user_id in json.loads(self.whitelist):
             url = self.URL + self.token + "/sendPhoto"
-            print(url)
-            print(user_id)
             files = {'photo': open(image_path, 'rb')}
             data = {'chat_id': user_id}
             r = requests.post(url, files=files, data=data)
-            print(r.status_code, r.reason, r.content)
+
+            if r.status_code != 200:
+                self.logger.info("Setup snapshot sent to " + str(user_id) + ".")
+            else:
+                self.logger.info("Sending snapshot to " + str(user_id) + " failed.")
 
     def get_token(self):
         """
