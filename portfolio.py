@@ -15,7 +15,6 @@ from event_types import OrderEvent, FillEvent
 import numpy as np
 import traceback
 
-from datetime import datetime
 import mplfinance as mpl
 import pymongo
 import queue
@@ -172,12 +171,12 @@ class Portfolio:
             for order in orders:
                 order.batch_size = batch_size
 
-            # Send setup image to users for review
+            # Generate static image of trade setup.
             t_dict = trade.get_trade_dict()
             self.generate_trade_setup_image(
                 t_dict, signal['op_data'])
 
-            # Only submit orders and update portfolio if within risk limits.
+            # Only raise orders and add to portfilio if within risk limits.
             if self.within_risk_limits(signal):
                 self.pf['trades'][str(trade_id)] = t_dict
                 self.save_porfolio(self.pf)
@@ -561,7 +560,7 @@ class Portfolio:
 
     def calculate_exposure(self, trade):
         """
-        Calculate capital at risk for the given trade.
+        Calculate the currect capital at risk for the given trade.
         """
         pass
 
@@ -660,7 +659,7 @@ class Portfolio:
 
     def generate_trade_setup_image(self, trade, op_data):
 
-        self.logger.INFO("Creating signal snapshot image")
+        self.logger.info("Creating signal snapshot image")
 
         # Create the image directory if it doesnt exist
         if not os.path.exists("setup_images"):
@@ -668,12 +667,12 @@ class Portfolio:
 
         # Dump trade data to file for ease of testing next stage
         # Remove from production
-        op_data.to_csv('op_data.csv')
-        with open('trade.json', 'w') as outfile:
-            json.dump(trade, outfile)
+        # op_data.to_csv('op_data.csv')
+        # with open('trade.json', 'w') as outfile:
+        #     json.dump(trade, outfile)
 
         # Reformat dataframe for mplfinance compatibility
-        df = op_data
+        df = op_data.copy(deep=True)
         df.rename(
             {'open': 'Open', 'high': 'High', 'low': 'Low',
              'close': 'Close', 'volume': 'Volume'}, axis=1,
@@ -710,9 +709,8 @@ class Portfolio:
         except ValueError as ve:
             print(ve)
             traceback.print_exc()
+            print(df)
             print(df['Open'])
-            for i in df['Open']:
-                print(type(i), i)
             sys.exit(0)
 
         message = "Entry: " + str(trade['entry_price']) + " \nStop: " + str(stop) + "\n"
