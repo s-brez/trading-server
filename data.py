@@ -151,20 +151,25 @@ class Datahandler:
 
         # Get a status report for each symbols stored data.
         reports = []
-        self.logger.info("Started data diagnostics.")
+        if output:
+            self.logger.info("Started data diagnostics.")
         for exchange in self.exchanges:
             for symbol in exchange.get_symbols():
                 reports.append(self.data_status_report(
                     exchange, symbol, output))
 
+        # TODO: oll different venues simultaneously with a processpool
+
         # Resolve discrepancies in stored data.
-        self.logger.info("Resolving missing data.")
+        if output:
+            self.logger.info("Resolving missing data.")
 
         for report in reports:
             self.backfill_gaps(report)
             self.replace_null_bars(report)
 
-        self.logger.info("Data diagnostics complete.")
+        if output:
+            self.logger.info("Data diagnostics complete.")
         self.ready = True
 
     def save_new_bars_to_db(self):

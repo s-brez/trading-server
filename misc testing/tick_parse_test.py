@@ -38,7 +38,7 @@ ws = Bitmex_WS(
             api_key, api_secret)
 
 if not ws.ws.sock.connected:
-    logger.info("Failed to to connect to BitMEX websocket.")
+    logger.debug("Failed to to connect to BitMEX websocket.")
 
 
 def get_recent_bar(timeframe, symbol, n=1):
@@ -178,7 +178,7 @@ def build_OHLCV(ticks: list, symbol: str, close_as_open=True):
 
     def parse_ticks():
         if not ws.ws:
-            logger.info("BitMEX websocket disconnected.")
+            logger.debug("BitMEX websocket disconnected.")
         else:
             all_ticks = ws.get_ticks()
             target_minute = datetime.now().minute - 1
@@ -192,7 +192,7 @@ def build_OHLCV(ticks: list, symbol: str, close_as_open=True):
                     if type(ts) is not datetime:
                         ts = parser.parse(ts)
                 except Exception:
-                    logger.info(traceback.format_exc())
+                    logger.debug(traceback.format_exc())
                 # scrape prev minutes ticks
                 if ts.minute == target_minute:
                     ticks_target_minute.append(i)

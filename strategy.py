@@ -273,9 +273,6 @@ class Strategy:
             None.
 
         """
-
-        self.logger.info("Running models.")
-
         sym = event.get_bar()['symbol']
         exc = event.get_exchange()
 
@@ -696,7 +693,6 @@ class Strategy:
                     count += 1
                     # Store signal in relevant db collection.
                     try:
-
                         self.db_other['signals'].insert_one(
                             self.remove_element(signal.get_signal_dict(), "op_data"))
 

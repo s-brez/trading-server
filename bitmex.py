@@ -533,7 +533,7 @@ class Bitmex(Exchange):
 
             elif 401 <= r.status_code <= 404:
                 # Syntax, auth or system limit error messages, raise exception.
-                # Code or API keys likely wrong if this occurs.
+                # Code likely wrong if this occurs.
                 raise Exception(r.status_code, r.json()['error']['message'])
 
             elif r.status_code == 503:

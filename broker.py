@@ -9,12 +9,14 @@ Licensed under GNU General Public License 3.0 or later.
 Some rights reserved. See LICENSE.md, AUTHORS.md.
 """
 
-
+from messaging_clients import Telegram
 from event_types import FillEvent
 from threading import Thread
 from time import sleep
+import traceback
 import datetime
 import json
+import sys
 
 
 class Broker:
@@ -95,6 +97,7 @@ class Broker:
 
         except KeyError:
             self.orders[new_order['trade_id']] = [new_order]
+            # print(traceback.format_exc())
 
     def check_fills(self, events):
         """
