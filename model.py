@@ -1,21 +1,19 @@
 """
 trading-server is a multi-asset, multi-strategy, event-driven execution
 and backtesting platform (OEMS) for trading common markets.
+
 Copyright (C) 2020  Sam Breznikar <sam@sdbgroup.io>
+
 Licensed under GNU General Public License 3.0 or later.
+
 Some rights reserved. See LICENSE.md, AUTHORS.md.
 """
 
 from abc import ABC, abstractmethod
 from features import Features as f
 from event_types import SignalEvent
-import matplotlib.pyplot as plt
-import plotly.graph_objects as go
 import traceback
-import numpy as np
-import re
 import sys
-import math
 
 
 class Model(ABC):
@@ -73,13 +71,17 @@ class Model(ABC):
         """
         Given a list of operating timeframes, append additional required
         timeframe strings to the list (amend in-place, no new list created).
+
         To be overwritten in each model.
+
         Args:
             timeframes: list of current-period operating timeframes.
             result: boolean, if True, return a new list. Othewise append req
                     timeframes to the list passed in (timeframes).
+
         Returns:
             None.
+
         Raises:
             None.
         """
@@ -88,10 +90,13 @@ class Model(ABC):
 class EMACrossTestingOnly(Model):
     """
     For testing use only.
+
     Entry:
         Market entry when EMA's cross
+
     Stop-loss:
         None.
+
     Take-profit:
         Close trade and re-open in opposite direction on opposing signal.
     """
@@ -140,12 +145,16 @@ class EMACrossTestingOnly(Model):
             exchange):
         """
         Run the model with the given data.
+
         Args:
             None:
+
         Returns:
             SignalEvent if signal is produced, otherwise None.
+
         Raises:
             None.
+
         """
 
         self.logger.info(
@@ -174,51 +183,53 @@ class EMACrossTestingOnly(Model):
                     # Short cross.
                     if slow > fast:
                         if slow_minus_1 < fast_minus_1 and slow_minus_2 < fast_minus_2:
-                            print("short signal detected")
                             shorts['price'].append(features[i][1])
                             shorts['time'].append(features[i][0])
 
                     # Long cross.
                     elif slow < fast:
                         if slow_minus_1 > fast_minus_1 and slow_minus_2 > fast_minus_2:
-                            print("long signal detected")
                             longs['price'].append(features[i][1])
                             longs['time'].append(features[i][0])
 
-                    try:
+            # print(op_data[timeframe])
+            # print(longs['time'])
+            # print(shorts['time'])
 
-                        signal = False
+            if longs['time'] or shorts['time']:
 
-                        # Generate trade signal if current bar has an entry.
-                        if longs['time']:
-                            if features[-1][0] == longs['time'][-1]:
-                                direction = "LONG"
-                                entry_price = longs['price'][-1]
-                                entry_ts = longs['time'][-1]
-                                signal = True
+                try:
 
-                        elif shorts['time']:
-                            if features[-1][0] == shorts['time'][-1]:
-                                direction = "SHORT"
-                                entry_price = shorts['price'][-1]
-                                entry_ts = shorts['time'][-1]
-                                signal = True
+                    signal = False
 
-                    except IndexError:
-                        traceback.print_exc()
-                        print(type(features), len(features[-1]), features[-1][0])
-                        print(type(longs), len(longs), longs['time'])
-                        print(type(shorts), len(shorts), shorts['time'])
-                        sys.exit(0)
+                    # Generate trade signal if current bar has an entry.
+                    if features[-1][0] == longs['time'][-1]:
+                        direction = "LONG"
+                        entry_price = longs['price'][-1]
+                        entry_ts = longs['time'][-1]
+                        signal = True
+
+                    elif features[-1][0] == shorts['time'][-1]:
+                        direction = "SHORT"
+                        entry_price = shorts['price'][-1]
+                        entry_ts = shorts['time'][-1]
+                        signal = True
 
                     if signal:
                         return SignalEvent(symbol, int(entry_ts.timestamp()),
                                            direction, timeframe, self.name,
                                            exchange, entry_price, "Market", None,
-                                           None, None, False, op_data, None)
+                                           None, None, False, None,
+                                           op_data[timeframe])
+                    else:
+                        return None
 
-                    # else:
-                    #     return None
+                except IndexError:
+                        traceback.print_exc()
+                        print(type(features), len(features[-1]), features[-1][0])
+                        print(type(longs), len(longs), longs['time'])
+                        print(type(shorts), len(shorts), shorts['time'])
+                        sys.exit(0)
 
     def get_required_timeframes(self, timeframes: list, result=False):
         """
