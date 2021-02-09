@@ -14,6 +14,7 @@ from threading import Thread
 from time import sleep
 import subprocess
 import datetime
+
 import logging
 import time
 import queue
@@ -21,9 +22,9 @@ import queue
 from messaging_clients import Telegram
 from portfolio import Portfolio
 from strategy import Strategy
+from data import Datahandler
 from broker import Broker
 from bitmex import Bitmex
-from data import Datahandler
 
 
 class Server:
@@ -115,6 +116,9 @@ class Server:
         if self.live_trading:
             self.data.run_data_diagnostics(1)
 
+            # Run twice to account for first diag runtime
+            self.data.run_data_diagnostics(0)
+
         self.cycle_count = 0
 
         sleep(self.seconds_til_next_minute())
@@ -140,7 +144,7 @@ class Server:
                     #     thread.daemon = True
                     #     thread.start()
 
-                    # Check data integrity periodically thereafter.
+                    # # Check data integrity periodically thereafter.
                     # if (self.cycle_count % self.DIAG_DELAY == 0):
                     #     thread = Thread(
                     #         target=lambda: self.data.run_data_diagnostics(0))
@@ -242,15 +246,6 @@ class Server:
             datefmt="%d-%m-%Y %H:%M:%S")
         ch.setFormatter(formatter)
         logger.addHandler(ch)
-
-        # Supress requests/urlib3/connectionpool/telegram messages as
-        # logging.DEBUG produces messages with each https request.
-        logging.getLogger("urllib3").propagate = False
-        logging.getLogger("telegram").propagate = False
-        logging.getLogger("connectionpool").propagate = False
-        requests_log = logging.getLogger("requests")
-        requests_log.addHandler(logging.NullHandler())
-        requests_log.propagate = False
 
         return logger
 
