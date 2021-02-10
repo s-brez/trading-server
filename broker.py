@@ -64,7 +64,7 @@ class Broker:
 
         except KeyError:
             self.orders[new_order['trade_id']] = [new_order]
-            # print(traceback.format_exc())
+            traceback.print_exc()
 
     def check_consent(self, events):
         """
@@ -96,8 +96,9 @@ class Broker:
                 order_count = len(self.orders[trade_id])
                 venue = self.orders[trade_id][0]['venue']
 
-                # If batch complete and consent given, submit order batch for execution.
-                if trade['consent']:
+                # User has accepted the trade.
+                # Submit order batch for execution.
+                if trade['consent'] is True:
                     if order_count == trade['order_count']:
                         self.logger.info(
                             "Trade " + str(trade_id) + " order batch ready.")
@@ -118,8 +119,16 @@ class Broker:
 
                     else:
                         self.logger.info("Order batch for trade " + str(trade_id) + " not yet ready.")
-                else:
+
+                # User has not yet made a decision.
+                # Do nothing.
+                elif trade['consent'] is None:
                     self.logger.info("Trade " + str(trade_id) + " awaiting user review.")
+
+                # User has rejected the trade.
+                # Remove orders from broker and mark trade inactive.
+                elif trade['consent'] is False:
+                    pass
 
             # Remove sent orders after iteration complete.
             for t_id in to_remove:
@@ -160,7 +169,33 @@ class Broker:
         Raises:
             None.
         """
-        pass
+
+        for response in self.tg.get_updates():
+
+            # Only check responses from whitelisted accounts
+            if str(response['message']['from']['id']) in self.tg.whitelist:
+
+                # Check response matches trade ID
+                if str(response['message']['text'][:len(str(trade_id))]) == str(trade_id):
+
+                    # TODO: Check response was given after trade trigger time
+
+                    try:
+                        decision = response['message']['text'].split(" - ", 1)
+                        if decision[1] == "Accept":
+                            self.db_other['trades'].update_one({"trade_id": trade_id}, {"$set": {"consent": True}})
+
+                        elif decision[1] == "Veto":
+                            self.db_other['trades'].update_one({"trade_id": trade_id}, {"$set": {"consent": False}})
+
+                        else:
+                            self.logger.info("Unknown input received as response to trade " + str(trade_id) + " consent message: " + decision[1])
+
+                    except Exception as ex:
+                        print(str(response['message']['text'][:len(str(trade_id))]), str(trade_id))
+                        print(response['message']['text'])
+                        print(decision)
+                        traceback.print_exc()
 
     def check_fills(self, events):
         """
