@@ -129,6 +129,22 @@ class Broker:
             pass
             # self.logger.info("No trades awaiting review.")
 
+    def check_overdue_trades(self):
+        """
+        Check for trades that have not been accepted by user and dont have pending orders.
+        This can occur if system crashes and resumes before user accepts or vetos pending trades.
+
+        Args:
+            None
+
+        Returns:
+           None.
+
+        Raises:
+            None.
+        """
+        pass
+
     def register_telegram_responses(self, trade_id):
         """
         Check telegram messages to determine acceptance/veto of trade.
