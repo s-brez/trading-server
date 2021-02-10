@@ -35,6 +35,7 @@ class Trade(ABC):
         self.r_pnl = 0                  # Total realised pnl.
         self.fees = 0                   # Total fees/commisions paid.
         self.exposure = None            # Percentage of capital at risk.
+        self.consent_given = False      # If or not user consents to trade.
 
     @abstractmethod
     def get_trade_dict(self):
@@ -97,7 +98,8 @@ class SingleInstrumentTrade(Trade):
             'symbol': self.symbol,
             'position': self.position,
             'order_count': self.order_count,
-            'orders': self.orders}
+            'orders': self.orders,
+            'consent': self.consent_given}
 
 
 class Position:
