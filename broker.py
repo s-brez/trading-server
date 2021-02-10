@@ -43,9 +43,7 @@ class Broker:
 
     def new_order(self, events, order_event):
         """
-        Process incoming order events and place orders with venues.
-
-        Create fill notifications as order fill confirmations are received.
+        Process and store incoming order events.
 
         Args:
             events: event queue object.
@@ -64,40 +62,89 @@ class Broker:
         try:
             self.orders[new_order['trade_id']].append(new_order)
 
+        except KeyError:
+            self.orders[new_order['trade_id']] = [new_order]
+            # print(traceback.format_exc())
+
+    def check_consent(self, events):
+        """
+        Place orders if all orders present and user accepts pending trades.
+
+        Args:
+            events: event queue object.
+
+        Returns:
+           None.
+
+        Raises:
+            None.
+        """
+
+        if self.orders.keys():
+
             to_remove = []
 
             for trade_id in self.orders.keys():
+
+                # Action user responses from telegram
+                self.register_telegram_responses(trade_id)
+
+                # Get stored trade state from DB
+                trade = dict(self.db_other['trades'].find_one({"trade_id": trade_id}, {"_id": 0}))
+
+                # Count received orders for that trade
                 order_count = len(self.orders[trade_id])
                 venue = self.orders[trade_id][0]['venue']
 
-                # If batch complete, submit order batch for execution.
-                if order_count == new_order['batch_size']:
-                    self.logger.info(
-                        "Trade " + str(trade_id) + " order batch ready.")
+                # If batch complete and consent given, submit order batch for execution.
+                if trade['consent']:
+                    if order_count == trade['order_count']:
+                        self.logger.info(
+                            "Trade " + str(trade_id) + " order batch ready.")
 
-                    for order in self.orders[trade_id]:
-                        print(json.dumps(order))
+                        for order in self.orders[trade_id]:
+                            print(json.dumps(order))
 
-                    # TODO: Get trade confirmation from user.
+                        # Place orders.
+                        order_confs = self.exchanges[venue].place_bulk_orders(
+                            self.orders[trade_id])
 
-                    # Place orders.
-                    order_confs = self.exchanges[venue].place_bulk_orders(
-                        self.orders[trade_id])
+                        # Update portfolio state with order placement details.
+                        if order_confs:
+                            self.pf.new_order_conf(order_confs, events)
 
-                    # Update portfolio state with order placement details.
-                    if order_confs:
-                        self.pf.new_order_conf(order_confs, events)
+                        # Flag sent orders for removal from self.orders.
+                        to_remove.append(trade_id)
 
-                    # Flag sent orders for removal from self.orders.
-                    to_remove.append(trade_id)
+                    else:
+                        self.logger.info("Order batch for trade " + str(trade_id) + " not yet ready.")
+                else:
+                    self.logger.info("Trade " + str(trade_id) + " awaiting user review.")
 
             # Remove sent orders after iteration complete.
             for t_id in to_remove:
                 del self.orders[t_id]
 
-        except KeyError:
-            self.orders[new_order['trade_id']] = [new_order]
-            # print(traceback.format_exc())
+        else:
+            pass
+            # self.logger.info("No trades awaiting review.")
+
+    def register_telegram_responses(self, trade_id):
+        """
+        Check telegram messages to determine acceptance/veto of trade.
+
+        Update DB to reflect users choice.
+
+        Args:
+            trade_id: id of trade to check for
+
+        Returns:
+           None.
+
+        Raises:
+            None.
+        """
+        pass
 
     def check_fills(self, events):
         """

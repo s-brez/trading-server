@@ -33,19 +33,44 @@ class Telegram(MessagingClient):
         self.token = self.get_token()
         self.whitelist = self.get_whitelist()
 
+        for i in self.get_updates():
+            print(i)
+
+        print(self.send_option_keyboard(None))
+
     def send_image(self, image_path, text):
 
-        # Send image only to whitelisted users with active status
+        url = self.URL + self.token + "/sendPhoto"
+        files = {'photo': open(image_path, 'rb')}
+
+        # Send image only to whitelisted users
         for user_id in json.loads(self.whitelist):
-            url = self.URL + self.token + "/sendPhoto"
-            files = {'photo': open(image_path, 'rb')}
-            data = {'chat_id': user_id}
+
+            data = {'chat_id': user_id, 'caption': text}
             r = requests.post(url, files=files, data=data)
 
             if r.status_code != 200:
                 self.logger.info("Setup snapshot sent to " + str(user_id) + ".")
             else:
                 self.logger.info("Sending snapshot to " + str(user_id) + " failed.")
+                print(r.status_code)
+
+    def send_option_keyboard(self, keyboard):
+
+        test_keyboard = [["Yes", "No"], ["Maybe"], ["1", "2", "3"]]
+        url = self.URL + self.token + "/sendMessage"
+
+        # Send only to whitelisted users
+        for user_id in json.loads(self.whitelist):
+            reply_markup = {"keyboard": test_keyboard, "one_time_keyboard": True}
+            text = {'text': 'Test', 'chat_id': user_id, 'reply_markup': reply_markup}
+            r = requests.post(url, json=text)
+            return r.json()
+
+    def get_updates(self):
+        url = self.URL + self.token + "/getUpdates"
+        r = requests.get(url).json()
+        return r['result']
 
     def get_token(self):
         """
