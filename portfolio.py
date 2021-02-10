@@ -716,12 +716,16 @@ class Portfolio:
             sys.exit(0)
 
         message = "Trade " + str(trade['trade_id']) + " - " + trade['model'] + " " + trade['timeframe'] + "\n\nEntry: " + str(trade['entry_price']) + " \nStop: " + str(stop) + "\n"
+        options = [[str(trade['trade_id']) + " - Accept", str(trade['trade_id']) + " - Veto"]]
 
         try:
             self.telegram.send_image(filename + ".png", message)
+            self.telegram.send_option_keyboard(options)
+
         except Exception as ex:
             self.logger.info("Failed to send setup image via telegram.")
             print(ex)
+            traceback.print_exc()
 
     def create_addplots(self, df, mpl, stop, entry_marker, stop_marker):
         """
