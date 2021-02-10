@@ -35,7 +35,7 @@ class Trade(ABC):
         self.r_pnl = 0                  # Total realised pnl.
         self.fees = 0                   # Total fees/commisions paid.
         self.exposure = None            # Percentage of capital at risk.
-        self.consent_given = False      # If or not user consents to trade.
+        self.consent_given = None      # If or not user consents to trade.
 
     @abstractmethod
     def get_trade_dict(self):
