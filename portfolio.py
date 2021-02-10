@@ -15,6 +15,9 @@ from event_types import OrderEvent, FillEvent
 import numpy as np
 import traceback
 
+import matplotlib
+matplotlib.use('qt5agg')
+
 import mplfinance as mpl
 import pymongo
 import queue
@@ -712,7 +715,7 @@ class Portfolio:
             print(df['Open'])
             sys.exit(0)
 
-        message = "Entry: " + str(trade['entry_price']) + " \nStop: " + str(stop) + "\n"
+        message = "Trade " + str(trade['trade_id']) + " - " + trade['model'] + " " + trade['timeframe'] + "\n\nEntry: " + str(trade['entry_price']) + " \nStop: " + str(stop) + "\n"
 
         try:
             self.telegram.send_image(filename + ".png", message)
