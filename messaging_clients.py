@@ -57,7 +57,7 @@ class Telegram(MessagingClient):
 
         # Send only to whitelisted users
         for user_id in json.loads(self.whitelist):
-            text = {'text': None, 'chat_id': user_id, 'reply_markup': reply_markup}
+            text = {'text': "Accept or veto trade:", 'chat_id': user_id, 'reply_markup': reply_markup}
 
             r = requests.post(url, json=text)
 
