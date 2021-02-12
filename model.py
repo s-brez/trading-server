@@ -196,7 +196,10 @@ class EMACrossTestingOnly(Model):
             # print(longs['time'])
             # print(shorts['time'])
 
-            if longs['time'] or shorts['time']:
+            if len(longs['time']) > 0 or len(shorts['time']) > 0:
+
+                # print(len(longs['time']))
+                # print(len(shorts['time']))
 
                 try:
 
