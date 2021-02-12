@@ -64,7 +64,7 @@ class Broker:
 
         except KeyError:
             self.orders[new_order['trade_id']] = [new_order]
-            traceback.print_exc()
+            # traceback.print_exc()
 
     def check_consent(self, events):
         """
@@ -97,7 +97,6 @@ class Broker:
                 venue = self.orders[trade_id][0]['venue']
 
                 # User has accepted the trade.
-                # Submit order batch for execution.
                 if trade['consent'] is True:
                     if order_count == trade['order_count']:
                         self.logger.info(
@@ -121,14 +120,13 @@ class Broker:
                         self.logger.info("Order batch for trade " + str(trade_id) + " not yet ready.")
 
                 # User has not yet made a decision.
-                # Do nothing.
                 elif trade['consent'] is None:
                     self.logger.info("Trade " + str(trade_id) + " awaiting user review.")
 
                 # User has rejected the trade.
-                # Remove orders from broker and mark trade inactive.
                 elif trade['consent'] is False:
-                    pass
+                    self.portfolio.trade_complete(trade_id)
+                    to_remove.append(trade_id)
 
             # Remove sent orders after iteration complete.
             for t_id in to_remove:
@@ -136,12 +134,12 @@ class Broker:
 
         else:
             pass
-            # self.logger.info("No trades awaiting review.")
+            self.logger.info("No trades awaiting review.")
 
     def check_overdue_trades(self):
         """
-        Check for trades that have not been accepted by user and dont have pending orders.
-        This can occur if system crashes and resumes before user accepts or vetos pending trades.
+        Check for trades that have not been accepted by user and dont have pending orders with Broker.
+        This may occur if system crashes and resumes before user accepts or vetos pending trades.
 
         Args:
             None
@@ -178,7 +176,10 @@ class Broker:
                 # Check response matches trade ID
                 if str(response['message']['text'][:len(str(trade_id))]) == str(trade_id):
 
-                    # TODO: Check response was given after trade trigger time
+                    # Check response given after trade trigger time 
+                    trade_ts = self.db_other['trades'].find_one({"trade_id": trade_id})['signal_timestamp']
+                    print(trade_ts, type(trade_ts))
+                    print(response['message']['date'], type(response['message']['date']))
 
                     try:
                         decision = response['message']['text'].split(" - ", 1)
@@ -191,7 +192,7 @@ class Broker:
                         else:
                             self.logger.info("Unknown input received as response to trade " + str(trade_id) + " consent message: " + decision[1])
 
-                    except Exception as ex:
+                    except Exception:
                         print(str(response['message']['text'][:len(str(trade_id))]), str(trade_id))
                         print(response['message']['text'])
                         print(decision)
@@ -304,7 +305,7 @@ class FillAgent:
 
                 else:
                     # Something critically wrong if theres a missing venue ID.
-                    raise Exception("Order ID mistmatch. Portfolio v_id:",
+                    raise Exception("Order ID mistmatch. \nPortfolio v_id:",
                                     port[0], "Actual v_id:", actual[0])
 
             # Wait til next minute elapses.

@@ -606,16 +606,15 @@ class Bitmex(Exchange):
 
         cancel_confs = {}
 
-        print(response)
         for i in response:
             try:
                 if i['orderID'] is not None:
                     cancel_confs[i['orderID']] = "SUCCESS"
                 elif i['error'] is not None:
                     cancel_confs[i['orderID']] = i['error']
-            except KeyError as ke:
+            except KeyError:
                 cancel_confs = i
-                print(traceback.format_exc(), ke)
+                # print(traceback.format_exc(), ke)
 
         return cancel_confs
 
