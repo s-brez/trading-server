@@ -35,7 +35,7 @@ class Trade(ABC):
         self.r_pnl = 0                  # Total realised pnl.
         self.fees = 0                   # Total fees/commisions paid.
         self.exposure = None            # Percentage of capital at risk.
-        self.consent_given = None      # If or not user consents to trade.
+        self.consent = None             # If or not user consents to trade.
 
     @abstractmethod
     def get_trade_dict(self):
@@ -99,7 +99,7 @@ class SingleInstrumentTrade(Trade):
             'position': self.position,
             'order_count': self.order_count,
             'orders': self.orders,
-            'consent': self.consent_given}
+            'consent': self.consent}
 
 
 class Position:
@@ -110,14 +110,14 @@ class Position:
     def __init__(self, fill_conf):
         self.fill_conf = fill_conf
 
-        # Use BitMEX taker fees as placeholder.
-        self.fees = (fill_conf['avg_fill_price'] / 100) * 0.075
+        # TODO
+        self.fees = None
 
     def __str__(self):
         return str(" ")
 
     def get_fill_conf(self):
-        return fill_conf
+        return self.fill_conf
 
     def get_pos_dict(self):
         return {

@@ -156,8 +156,8 @@ class FillEvent(Event):
         self.type = 'FILL'
         self.order_conf = order_conf
 
-        # Use BitMEX taker fees as placeholder.
-        self.fees = (order_conf['avg_fill_price'] / 100) * 0.075
+        # TODO
+        self.fees = None
 
     def __str__(self):
         return str(" ")
