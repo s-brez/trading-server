@@ -66,6 +66,22 @@ class Telegram(MessagingClient):
             else:
                 self.logger.info("Sending consent query to " + str(user_id) + " failed.")
                 print(r.status_code)
+                print(r.json())
+
+    def send_message(self, text):
+        url = self.URL + self.token + "/sendMessage"
+
+        # Send image only to whitelisted users
+        for user_id in json.loads(self.whitelist):
+
+            data = {'chat_id': user_id, 'caption': text}
+            r = requests.post(url, data=data)
+
+            if int(r.status_code) == 200:
+                self.logger.info("Text message sent to " + str(user_id) + ".")
+            else:
+                self.logger.info("Sending message to " + str(user_id) + " failed.")
+                print(r.json())
 
     def get_updates(self):
         url = self.URL + self.token + "/getUpdates"
