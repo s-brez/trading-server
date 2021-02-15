@@ -174,13 +174,16 @@ class Portfolio:
             for order in orders:
                 order.batch_size = batch_size
 
+            within_risk_limits = self.within_risk_limits(signal)
+
             # Generate static image of trade setup.
             t_dict = trade.get_trade_dict()
             self.generate_trade_setup_image(
-                t_dict, signal['op_data'])
+                t_dict, signal['op_data'], within_risk_limits)
 
             # Only raise orders and add to portfilio if within risk limits.
-            if self.within_risk_limits(signal):
+            if within_risk_limits:
+
                 self.pf['trades'][str(trade_id)] = t_dict
                 self.save_porfolio(self.pf)
                 for order in orders:
@@ -228,8 +231,12 @@ class Portfolio:
             size = self.pf['trades'][t_id]['position']['size']
             new_size = size - fill_conf['size']
 
-            if new_size != 0:
+            if new_size > 0:
+                # Should be 0
                 raise Exception(new_size)
+            elif new_size < 0:
+                # Can be negative if user modifies positions manually
+                new_size = 0
 
             self.pf['trades'][t_id]['position']['size'] = new_size
             self.pf['trades'][t_id]['position']['status'] = "CLOSED"
@@ -310,17 +317,21 @@ class Portfolio:
         self.calculate_pnl_by_trade(trade_id)
 
         # Run post-trade analytics.
-        self.post_trade_analysis(trade_id)
+        self.run_post_trade_analysis(trade_id)
+
+        # Reduce active trade count by 1.
+        self.pf['total_active_trades'] = self.pf['total_active_trades'] - 1 if self.pf['total_active_trades'] >= 1 else 0
 
         # Save updated portfolio state to DB.
         self.save_porfolio(self.pf)
 
-    def cancel_orders_by_trade_id(self, t_id):
+    def cancel_orders_by_trade_id(self, trade_id):
         """
         Cancel all orders matching the given trade ID and update
         local portfolio state.
         """
 
+        t_id = str(trade_id)
         o_ids = self.pf['trades'][t_id]['orders'].keys()
         v_ids = [
             self.pf['trades'][t_id]['orders'][o]['venue_id'] for o in o_ids if
@@ -328,11 +339,7 @@ class Portfolio:
 
         venue = self.pf['trades'][t_id]['venue']
 
-        print("v_ids to cancel", v_ids)
-
         cancel_confs = self.exchanges[venue].cancel_orders(v_ids)
-
-        print("cancel_confs", cancel_confs)
 
         try:
             if cancel_confs['error']["message"] == 'Not Found':
@@ -341,10 +348,11 @@ class Portfolio:
                     self.pf['trades'][t_id]['orders'][o]['status'] == "FILLED"
                 # Handle other error messages here
 
-        except KeyError as ke:
-            # print(traceback.format_exc(), ke)
+        except KeyError:
+
             # Update portfolio state based on cancellation message.
             self.pf['trades'][t_id]['active'] = False
+
             for order_id in o_ids:
                 for venue_id in v_ids:
                     # Handle active orders actually cancelled.
@@ -356,22 +364,28 @@ class Portfolio:
                             'status'] = "CANCELLED"
 
                     else:
+                        print(self.pf['trades'][t_id]['orders'][order_id]['venue_id'])
+                        print(venue_id)
+                        print(cancel_confs[venue_id])
                         raise Exception(
-                                "Order id mismatch:", cancel_confs[v_id])
+                                "Order id mismatch:", cancel_confs[venue_id])
 
     def check_position_open(self, trade_id):
         """
         Return true if position is still open according to local portfolio.
         """
 
-        if self.pf['trades'][trade_id]['position']['status'] == "OPEN":
+        t_id = str(trade_id)
+        if self.pf['trades'][t_id]['position'] is None:
+            return False
+        if self.pf['trades'][t_id]['position']['status'] == "OPEN":
             return True
-        elif self.pf['trades'][trade_id]['position']['status'] == "CLOSED":
+        elif self.pf['trades'][t_id]['position']['status'] == "CLOSED":
             return False
         else:
             raise Exception(
                 "Position status error:",
-                self.pf['trades'][trade_id]['position']['status'])
+                self.pf['trades'][t_id]['position']['status'])
 
     def close_position_by_trade_id(self, t_id):
         """
@@ -402,15 +416,15 @@ class Portfolio:
 
         return self.exchanges[venue].close_position(symbol)
 
-    def calculate_pnl_by_trade(self, t_id):
+    def calculate_pnl_by_trade(self, trade_id):
         """
         Calculate pnl for the given trade and update local portfolio state.
         """
 
         # Match internal order ids with venue ids {venue id: order id}
+        t_id = str(trade_id)
         o_ids = self.pf['trades'][t_id]['orders'].keys()
         id_pairs = {self.pf['trades'][t_id]['orders'][i]['venue_id']: i for i in o_ids}
-        v_ids = id_pairs.keys()
 
         # Fetch all balance affecting executions.
         executions = self.exchanges[self.pf['trades'][t_id][
@@ -424,47 +438,53 @@ class Portfolio:
             if exc['order_id'] in o_ids:
                 s_exc[exc['order_id']].append(exc)
 
-        print(json.dumps(s_exc, indent=2))
-
         # Avg total long and short for the trade.
         avg_long, long_total, avg_short, short_total, total_fee = 0, 0, 0, 0, 0
 
         for o_id in o_ids:
-            for sub_order in s_exc[o_id]:
+            try:
+                for sub_order in s_exc[o_id]:
+                    if sub_order['direction'] == "LONG":
+                        avg_long += sub_order['avg_exc_price'] * sub_order['size']
+                        long_total += sub_order['size']
+                        total_fee += sub_order['total_fee']
 
-                if sub_order['direction'] == "LONG":
-                    avg_long += sub_order['avg_exc_price'] * sub_order['size']
-                    long_total += sub_order['size']
-                    total_fee += sub_order['total_fee']
+                    elif sub_order['direction'] == "SHORT":
+                        avg_short += sub_order['avg_exc_price'] * sub_order['size']
+                        short_total += sub_order['size']
+                        total_fee += sub_order['total_fee']
 
-                elif sub_order['direction'] == "SHORT":
-                    avg_short += sub_order['avg_exc_price'] * sub_order['size']
-                    short_total += sub_order['size']
-                    total_fee += sub_order['total_fee']
+            # If order ID isnt in executions, order was not executed.
+            except KeyError:
+                pass
 
-        avg_long /= long_total
-        avg_short /= short_total
+        try:
+            if long_total and avg_long:
+                avg_long /= long_total
+            if short_total and avg_short:
+                avg_short /= short_total
+
+        except ZeroDivisionError:
+            traceback.print_exc()
+            print("long_total", long_total)
+            print("avg_long", avg_long)
+            print("short_total", short_total)
+            print("avg_short", avg_short)
+            sys.exit(0)
 
         if self.pf['trades'][t_id]['direction'] == "LONG":
-            pnl = avg_short - avg_long
+            pnl = avg_short - avg_long if avg_short and avg_long else 0
         elif self.pf['trades'][t_id]['direction'] == "SHORT":
-            pnl = avg_long - avg_short
+            pnl = avg_long - avg_short if avg_short and avg_long else 0
         else:
             raise Exception(self.pf['trades'][t_id]['direction'])
 
-        print("avg long exec:", avg_long)
-        print("avg short exec:", avg_short)
-        print("pnl:", pnl)
-        print("total_fee:", total_fee)
-
         self.pf['current_balance'] += (pnl + total_fee)
-        self.pf['balance_hsitory'][str(int(time.time()))] = {
+        self.pf['balance_history'][str(int(time.time()))] = {
             'amt': pnl + total_fee,
             'trade_id': t_id}
 
-        print("New balance:", self.pf['current_balance'])
-
-    def post_trade_analysis(self, trade_id):
+    def run_post_trade_analysis(self, trade_id):
         """
         TODO: conduct post-trade analytics.
         """
@@ -543,12 +563,15 @@ class Portfolio:
         # Position limit check.
         if self.pf['total_active_trades'] < self.pf['max_simultaneous_positions']:
 
-            if (  # Drawdown check.
+            # Drawdown limit check.
+            if (
                 (self.pf['current_drawdown'] / self.pf['current_balance'])
                     * 100) >= self.pf['max_accepted_drawdown'] or (
                     self.pf['current_drawdown'] == 0):
 
                 if not self.correlated(signal):  # Correlation check.
+                    self.logger.info(
+                        "Trade within risk limits.")
                     return True
                 else:
                     self.logger.info(
@@ -572,7 +595,7 @@ class Portfolio:
         Return true if any active trades would be correlated with trades
         produced by the incoming signal.
         """
-        pass
+        return False
 
     def calculate_stop_price(self, signal):
         """
@@ -660,7 +683,7 @@ class Portfolio:
 
                 self.trades_save_to_db.task_done()
 
-    def generate_trade_setup_image(self, trade, op_data):
+    def generate_trade_setup_image(self, trade, op_data, within_risk_limits: bool):
 
         self.logger.info("Creating signal snapshot image")
 
@@ -708,19 +731,18 @@ class Portfolio:
                             datetime_format='%d-%m %H:%M', figscale=1, savefig=filename,
                             tight_layout=False)
 
-        except ValueError as ve:
-            print(ve)
+        except ValueError:
             traceback.print_exc()
             print(df)
             print(df['Open'])
-            sys.exit(0)
 
         message = "Trade " + str(trade['trade_id']) + " - " + trade['model'] + " " + trade['timeframe'] + "\n\nEntry: " + str(trade['entry_price']) + " \nStop: " + str(stop) + "\n"
         options = [[str(trade['trade_id']) + " - Accept", str(trade['trade_id']) + " - Veto"]]
 
         try:
             self.telegram.send_image(filename + ".png", message)
-            self.telegram.send_option_keyboard(options)
+            if within_risk_limits is True:
+                self.telegram.send_option_keyboard(options)
 
         except Exception as ex:
             self.logger.info("Failed to send setup image via telegram.")
@@ -729,6 +751,8 @@ class Portfolio:
 
     def create_addplots(self, df, mpl, stop, entry_marker, stop_marker):
         """
+        Helper method for generate_trade_setup_image.
+        Formats plot artifcats for mplfinance.
         """
 
         adps, hlines = [], {'hlines': [], 'colors': [], 'linestyle': '--',

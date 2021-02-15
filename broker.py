@@ -125,7 +125,7 @@ class Broker:
 
                 # User has rejected the trade.
                 elif trade['consent'] is False:
-                    self.portfolio.trade_complete(trade_id)
+                    self.pf.trade_complete(trade_id)
                     to_remove.append(trade_id)
 
             # Remove sent orders after iteration complete.
@@ -170,33 +170,33 @@ class Broker:
 
         for response in self.tg.get_updates():
 
-            # Only check responses from whitelisted accounts
+            # Response must have came from a whitelisted account.
             if str(response['message']['from']['id']) in self.tg.whitelist:
 
-                # Check response matches trade ID
+                # Response ID must match trade ID.
                 if str(response['message']['text'][:len(str(trade_id))]) == str(trade_id):
 
-                    # Check response given after trade trigger time 
+                    # Response timestamp must be greater than signal trigger time.
                     trade_ts = self.db_other['trades'].find_one({"trade_id": trade_id})['signal_timestamp']
-                    print(trade_ts, type(trade_ts))
-                    print(response['message']['date'], type(response['message']['date']))
+                    response_ts = response['message']['date']
+                    if response_ts > trade_ts:
 
-                    try:
-                        decision = response['message']['text'].split(" - ", 1)
-                        if decision[1] == "Accept":
-                            self.db_other['trades'].update_one({"trade_id": trade_id}, {"$set": {"consent": True}})
+                        try:
+                            decision = response['message']['text'].split(" - ", 1)
+                            if decision[1] == "Accept":
+                                self.db_other['trades'].update_one({"trade_id": trade_id}, {"$set": {"consent": True}})
 
-                        elif decision[1] == "Veto":
-                            self.db_other['trades'].update_one({"trade_id": trade_id}, {"$set": {"consent": False}})
+                            elif decision[1] == "Veto":
+                                self.db_other['trades'].update_one({"trade_id": trade_id}, {"$set": {"consent": False}})
 
-                        else:
-                            self.logger.info("Unknown input received as response to trade " + str(trade_id) + " consent message: " + decision[1])
+                            else:
+                                self.logger.info("Unknown input received as response to trade " + str(trade_id) + " consent message: " + decision[1])
 
-                    except Exception:
-                        print(str(response['message']['text'][:len(str(trade_id))]), str(trade_id))
-                        print(response['message']['text'])
-                        print(decision)
-                        traceback.print_exc()
+                        except Exception:
+                            print(str(response['message']['text'][:len(str(trade_id))]), str(trade_id))
+                            print(response['message']['text'])
+                            print(decision)
+                            traceback.print_exc()
 
     def check_fills(self, events):
         """
