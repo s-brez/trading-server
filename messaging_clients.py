@@ -74,7 +74,7 @@ class Telegram(MessagingClient):
         # Send image only to whitelisted users
         for user_id in json.loads(self.whitelist):
 
-            data = {'chat_id': user_id, 'caption': text}
+            data = {'chat_id': user_id, 'text': text}
             r = requests.post(url, data=data)
 
             if int(r.status_code) == 200:
