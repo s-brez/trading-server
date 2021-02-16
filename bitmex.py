@@ -147,7 +147,6 @@ class Bitmex(Exchange):
             f"symbol={symbol}&filter=&count={total}&"
             f"startTime={start}&reverse=false")
 
-        # Uncomment below line to manually verify results.
         # self.logger.info("API request string: " + payload)
 
         bars_to_parse = requests.get(payload).json()
@@ -183,7 +182,7 @@ class Bitmex(Exchange):
 
             return timestamp
 
-    def get_recent_bars(timeframe, symbol, n=1):
+    def get_recent_bars(self, timeframe, symbol, n=1):
 
         payload = str(
             self.BASE_URL + self.BARS_URL + timeframe +
@@ -204,7 +203,7 @@ class Bitmex(Exchange):
                     'volume': i['volume']})
         return bars
 
-    def get_recent_ticks(symbol, n=1):
+    def get_recent_ticks(self, symbol, n=1):
 
         # Find difference between start and end of period.
         delta = n * 60
@@ -214,11 +213,11 @@ class Bitmex(Exchange):
         start_iso = datetime.utcfromtimestamp(start_epoch).isoformat()
 
         # find end timestamp and convert to ISO1806
-        end_epoch = previous_minute() + 60
+        end_epoch = self.previous_minute() + 60
         end_iso = datetime.utcfromtimestamp(end_epoch).isoformat()
 
         # Initial poll.
-        sleep(1)
+        time.sleep(1)
         payload = str(
             self.BASE_URL + self.TICKS_URL + symbol + "&count=" +
             "1000&reverse=false&startTime=" + start_iso + "&endTime" + end_iso)
@@ -342,7 +341,7 @@ class Bitmex(Exchange):
                     'symbol': res['symbol'],
                     'direction': direction,
                     'size': res['lastQty'],
-                    'order_type': res['ordType'],
+                    'order_type': order_type,
                     'fee_type': fee_type,
                     'fee_amt': res['commission'],
                     'total_fee': res['execComm'] / res['avgPx'],
@@ -352,9 +351,6 @@ class Bitmex(Exchange):
 
     def close_position(self, symbol, qty=None, direction=None):
         position = self.get_position(symbol)
-
-        print(position)
-        print(symbol, qty, direction)
 
         if direction == "LONG":
             amt = -qty
@@ -375,7 +371,6 @@ class Bitmex(Exchange):
                 'ordType': "Market"}
 
         # Don't do anything if closing size or position size is 0.
-        print(payload)
         if payload['orderQty'] != 0 and position['currentQty'] != 0:
             prepared_request = Request(
                 'POST',
@@ -504,8 +499,6 @@ class Bitmex(Exchange):
         if nm_o:
             payload = {'orders': self.format_orders(nm_o)}
 
-            s = Session()
-
             prepared_request = Request(
                 'POST',
                 self.BASE_URL_TESTNET + self.BULK_ORDERS_URL,
@@ -541,7 +534,7 @@ class Bitmex(Exchange):
                 self.logger.info(
                     str(r.status_code) + " " + r.json()['error']['message'])
             else:
-                self.logger.info(str(r.status_code), str(r.json()))
+                self.logger.info(str(r.status_code) + " " + str(r.json()))
 
         updated_orders = []
         if order_confirmations:
