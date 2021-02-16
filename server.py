@@ -71,7 +71,7 @@ class Server:
             serverSelectionTimeoutMS=self.DB_TIMEOUT_MS)
         self.db_prices = self.db_client[self.DB_PRICES]
         self.db_other = self.db_client[self.DB_OTHER]
-        self.check_db(self.VENUES)
+        self.check_db_status(self.VENUES)
 
         self.exchanges = self.exchange_wrappers(self.logger, self.VENUES)
         self.telegram = Telegram(self.logger)
@@ -287,7 +287,7 @@ class Server:
         delay = 60 - now
         return delay
 
-    def check_db(self, op_venues):
+    def check_db_status(self, op_venues):
         """
         Check DB connection, set up collections and indexing.
 
