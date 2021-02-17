@@ -579,37 +579,43 @@ class Bitmex(Exchange):
 
         return updated_orders
 
-    def cancel_orders(self, order_ids):
-        payload = {"orderID": order_ids}
+    def cancel_orders(self, order_ids: list):
 
-        prepared_request = Request(
-            "DELETE",
-            self.BASE_URL_TESTNET + self.ORDERS_URL,
-            json=payload,
-            params='').prepare()
+        # Only cancel orders if they have been submitted to venue
+        # order_ids will only contain ids if orders already submitted
+        if order_ids[0] is not None:
 
-        request = self.generate_request_headers(
-            prepared_request,
-            self.api_key,
-            self.api_secret)
+            payload = {"orderID": order_ids}
 
-        response = self.session.send(request).json()
+            prepared_request = Request(
+                "DELETE",
+                self.BASE_URL_TESTNET + self.ORDERS_URL,
+                json=payload,
+                params='').prepare()
 
-        response = [response] if not isinstance(response, list) else response
+            request = self.generate_request_headers(
+                prepared_request,
+                self.api_key,
+                self.api_secret)
 
-        cancel_confs = {}
+            response = self.session.send(request).json()
 
-        for i in response:
-            try:
-                if i['orderID'] is not None:
-                    cancel_confs[i['orderID']] = "SUCCESS"
-                elif i['error'] is not None:
-                    cancel_confs[i['orderID']] = i['error']
-            except KeyError:
-                cancel_confs = i
-                # print(traceback.format_exc(), ke)
+            response = [response] if not isinstance(response, list) else response
+            cancel_confs = {}
 
-        return cancel_confs
+            for i in response:
+                try:
+                    if i['orderID'] is not None:
+                        cancel_confs[i['orderID']] = "SUCCESS"
+                    elif i['error'] is not None:
+                        cancel_confs[i['orderID']] = i['error']
+                except KeyError:
+                    cancel_confs = i
+                    # print(traceback.format_exc(), ke)
+            return cancel_confs
+
+        else:
+            return None
 
     def format_orders(self, orders):
 
