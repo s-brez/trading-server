@@ -37,11 +37,11 @@ class Portfolio:
     """
 
     MAX_SIMULTANEOUS_POSITIONS = 1
-    MAX_CORRELATED_TRADES = 2
+    MAX_CORRELATED_POSITIONS = 2
     MAX_ACCEPTED_DRAWDOWN = 25  # Percentage as integer.
     RISK_PER_TRADE = 1          # Percentage as integer OR 'KELLY'
     DEFAULT_STOP = 2            # Default (%) stop distance if none provided.
-    SNAPSHOT_SIZE = 100         # Lookback period for consent images
+    SNAPSHOT_SIZE = 100         # Lookback period for trade snapshot images
 
     def __init__(self, exchanges, logger, db_other, db_client, models,
                  telegram):
@@ -231,11 +231,11 @@ class Portfolio:
             size = self.pf['trades'][t_id]['position']['size']
             new_size = size - fill_conf['size']
 
+            # Should be 0
             if new_size > 0:
-                # Should be 0
                 raise Exception(new_size)
+            # Can be negative if user modifies positions manually
             elif new_size < 0:
-                # Can be negative if user modifies positions manually
                 new_size = 0
 
             self.pf['trades'][t_id]['position']['size'] = new_size
@@ -320,7 +320,10 @@ class Portfolio:
         self.run_post_trade_analysis(trade_id)
 
         # Reduce active trade count by 1.
-        self.pf['total_active_trades'] = self.pf['total_active_trades'] - 1 if self.pf['total_active_trades'] >= 1 else 0
+        self.pf['total_active_trades'] -= 1 if self.pf['total_active_trades'] > 0 else 0
+
+        # Mark trade as inactive
+        self.pf['trades'][str(trade_id)]['active'] = False
 
         # Save updated portfolio state to DB.
         self.save_porfolio(self.pf)
@@ -341,34 +344,38 @@ class Portfolio:
 
         cancel_confs = self.exchanges[venue].cancel_orders(v_ids)
 
-        try:
-            if cancel_confs['error']["message"] == 'Not Found':
-                self.pf['trades'][t_id]['active'] = False
-                for o in o_ids:
-                    self.pf['trades'][t_id]['orders'][o]['status'] == "FILLED"
+        if cancel_confs:
+
+            # Handle cancellation failure messages
+            try:
+                if cancel_confs['error']["message"] == 'Not Found':
+                    self.pf['trades'][t_id]['active'] = False
+                    for o in o_ids:
+                        self.pf['trades'][t_id]['orders'][o]['status'] == "FILLED"
+
                 # Handle other error messages here
+                else:
+                    raise Exception("Unhandled case", cancel_confs['error']["message"])
 
-        except KeyError:
+            # Handle successful cancellation messages
+            except KeyError:
 
-            # Update portfolio state based on cancellation message.
-            self.pf['trades'][t_id]['active'] = False
+                self.pf['trades'][t_id]['active'] = False
 
-            for order_id in o_ids:
-                for venue_id in v_ids:
-                    # Handle active orders actually cancelled.
-                    if self.pf['trades'][t_id]['orders'][order_id][
-                        'venue_id'] == venue_id and cancel_confs[
-                            venue_id] == "SUCCESS":
+                for order_id in o_ids:
+                    for venue_id in set(v_ids):
 
-                        self.pf['trades'][t_id]['orders']['order_id'][
-                            'status'] = "CANCELLED"
+                        # Set order status to cancelled
+                        if self.pf['trades'][t_id]['orders'][order_id][
+                            'venue_id'] == venue_id and cancel_confs[
+                                venue_id] == "SUCCESS":
 
-                    else:
-                        print(self.pf['trades'][t_id]['orders'][order_id]['venue_id'])
-                        print(venue_id)
-                        print(cancel_confs[venue_id])
-                        raise Exception(
-                                "Order id mismatch:", cancel_confs[venue_id])
+                            self.pf['trades'][t_id]['orders'][order_id][
+                                'status'] = "CANCELLED"
+
+        # No active cancellations ocurred, trade was vetoed
+        else:
+            pass
 
     def check_position_open(self, trade_id):
         """
@@ -529,7 +536,7 @@ class Portfolio:
                 'win_loss_ratio': 0,
                 'gain_to_pain_ratio': 0,
                 'risk_per_trade': self.RISK_PER_TRADE,
-                'max_correlated_trades': self.MAX_CORRELATED_TRADES,
+                'max_correlated_positions': self.MAX_CORRELATED_POSITIONS,
                 'max_accepted_drawdown': self.MAX_ACCEPTED_DRAWDOWN,
                 'max_simultaneous_positions': self.MAX_SIMULTANEOUS_POSITIONS,
                 'default_stop': self.DEFAULT_STOP,
@@ -558,8 +565,6 @@ class Portfolio:
         Return true if the new signal would be within risk limits if traded.
         """
 
-        # TODO: Finish after signal > order > fill logic is done.
-
         # Position limit check.
         if self.pf['total_active_trades'] < self.pf['max_simultaneous_positions']:
 
@@ -569,19 +574,21 @@ class Portfolio:
                     * 100) >= self.pf['max_accepted_drawdown'] or (
                     self.pf['current_drawdown'] == 0):
 
-                if not self.correlated(signal):  # Correlation check.
+                # Correlation check.
+                if not self.correlated(signal):
                     self.logger.info(
-                        "Trade within risk limits.")
+                        "New trade within risk limits.")
                     return True
+
                 else:
                     self.logger.info(
-                        "Trade skipped. Correlated positions limit reached.")
+                        "New trade skipped. Correlated positions limit reached.")
                     return False
             else:
-                self.logger.info("Trade skipped. Drawdown limit reached.")
+                self.logger.info("New trade skipped. Drawdown limit reached.")
                 return False
         else:
-            self.logger.info("Trade skipped. Position limit reached.")
+            self.logger.info("New trade skipped. Position limit reached.")
             return False
 
     def calculate_exposure(self, trade):
@@ -629,6 +636,9 @@ class Portfolio:
         # TOOD: Kelly criteron risk management.
         elif self.RISK_PER_TRADE.upper() == "KELLY":
             pass
+
+        else:
+            raise Exception("RISK_PER_TRADE must be an integer, or 'KELLY': " + self.RISK_PER_TRADE)
 
     def update_price(self, events, market_event):
         """
@@ -735,6 +745,7 @@ class Portfolio:
             traceback.print_exc()
             print(df)
             print(df['Open'])
+            sys.exit(0)
 
         message = "Trade " + str(trade['trade_id']) + " - " + trade['model'] + " " + trade['timeframe'] + "\n\nEntry: " + str(trade['entry_price']) + " \nStop: " + str(stop) + "\n"
         options = [[str(trade['trade_id']) + " - Accept", str(trade['trade_id']) + " - Veto"]]
@@ -743,6 +754,8 @@ class Portfolio:
             self.telegram.send_image(filename + ".png", message)
             if within_risk_limits is True:
                 self.telegram.send_option_keyboard(options)
+            else:
+                self.telegram.send_message("Trade would exceed risk limits.")
 
         except Exception as ex:
             self.logger.info("Failed to send setup image via telegram.")
