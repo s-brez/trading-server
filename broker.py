@@ -26,14 +26,14 @@ class Broker:
     """
 
     def __init__(self, exchanges, logger, portfolio, db_other, db_client,
-                 live_trading):
+                 live_trading, telegram):
         self.exchanges = {i.get_name(): i for i in exchanges}
         self.logger = logger
         self.pf = portfolio
         self.db_other = db_other
         self.db_client = db_client
         self.live_trading = live_trading
-        self.tg = Telegram(self.logger)
+        self.tg = telegram
 
         # Container for order batches {trade_id: [order objects]}.
         self.orders = {}
@@ -43,9 +43,7 @@ class Broker:
 
     def new_order(self, events, order_event):
         """
-        Process incoming order events and place orders with venues.
-
-        Create fill notifications as order fill confirmations are received.
+        Process and store incoming order events.
 
         Args:
             events: event queue object.
@@ -64,40 +62,162 @@ class Broker:
         try:
             self.orders[new_order['trade_id']].append(new_order)
 
+        except KeyError:
+            self.orders[new_order['trade_id']] = [new_order]
+            # traceback.print_exc()
+
+    def check_consent(self, events):
+        """
+        Place orders if all orders present and user accepts pending trades.
+
+        Args:
+            events: event queue object.
+
+        Returns:
+           None.
+
+        Raises:
+            None.
+        """
+
+        if self.orders.keys():
+
             to_remove = []
 
             for trade_id in self.orders.keys():
+
+                # Action user responses from telegram, if any
+                self.register_telegram_responses(trade_id)
+
+                # Get stored trade state from DB
+                trade = dict(self.db_other['trades'].find_one({"trade_id": trade_id}, {"_id": 0}))
+
+                # Count received orders for that trade
                 order_count = len(self.orders[trade_id])
                 venue = self.orders[trade_id][0]['venue']
 
-                # If batch complete, submit order batch for execution.
-                if order_count == new_order['batch_size']:
-                    self.logger.debug(
-                        "Trade " + str(trade_id) + " order batch ready.")
+                # User has accepted the trade.
+                if trade['consent'] is True:
+                    if order_count == trade['order_count']:
+                        self.logger.info(
+                            "Trade " + str(trade_id) + " order batch ready.")
 
-                    for order in self.orders[trade_id]:
-                        print(json.dumps(order))
+                        # for order in self.orders[trade_id]:
+                        #     print(json.dumps(order))
 
-                    # TODO: Get trade confirmation from user.
+                        # Place orders.
+                        order_confs = self.exchanges[venue].place_bulk_orders(
+                            self.orders[trade_id])
 
-                    # Place orders.
-                    order_confs = self.exchanges[venue].place_bulk_orders(
-                        self.orders[trade_id])
+                        # Update portfolio state with order placement details.
+                        if order_confs:
+                            self.pf.new_order_conf(order_confs, events)
+                            self.logger.info("Orders for trade " + str(trade_id) + " submitted to venue.")
 
-                    # Update portfolio state with order placement details.
-                    if order_confs:
-                        self.pf.new_order_conf(order_confs, events)
+                        else:
+                            self.logger.info("Order submission for " + str(trade_id) + " may have failed or only partially succeeded.")
+                            # raise Exception("Caution: manual order and position check required for trade " + str(trade_id) + ".")
 
-                    # Flag sent orders for removal from self.orders.
+                        to_remove.append(trade_id)
+
+                    else:
+                        self.logger.info("Order batch for trade " + str(trade_id) + " not yet ready.")
+
+                # User has not yet made a decision.
+                elif trade['consent'] is None:
+                    self.logger.info("Trade " + str(trade_id) + " awaiting user review.")
+
+                # User has rejected the trade.
+                elif trade['consent'] is False:
+                    self.pf.trade_complete(trade_id)
                     to_remove.append(trade_id)
 
             # Remove sent orders after iteration complete.
             for t_id in to_remove:
                 del self.orders[t_id]
 
-        except KeyError as ke:
-            self.orders[new_order['trade_id']] = [new_order]
-            # print(traceback.format_exc())
+        else:
+            pass
+            self.logger.info("No trades awaiting review.")
+
+    def check_overdue_trades(self):
+        """
+        Check for trades that have not been accepted by user and dont have pending orders with Broker.
+        This may occur if system crashes and resumes before user accepts or vetos pending trades.
+
+        Args:
+            None
+
+        Returns:
+           None.
+
+        Raises:
+            None.
+        """
+        pass
+
+    def register_telegram_responses(self, trade_id):
+        """
+        Check telegram messages to determine acceptance/veto of trade.
+
+        Update DB to reflect users choice.
+
+        Args:
+            trade_id: id of trade to check for
+
+        Returns:
+           None.
+
+        Raises:
+            None.
+        """
+
+        for response in self.tg.get_updates():
+
+            u_id = None
+            msg_type = None
+            t_id = str(trade_id)
+
+            # Message field may be 'message' or 'edited_message'
+            try:
+                u_id = str(response['message']['from']['id'])
+                msg_type = 'message'
+            except KeyError:
+                u_id = str(response['edited_message']['from']['id'])
+                msg_type = 'edited_message'
+
+            # Response must have came from a whitelisted account.
+            try:
+                if u_id in self.tg.whitelist:
+
+                    # Response ID must match trade ID.
+                    if str(response[msg_type]['text'][:len(t_id)]) == t_id:
+
+                        # Response timestamp must be greater than signal trigger time.
+                        trade_ts = self.db_other['trades'].find_one({"trade_id": trade_id})['signal_timestamp']
+                        response_ts = response[msg_type]['date']
+                        if response_ts > trade_ts:
+
+                            try:
+                                decision = response[msg_type]['text'].split(" - ", 1)
+                                if decision[1] == "Accept":
+                                    self.db_other['trades'].update_one({"trade_id": trade_id}, {"$set": {"consent": True}})
+                                    self.pf.pf['trades'][t_id]['consent'] = True
+
+                                elif decision[1] == "Veto":
+                                    self.db_other['trades'].update_one({"trade_id": trade_id}, {"$set": {"consent": False}})
+                                    self.pf.pf['trades'][t_id]['consent'] = False
+
+                                else:
+                                    self.logger.info("Unknown input received as response to trade " + t_id + " consent message: " + decision[1])
+
+                            except Exception:
+                                traceback.print_exc()
+
+            # Unexpected response format in updates
+            except Exception:
+                traceback.print_exc()
+                print(json.dumps(response))
 
     def check_fills(self, events):
         """
@@ -110,6 +230,7 @@ class Broker:
                 events.put(fill_event)
 
             self.fill_agent.fills = []
+            self.logger.info("Parsing order fill messages.")
 
         return events
 
@@ -132,7 +253,7 @@ class FillAgent:
         thread = Thread(target=lambda: self.start(portfolio), daemon=True)
         thread.start()
 
-        self.logger.debug("Started FillAgent daemon.")
+        self.logger.info("Started FillAgent.")
 
     def start(self, portfolio):
         """
@@ -206,7 +327,7 @@ class FillAgent:
 
                 else:
                     # Something critically wrong if theres a missing venue ID.
-                    raise Exception("Order ID mistmatch. Portfolio v_id:",
+                    raise Exception("Order ID mistmatch. \nPortfolio v_id:",
                                     port[0], "Actual v_id:", actual[0])
 
             # Wait til next minute elapses.

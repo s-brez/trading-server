@@ -12,10 +12,8 @@ Some rights reserved. See LICENSE.md, AUTHORS.md.
 from abc import ABC, abstractmethod
 from features import Features as f
 from event_types import SignalEvent
-import matplotlib.pyplot as plt
-import plotly.graph_objects as go
-import numpy as np
-import re
+import traceback
+import sys
 
 
 class Model(ABC):
@@ -159,7 +157,7 @@ class EMACrossTestingOnly(Model):
 
         """
 
-        self.logger.debug(
+        self.logger.info(
             "Running " + str(timeframe) + " " + self.get_name() + ".")
 
         if timeframe in self.operating_timeframes:
@@ -194,99 +192,47 @@ class EMACrossTestingOnly(Model):
                             longs['price'].append(features[i][1])
                             longs['time'].append(features[i][0])
 
-            if longs or shorts:
+            # print(op_data[timeframe])
+            # print(longs['time'])
+            # print(shorts['time'])
 
-                signal = False
+            if len(longs['time']) > 0 or len(shorts['time']) > 0:
 
-                # Generate trade signal if current bar has an entry.
-                if features[-1][0] == longs['time'][-1]:
-                    direction = "LONG"
-                    entry_price = longs['price'][-1]
-                    entry_ts = longs['time'][-1]
-                    signal = True
+                # print(len(longs['time']))
+                # print(len(shorts['time']))
 
-                elif features[-1][0] == shorts['time'][-1]:
-                    direction = "SHORT"
-                    entry_price = shorts['price'][-1]
-                    entry_ts = shorts['time'][-1]
-                    signal = True
+                try:
 
-                if signal:
+                    signal = False
 
-                    # Plot the signal.
-                    chart = go.Figure(
-                        data=[
+                    # Generate trade signal if current bar has an entry.
+                    if features[-1][0] == longs['time'][-1]:
+                        direction = "LONG"
+                        entry_price = longs['price'][-1]
+                        entry_ts = longs['time'][-1]
+                        signal = True
 
-                            # Bars.
-                            go.Ohlc(
-                                x=op_data[timeframe].index,
-                                open=op_data[timeframe]['open'],
-                                high=op_data[timeframe]['high'],
-                                low=op_data[timeframe]['low'],
-                                close=op_data[timeframe]['close'],
-                                name="Bars",
-                                increasing_line_color='black',
-                                decreasing_line_color='black'),
+                    elif features[-1][0] == shorts['time'][-1]:
+                        direction = "SHORT"
+                        entry_price = shorts['price'][-1]
+                        entry_ts = shorts['time'][-1]
+                        signal = True
 
-                            # EMA10.
-                            go.Scatter(
-                                x=op_data[timeframe].index,
-                                y=op_data[timeframe].EMA10,
-                                line=dict(color='gray', width=1),
-                                name="EMA10"),
+                    if signal:
+                        return SignalEvent(symbol, int(entry_ts.timestamp()),
+                                           direction, timeframe, self.name,
+                                           exchange, entry_price, "Market", None,
+                                           None, None, False, None,
+                                           op_data[timeframe])
+                    else:
+                        return None
 
-                            # EMA20.
-                            go.Scatter(
-                                x=op_data[timeframe].index,
-                                y=op_data[timeframe].EMA20,
-                                line=dict(color='black', width=1),
-                                name="EMA20"),
-
-                            # Longs.
-                            go.Scatter(
-                                x=longs['time'],
-                                y=longs['price'],
-                                mode='markers',
-                                name="Long",
-                                marker_color="green",
-                                marker_size=10),
-
-                            # Shorts.
-                            go.Scatter(
-                                x=shorts['time'],
-                                y=shorts['price'],
-                                mode='markers',
-                                name="Short",
-                                marker_color="red",
-                                marker_size=10)])
-
-                    title = str(
-                        timeframe + " " + self.get_name() + " " +
-                        symbol + " " + exchange.get_name())
-
-                    chart.update_layout(
-                        title_text=title,
-                        title={
-                            'y': 0.9,
-                            'x': 0.5,
-                            'xanchor': 'center',
-                            'yanchor': 'top'},
-                        xaxis_rangeslider_visible=False,
-                        xaxis_title="Time",
-                        yaxis_title="Price (USD)",
-                        paper_bgcolor='white',
-                        plot_bgcolor='white',
-                        xaxis_showgrid=True,
-                        yaxis_showgrid=True)
-
-                    chart.show()
-
-                    return SignalEvent(symbol, int(entry_ts.timestamp()),
-                                       direction, timeframe, self.name,
-                                       exchange, entry_price, "Market", None,
-                                       None, None, False, None)
-                else:
-                    return None
+                except IndexError:
+                        traceback.print_exc()
+                        print(type(features), len(features[-1]), features[-1][0])
+                        print(type(longs), len(longs), longs['time'])
+                        print(type(shorts), len(shorts), shorts['time'])
+                        sys.exit(0)
 
     def get_required_timeframes(self, timeframes: list, result=False):
         """

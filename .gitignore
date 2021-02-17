@@ -1,2 +1,5 @@
 
 *.pyc
+op_data.csv
+trade.json
+*.png

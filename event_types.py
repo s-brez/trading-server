@@ -57,7 +57,7 @@ class SignalEvent(Event):
     def __init__(self, symbol: str, entry_ts, direction: str, timeframe: str,
                  strategy: str, venue, entry_price: float, entry_type: str,
                  targets: list, stop_price: float, void_price: float,
-                 trail: bool, note: str, ic=1):
+                 trail: bool, note: str, dataset, ic=1):
 
         self.type = 'SIGNAL'
         self.entry_ts = entry_ts        # Entry bar timestamp.
@@ -73,6 +73,7 @@ class SignalEvent(Event):
         self.void_price = void_price    # Invalidation price.
         self.instrument_count = ic      # # of instruments in use.
         self.trail = trail              # True or False for trailing stop.
+        self.op_data = dataset          # Dataset used to generate signal.
         self.note = note                # Signal notes.
 
     def __str__(self):
@@ -89,6 +90,7 @@ class SignalEvent(Event):
             'venue': self.venue.get_name(),
             'symbol': self.symbol,
             'entry_timestamp': self.entry_ts,
+            'timeframe': self.timeframe,
             'direction': self.direction,
             'entry_price': self.entry_price,
             'entry_type': self.entry_type,
@@ -97,7 +99,8 @@ class SignalEvent(Event):
             'void_price': self.void_price,
             'instrument_count': self.instrument_count,
             'trail': self.trail,
-            'note': self.note}
+            'note': self.note,
+            'op_data': self.op_data}
 
     def inverse_direction(self):
         """
@@ -153,8 +156,8 @@ class FillEvent(Event):
         self.type = 'FILL'
         self.order_conf = order_conf
 
-        # Use BitMEX taker fees as placeholder.
-        self.fees = (order_conf['avg_fill_price'] / 100) * 0.075
+        # TODO
+        self.fees = None
 
     def __str__(self):
         return str(" ")

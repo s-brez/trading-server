@@ -10,18 +10,16 @@ Some rights reserved. See LICENSE.md, AUTHORS.md.
 """
 
 from pymongo import MongoClient, errors
-from multiprocessing import Process
 from threading import Thread
 from time import sleep
 import subprocess
 import datetime
-import pymongo
+
 import logging
 import time
 import queue
-import sys
-import json
 
+from messaging_clients import Telegram
 from portfolio import Portfolio
 from strategy import Strategy
 from data import Datahandler
@@ -64,7 +62,7 @@ class Server:
         # Set False for forward testing.
         self.live_trading = True
 
-        self.log_level = logging.DEBUG
+        self.log_level = logging.INFO
         self.logger = self.setup_logger()
 
         # Check DB state OK before connecting to any exchanges
@@ -73,9 +71,10 @@ class Server:
             serverSelectionTimeoutMS=self.DB_TIMEOUT_MS)
         self.db_prices = self.db_client[self.DB_PRICES]
         self.db_other = self.db_client[self.DB_OTHER]
-        self.check_db(self.VENUES)
+        self.check_db_status(self.VENUES)
 
         self.exchanges = self.exchange_wrappers(self.logger, self.VENUES)
+        self.telegram = Telegram(self.logger)
 
         # Main event queue.
         self.events = queue.Queue(0)
@@ -88,14 +87,16 @@ class Server:
                                  self.db_other, self.db_client)
 
         self.portfolio = Portfolio(self.exchanges, self.logger, self.db_other,
-                                   self.db_client, self.strategy.models)
+                                   self.db_client, self.strategy.models,
+                                   self.telegram)
 
         self.broker = Broker(self.exchanges, self.logger, self.portfolio,
-                             self.db_other, self.db_client, self.live_trading)
+                             self.db_other, self.db_client, self.live_trading,
+                             self.telegram)
 
         # Start flask api in separate process
         p = subprocess.Popen(["python", "api.py"])
-        self.logger.debug("Started flask API.")
+        self.logger.info("Started flask API.")
 
         # Processing performance tracking variables.
         self.start_processing = None
@@ -114,6 +115,9 @@ class Server:
         # No need to do so if backtesting, just use existing stored data.
         if self.live_trading:
             self.data.run_data_diagnostics(1)
+
+            # Run twice to account for first diag runtime
+            self.data.run_data_diagnostics(0)
 
         self.cycle_count = 0
 
@@ -134,18 +138,18 @@ class Server:
 
                     # Run diagnostics at 3 and 7 mins to be sure missed
                     # bars are rectified before ongoing system operation.
-                    if (self.cycle_count == 2 or self.cycle_count == 5):
-                        thread = Thread(
-                            target=lambda: self.data.run_data_diagnostics(0))
-                        thread.daemon = True
-                        thread.start()
+                    # if (self.cycle_count == 2 or self.cycle_count == 5):
+                    #     thread = Thread(
+                    #         target=lambda: self.data.run_data_diagnostics(0))
+                    #     thread.daemon = True
+                    #     thread.start()
 
-                    # Check data integrity periodically thereafter.
-                    if (self.cycle_count % self.DIAG_DELAY == 0):
-                        thread = Thread(
-                            target=lambda: self.data.run_data_diagnostics(0))
-                        thread.daemon = True
-                        thread.start()
+                    # # Check data integrity periodically thereafter.
+                    # if (self.cycle_count % self.DIAG_DELAY == 0):
+                    #     thread = Thread(
+                    #         target=lambda: self.data.run_data_diagnostics(0))
+                    #     thread.daemon = True
+                    #     thread.start()
 
                 # Sleep til the next minute begins.
                 sleep(self.seconds_til_next_minute())
@@ -174,7 +178,7 @@ class Server:
                 self.end_processing = time.time()
                 duration = round(
                     self.end_processing - self.start_processing, 5)
-                self.logger.debug(
+                self.logger.info(
                     "Processed " + str(count) + " events in " +
                     str(duration) + " seconds.")
 
@@ -183,6 +187,7 @@ class Server:
                 self.strategy.trim_datasets()
                 self.strategy.save_new_signals_to_db()
                 self.portfolio.save_new_trades_to_db()
+                self.broker.check_consent(self.events)
 
                 break
 
@@ -198,12 +203,12 @@ class Server:
 
                     # Order Event generation.
                     elif event.type == "SIGNAL":
-                        self.logger.debug("Processing signal event.")
+                        self.logger.info("Processing signal event.")
                         self.portfolio.new_signal(self.events, event)
 
                     # Order placement and Fill Event generation.
                     elif event.type == "ORDER":
-                        self.logger.debug("Processing order event.")
+                        self.logger.info("Processing order event.")
 
                         # Do order confirmation and placement in new thread as
                         # confirmation requires user input.
@@ -214,7 +219,7 @@ class Server:
 
                     # Final portolio update.
                     elif event.type == "FILL":
-                        self.logger.debug("Processing fill event.")
+                        self.logger.info("Processing fill event.")
                         self.portfolio.new_fill(event)
 
                 # Finished all jobs in queue.
@@ -243,13 +248,6 @@ class Server:
         ch.setFormatter(formatter)
         logger.addHandler(ch)
 
-        # Supress requests/urlib3/connectionpool messages as
-        # logging.DEBUG produces messages with each https request.
-        logging.getLogger("urllib3").propagate = False
-        requests_log = logging.getLogger("requests")
-        requests_log.addHandler(logging.NullHandler())
-        requests_log.propagate = False
-
         return logger
 
     def exchange_wrappers(self, logger, op_venues):
@@ -269,7 +267,7 @@ class Server:
         # TODO: load exchange wrappers from 'op_venues' list param
 
         venues = [Bitmex(logger)]
-        self.logger.debug("Initialised exchange connectors.")
+        self.logger.info("Initialised exchange connectors.")
 
         return venues
 
@@ -289,7 +287,7 @@ class Server:
         delay = 60 - now
         return delay
 
-    def check_db(self, op_venues):
+    def check_db_status(self, op_venues):
         """
         Check DB connection, set up collections and indexing.
 
@@ -308,7 +306,7 @@ class Server:
             # If no exception, DBs exist
             time.sleep(self.DB_TIMEOUT_MS)
             self.db_client.server_info()
-            self.logger.debug("Connected to DB client at " + self.DB_URL + ".")
+            self.logger.info("Connected to DB client at " + self.DB_URL + ".")
 
             price_colls = self.db_prices.list_collection_names()
             other_colls = self.db_other.list_collection_names()
@@ -317,7 +315,7 @@ class Server:
             for venue_name in op_venues:
                 if venue_name not in price_colls:
 
-                    self.logger.debug("Creating indexing for " + venue_name +
+                    self.logger.info("Creating indexing for " + venue_name +
                                       " in " + self.DB_PRICES + ".")
 
                     self.db_prices[venue_name].create_index(
@@ -329,14 +327,14 @@ class Server:
             for coll_name in self.DB_OTHER_COLLS:
                 if coll_name not in other_colls:
 
-                    self.logger.debug("Creating indexing for " + coll_name +
+                    self.logger.info("Creating indexing for " + coll_name +
                                       " in " + self.DB_OTHER + ".")
 
                     # No indexing required for other DB categories (yet)
                     # Add here if required later
 
         except errors.ServerSelectionTimeoutError as e:
-            self.logger.debug("Failed to connect to " + self.DB_PRICES +
+            self.logger.info("Failed to connect to " + self.DB_PRICES +
                               " at " + self.DB_URL + ".")
             raise Exception()
 

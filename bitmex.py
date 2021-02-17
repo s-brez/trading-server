@@ -71,7 +71,7 @@ class Bitmex(Exchange):
             self.logger, self.symbols, self.channels, self.WS_URL,
             self.api_key, self.api_secret)
         if not self.ws.ws.sock.connected:
-            self.logger.debug("Failed to to connect to BitMEX websocket.")
+            self.logger.info("Failed to to connect to BitMEX websocket.")
 
         # Set default https request retry behaviour.
         retries = Retry(
@@ -91,7 +91,7 @@ class Bitmex(Exchange):
     def parse_ticks(self):
 
         if not self.ws.ws:
-            self.logger.debug("BitMEX websocket disconnected.")
+            self.logger.info("BitMEX websocket disconnected.")
         else:
             all_ticks = self.ws.get_ticks()
             target_minute = datetime.now().minute - 1
@@ -105,7 +105,7 @@ class Bitmex(Exchange):
                     if type(ts) is not datetime:
                         ts = parser.parse(ts)
                 except Exception:
-                    self.logger.debug(traceback.format_exc())
+                    self.logger.info(traceback.format_exc())
 
                 # Scrape prev minutes ticks.
                 if ts.minute == target_minute:
@@ -147,8 +147,7 @@ class Bitmex(Exchange):
             f"symbol={symbol}&filter=&count={total}&"
             f"startTime={start}&reverse=false")
 
-        # Uncomment below line to manually verify results.
-        # self.logger.debug("API request string: " + payload)
+        # self.logger.info("API request string: " + payload)
 
         bars_to_parse = requests.get(payload).json()
 
@@ -178,12 +177,12 @@ class Bitmex(Exchange):
             response = requests.get(payload).json()[0]['timestamp']
             timestamp = int(parser.parse(response).timestamp())
 
-            self.logger.debug(
+            self.logger.info(
                 "BitMEX" + symbol + " origin timestamp: " + str(timestamp))
 
             return timestamp
 
-    def get_recent_bars(timeframe, symbol, n=1):
+    def get_recent_bars(self, timeframe, symbol, n=1):
 
         payload = str(
             self.BASE_URL + self.BARS_URL + timeframe +
@@ -204,7 +203,7 @@ class Bitmex(Exchange):
                     'volume': i['volume']})
         return bars
 
-    def get_recent_ticks(symbol, n=1):
+    def get_recent_ticks(self, symbol, n=1):
 
         # Find difference between start and end of period.
         delta = n * 60
@@ -214,11 +213,11 @@ class Bitmex(Exchange):
         start_iso = datetime.utcfromtimestamp(start_epoch).isoformat()
 
         # find end timestamp and convert to ISO1806
-        end_epoch = previous_minute() + 60
+        end_epoch = self.previous_minute() + 60
         end_iso = datetime.utcfromtimestamp(end_epoch).isoformat()
 
         # Initial poll.
-        sleep(1)
+        time.sleep(1)
         payload = str(
             self.BASE_URL + self.TICKS_URL + symbol + "&count=" +
             "1000&reverse=false&startTime=" + start_iso + "&endTime" + end_iso)
@@ -342,7 +341,7 @@ class Bitmex(Exchange):
                     'symbol': res['symbol'],
                     'direction': direction,
                     'size': res['lastQty'],
-                    'order_type': res['ordType'],
+                    'order_type': order_type,
                     'fee_type': fee_type,
                     'fee_amt': res['commission'],
                     'total_fee': res['execComm'] / res['avgPx'],
@@ -352,9 +351,6 @@ class Bitmex(Exchange):
 
     def close_position(self, symbol, qty=None, direction=None):
         position = self.get_position(symbol)
-
-        print(position)
-        print(symbol, qty, direction)
 
         if direction == "LONG":
             amt = -qty
@@ -375,7 +371,6 @@ class Bitmex(Exchange):
                 'ordType': "Market"}
 
         # Don't do anything if closing size or position size is 0.
-        print(payload)
         if payload['orderQty'] != 0 and position['currentQty'] != 0:
             prepared_request = Request(
                 'POST',
@@ -504,8 +499,6 @@ class Bitmex(Exchange):
         if nm_o:
             payload = {'orders': self.format_orders(nm_o)}
 
-            s = Session()
-
             prepared_request = Request(
                 'POST',
                 self.BASE_URL_TESTNET + self.BULK_ORDERS_URL,
@@ -538,10 +531,10 @@ class Bitmex(Exchange):
 
             elif r.status_code == 503:
                 # Server overloaded, retry after 500ms, dont raise exception.
-                self.logger.debug(
+                self.logger.info(
                     str(r.status_code) + " " + r.json()['error']['message'])
             else:
-                self.logger.debug(str(r.status_code), str(r.json()))
+                self.logger.info(str(r.status_code) + " " + str(r.json()))
 
         updated_orders = []
         if order_confirmations:
@@ -586,38 +579,43 @@ class Bitmex(Exchange):
 
         return updated_orders
 
-    def cancel_orders(self, order_ids):
-        payload = {"orderID": order_ids}
+    def cancel_orders(self, order_ids: list):
 
-        prepared_request = Request(
-            "DELETE",
-            self.BASE_URL_TESTNET + self.ORDERS_URL,
-            json=payload,
-            params='').prepare()
+        # Only cancel orders if they have been submitted to venue
+        # order_ids will only contain ids if orders already submitted
+        if order_ids[0] is not None:
 
-        request = self.generate_request_headers(
-            prepared_request,
-            self.api_key,
-            self.api_secret)
+            payload = {"orderID": order_ids}
 
-        response = self.session.send(request).json()
+            prepared_request = Request(
+                "DELETE",
+                self.BASE_URL_TESTNET + self.ORDERS_URL,
+                json=payload,
+                params='').prepare()
 
-        response = [response] if not isinstance(response, list) else response
+            request = self.generate_request_headers(
+                prepared_request,
+                self.api_key,
+                self.api_secret)
 
-        cancel_confs = {}
+            response = self.session.send(request).json()
 
-        print(response)
-        for i in response:
-            try:
-                if i['orderID'] is not None:
-                    cancel_confs[i['orderID']] = "SUCCESS"
-                elif i['error'] is not None:
-                    cancel_confs[i['orderID']] = i['error']
-            except KeyError as ke:
-                cancel_confs = i
-                print(traceback.format_exc(), ke)
+            response = [response] if not isinstance(response, list) else response
+            cancel_confs = {}
 
-        return cancel_confs
+            for i in response:
+                try:
+                    if i['orderID'] is not None:
+                        cancel_confs[i['orderID']] = "SUCCESS"
+                    elif i['error'] is not None:
+                        cancel_confs[i['orderID']] = i['error']
+                except KeyError:
+                    cancel_confs = i
+                    # print(traceback.format_exc(), ke)
+            return cancel_confs
+
+        else:
+            return None
 
     def format_orders(self, orders):
 

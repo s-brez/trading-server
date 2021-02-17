@@ -11,12 +11,20 @@ Some rights reserved. See LICENSE.md, AUTHORS.md.
 
 from trade_types import SingleInstrumentTrade, Order, Position, TradeID
 from event_types import OrderEvent, FillEvent
-from pymongo import MongoClient, errors
+
+import numpy as np
+import traceback
+
+import matplotlib
+matplotlib.use('qt5agg')
+
+import mplfinance as mpl
 import pymongo
 import queue
 import time
 import json
 import sys
+import os
 
 
 class Portfolio:
@@ -29,17 +37,20 @@ class Portfolio:
     """
 
     MAX_SIMULTANEOUS_POSITIONS = 1
-    MAX_CORRELATED_TRADES = 2
+    MAX_CORRELATED_POSITIONS = 2
     MAX_ACCEPTED_DRAWDOWN = 25  # Percentage as integer.
-    RISK_PER_TRADE = 2          # Percentage as integer OR 'KELLY'
+    RISK_PER_TRADE = 1          # Percentage as integer OR 'KELLY'
     DEFAULT_STOP = 2            # Default (%) stop distance if none provided.
+    SNAPSHOT_SIZE = 100         # Lookback period for trade snapshot images
 
-    def __init__(self, exchanges, logger, db_other, db_client, models):
+    def __init__(self, exchanges, logger, db_other, db_client, models,
+                 telegram):
         self.exchanges = {i.get_name(): i for i in exchanges}
         self.logger = logger
         self.db_other = db_other
         self.db_client = db_client
         self.models = models
+        self.telegram = telegram
 
         self.trades_save_to_db = queue.Queue(0)
         self.id_gen = TradeID(db_other)
@@ -62,119 +73,130 @@ class Portfolio:
         """
 
         signal = event.get_signal_dict()
-        if self.within_risk_limits(signal):
+        orders = []
 
-            orders = []
+        # Generate sequential trade ID for new trade.
+        trade_id = self.id_gen.new_id()
 
-            # Generate sequential trade ID for new trade.
-            trade_id = self.id_gen.new_id()
+        # Handle single-instrument signals:
+        if signal['instrument_count'] == 1:
 
-            # Handle single-instrument signals:
-            if signal['instrument_count'] == 1:
+            stop = self.calculate_stop_price(signal),
+            size = self.calculate_position_size(stop[0],
+                                                signal['entry_price'])
+            # Entry order.
+            orders.append(Order(
+                self.logger,
+                trade_id,               # Parent trade ID.
+                None,                   # Order ID as used by venue.
+                signal['symbol'],       # Instrument ticker code.
+                signal['venue'],        # Venue name.
+                signal['direction'],    # LONG or SHORT.
+                size,                   # Size in native denomination.
+                signal['entry_price'],  # Order price.
+                signal['entry_type'],   # LIMIT MARKET STOP_LIMIT/MARKET.
+                "ENTRY",                # ENTRY, TAKE_PROFIT, STOP.
+                stop[0],                # Order invalidation price.
+                False,                  # Trail.
+                False,                  # Reduce-only order.
+                False))                 # Post-only order.
 
-                stop = self.calculate_stop_price(signal),
-                size = self.calculate_position_size(stop[0],
-                                                    signal['entry_price'])
+            # Stop order.
+            orders.append(Order(
+                self.logger,
+                trade_id,
+                None,
+                signal['symbol'],
+                signal['venue'],
+                event.inverse_direction(),
+                size,
+                stop[0],
+                "STOP",
+                "STOP",
+                None,
+                signal['trail'],
+                True,
+                False))
 
-                # Entry order.
-                orders.append(Order(
-                    self.logger,
-                    trade_id,               # Parent trade ID.
-                    None,                   # Order ID as used by venue.
-                    signal['symbol'],       # Instrument ticker code.
-                    signal['venue'],        # Venue name.
-                    signal['direction'],    # LONG or SHORT.
-                    size,                   # Size in native denomination.
-                    signal['entry_price'],  # Order price.
-                    signal['entry_type'],   # LIMIT MARKET STOP_LIMIT/MARKET.
-                    "ENTRY",                # ENTRY, TAKE_PROFIT, STOP.
-                    stop[0],                # Order invalidation price.
-                    False,                  # Trail.
-                    False,                  # Reduce-only order.
-                    False))                 # Post-only order.
+            # Take profit order(s).
+            if signal['targets']:
 
-                # Stop order.
-                orders.append(Order(
-                    self.logger,
-                    trade_id,
-                    None,
-                    signal['symbol'],
-                    signal['venue'],
-                    event.inverse_direction(),
-                    size,
-                    stop[0],
-                    "STOP",
-                    "STOP",
-                    None,
-                    signal['trail'],
-                    True,
-                    False))
-
-                # Take profit order(s).
-                if signal['targets']:
-
-                    count = 1
-                    for target in signal['targets']:
-
-                        # Label final TP order as "FINAL_TAKE_PROFIT".
-                        tp_type = "TAKE_PROFIT" if count != len(signal['targets']) else "FINAL_TAKE_PROFIT"
-                        count += 1
-
-                        orders.append(Order(
-                            self.logger,
-                            trade_id,
-                            None,
-                            signal['symbol'],
-                            signal['venue'],
-                            event.inverse_direction(),
-                            (size / 100) * target[1],
-                            target[0],
-                            "LIMIT",
-                            tp_type,
-                            stop[0],
-                            False,
-                            True,
-                            False))
-
-                # Set sequential order ID's, based on trade ID.
                 count = 1
-                for order in orders:
-                    order.order_id = str(trade_id) + "-" + str(count)
+                for target in signal['targets']:
+
+                    # Label final TP order as "FINAL_TAKE_PROFIT".
+                    tp_type = "TAKE_PROFIT" if count != len(signal['targets']) else "FINAL_TAKE_PROFIT"
                     count += 1
 
-                # Parent trade object:
-                trade = SingleInstrumentTrade(
-                    self.logger,
-                    signal['direction'],        # Direction
-                    signal['venue'],            # Venue name.
-                    signal['symbol'],           # Instrument ticker code.
-                    signal['strategy'],         # Model name.
-                    signal['entry_timestamp'],  # Signal timestamp.
-                    None,                       # Position object.
-                    {str(i.get_order_dict()['order_id']): i.get_order_dict() for i in orders})  # noqa
+                    orders.append(Order(
+                        self.logger,
+                        trade_id,
+                        None,
+                        signal['symbol'],
+                        signal['venue'],
+                        event.inverse_direction(),
+                        (size / 100) * target[1],
+                        target[0],
+                        "LIMIT",
+                        tp_type,
+                        stop[0],
+                        False,
+                        True,
+                        False))
 
-                # Finalise trade object. Must be called to set ID + order count
-                trade.set_batch_size_and_id(trade_id)
+            # Set sequential order ID's, based on trade ID.
+            count = 1
+            for order in orders:
+                order.order_id = str(trade_id) + "-" + str(count)
+                count += 1
 
-                # Queue the trade for DB storage and update portfolio state.
-                self.trades_save_to_db.put(trade.get_trade_dict())
-                self.pf['trades'][str(trade_id)] = trade.get_trade_dict()
-                self.save_porfolio(self.pf)
+            # Parent trade object:
+            trade = SingleInstrumentTrade(
+                self.logger,
+                signal['direction'],        # Direction
+                signal['venue'],            # Venue name.
+                signal['symbol'],           # Instrument ticker code.
+                signal['strategy'],         # Model name.
+                signal['entry_timestamp'],  # Signal timestamp.
+                signal['timeframe'],        # Signal timeframe.
+                signal['entry_price'],       # Entry price.
+                None,                       # Position object.
+                {str(i.get_order_dict()['order_id']): i.get_order_dict() for i in orders})  # noqa
 
-            # TODO: handle multi-instrument, multi-venue trades.
-            elif signal['instrument_count'] == 2:
-                pass
+            # Finalise trade object. Must be called to set ID + order count
+            trade.set_batch_size_and_id(trade_id)
 
-            elif signal['instrument_count'] > 2:
-                pass
+            # Queue the trade for storage.
+            self.trades_save_to_db.put(trade.get_trade_dict())
 
             # Set order batch size and queue orders for execution.
             batch_size = len(orders)
             for order in orders:
                 order.batch_size = batch_size
-                events.put(OrderEvent(order.get_order_dict()))
 
-            self.logger.debug("Trade " + str(trade_id) + " registered.")
+            within_risk_limits = self.within_risk_limits(signal)
+
+            # Generate static image of trade setup.
+            t_dict = trade.get_trade_dict()
+            self.generate_trade_setup_image(
+                t_dict, signal['op_data'], within_risk_limits)
+
+            # Only raise orders and add to portfilio if within risk limits.
+            if within_risk_limits:
+
+                self.pf['trades'][str(trade_id)] = t_dict
+                self.save_porfolio(self.pf)
+                for order in orders:
+                    events.put(OrderEvent(order.get_order_dict()))
+
+        # TODO: handle multi-instrument, multi-venue trades.
+        elif signal['instrument_count'] == 2:
+            pass
+
+        elif signal['instrument_count'] > 2:
+            pass
+
+        self.logger.info("Trade " + str(trade_id) + " registered.")
 
     def new_fill(self, fill_event):
         """
@@ -209,8 +231,12 @@ class Portfolio:
             size = self.pf['trades'][t_id]['position']['size']
             new_size = size - fill_conf['size']
 
-            if new_size != 0:
+            # Should be 0
+            if new_size > 0:
                 raise Exception(new_size)
+            # Can be negative if user modifies positions manually
+            elif new_size < 0:
+                new_size = 0
 
             self.pf['trades'][t_id]['position']['size'] = new_size
             self.pf['trades'][t_id]['position']['status'] = "CLOSED"
@@ -291,17 +317,24 @@ class Portfolio:
         self.calculate_pnl_by_trade(trade_id)
 
         # Run post-trade analytics.
-        self.post_trade_analysis(trade_id)
+        self.run_post_trade_analysis(trade_id)
+
+        # Reduce active trade count by 1.
+        self.pf['total_active_trades'] -= 1 if self.pf['total_active_trades'] > 0 else 0
+
+        # Mark trade as inactive
+        self.pf['trades'][str(trade_id)]['active'] = False
 
         # Save updated portfolio state to DB.
         self.save_porfolio(self.pf)
 
-    def cancel_orders_by_trade_id(self, t_id):
+    def cancel_orders_by_trade_id(self, trade_id):
         """
         Cancel all orders matching the given trade ID and update
         local portfolio state.
         """
 
+        t_id = str(trade_id)
         o_ids = self.pf['trades'][t_id]['orders'].keys()
         v_ids = [
             self.pf['trades'][t_id]['orders'][o]['venue_id'] for o in o_ids if
@@ -309,50 +342,57 @@ class Portfolio:
 
         venue = self.pf['trades'][t_id]['venue']
 
-        print("v_ids to cancel", v_ids)
-
         cancel_confs = self.exchanges[venue].cancel_orders(v_ids)
 
-        print("cancel_confs", cancel_confs)
+        if cancel_confs:
 
-        try:
-            if cancel_confs['error']["message"] == 'Not Found':
-                self.pf['trades'][t_id]['active'] = False
-                for o in o_ids:
-                    self.pf['trades'][t_id]['orders'][o]['status'] == "FILLED"
+            # Handle cancellation failure messages
+            try:
+                if cancel_confs['error']["message"] == 'Not Found':
+                    self.pf['trades'][t_id]['active'] = False
+                    for o in o_ids:
+                        self.pf['trades'][t_id]['orders'][o]['status'] == "FILLED"
+
                 # Handle other error messages here
+                else:
+                    raise Exception("Unhandled case", cancel_confs['error']["message"])
 
-        except KeyError as ke:
-            # print(traceback.format_exc(), ke)
-            # Update portfolio state based on cancellation message.
-            self.pf['trades'][t_id]['active'] = False
-            for order_id in o_ids:
-                for venue_id in v_ids:
-                    # Handle active orders actually cancelled.
-                    if self.pf['trades'][t_id]['orders'][order_id][
-                        'venue_id'] == venue_id and cancel_confs[
-                            venue_id] == "SUCCESS":
+            # Handle successful cancellation messages
+            except KeyError:
 
-                        self.pf['trades'][t_id]['orders']['order_id'][
-                            'status'] = "CANCELLED"
+                self.pf['trades'][t_id]['active'] = False
 
-                    else:
-                        raise Exception(
-                                "Order id mismatch:", cancel_confs[v_id])
+                for order_id in o_ids:
+                    for venue_id in set(v_ids):
+
+                        # Set order status to cancelled
+                        if self.pf['trades'][t_id]['orders'][order_id][
+                            'venue_id'] == venue_id and cancel_confs[
+                                venue_id] == "SUCCESS":
+
+                            self.pf['trades'][t_id]['orders'][order_id][
+                                'status'] = "CANCELLED"
+
+        # No active cancellations ocurred, trade was vetoed
+        else:
+            pass
 
     def check_position_open(self, trade_id):
         """
         Return true if position is still open according to local portfolio.
         """
 
-        if self.pf['trades'][trade_id]['position']['status'] == "OPEN":
+        t_id = str(trade_id)
+        if self.pf['trades'][t_id]['position'] is None:
+            return False
+        if self.pf['trades'][t_id]['position']['status'] == "OPEN":
             return True
-        elif self.pf['trades'][trade_id]['position']['status'] == "CLOSED":
+        elif self.pf['trades'][t_id]['position']['status'] == "CLOSED":
             return False
         else:
             raise Exception(
                 "Position status error:",
-                self.pf['trades'][trade_id]['position']['status'])
+                self.pf['trades'][t_id]['position']['status'])
 
     def close_position_by_trade_id(self, t_id):
         """
@@ -383,15 +423,15 @@ class Portfolio:
 
         return self.exchanges[venue].close_position(symbol)
 
-    def calculate_pnl_by_trade(self, t_id):
+    def calculate_pnl_by_trade(self, trade_id):
         """
         Calculate pnl for the given trade and update local portfolio state.
         """
 
         # Match internal order ids with venue ids {venue id: order id}
+        t_id = str(trade_id)
         o_ids = self.pf['trades'][t_id]['orders'].keys()
         id_pairs = {self.pf['trades'][t_id]['orders'][i]['venue_id']: i for i in o_ids}
-        v_ids = id_pairs.keys()
 
         # Fetch all balance affecting executions.
         executions = self.exchanges[self.pf['trades'][t_id][
@@ -405,47 +445,53 @@ class Portfolio:
             if exc['order_id'] in o_ids:
                 s_exc[exc['order_id']].append(exc)
 
-        print(json.dumps(s_exc, indent=2))
-
         # Avg total long and short for the trade.
         avg_long, long_total, avg_short, short_total, total_fee = 0, 0, 0, 0, 0
 
         for o_id in o_ids:
-            for sub_order in s_exc[o_id]:
+            try:
+                for sub_order in s_exc[o_id]:
+                    if sub_order['direction'] == "LONG":
+                        avg_long += sub_order['avg_exc_price'] * sub_order['size']
+                        long_total += sub_order['size']
+                        total_fee += sub_order['total_fee']
 
-                if sub_order['direction'] == "LONG":
-                    avg_long += sub_order['avg_exc_price'] * sub_order['size']
-                    long_total += sub_order['size']
-                    total_fee += sub_order['total_fee']
+                    elif sub_order['direction'] == "SHORT":
+                        avg_short += sub_order['avg_exc_price'] * sub_order['size']
+                        short_total += sub_order['size']
+                        total_fee += sub_order['total_fee']
 
-                elif sub_order['direction'] == "SHORT":
-                    avg_short += sub_order['avg_exc_price'] * sub_order['size']
-                    short_total += sub_order['size']
-                    total_fee += sub_order['total_fee']
+            # If order ID isnt in executions, order was not executed.
+            except KeyError:
+                pass
 
-        avg_long /= long_total
-        avg_short /= short_total
+        try:
+            if long_total and avg_long:
+                avg_long /= long_total
+            if short_total and avg_short:
+                avg_short /= short_total
+
+        except ZeroDivisionError:
+            traceback.print_exc()
+            print("long_total", long_total)
+            print("avg_long", avg_long)
+            print("short_total", short_total)
+            print("avg_short", avg_short)
+            sys.exit(0)
 
         if self.pf['trades'][t_id]['direction'] == "LONG":
-            pnl = avg_short - avg_long
+            pnl = avg_short - avg_long if avg_short and avg_long else 0
         elif self.pf['trades'][t_id]['direction'] == "SHORT":
-            pnl = avg_long - avg_short
+            pnl = avg_long - avg_short if avg_short and avg_long else 0
         else:
             raise Exception(self.pf['trades'][t_id]['direction'])
 
-        print("avg long exec:", avg_long)
-        print("avg short exec:", avg_short)
-        print("pnl:", pnl)
-        print("total_fee:", total_fee)
-
         self.pf['current_balance'] += (pnl + total_fee)
-        self.pf['balance_hsitory'][str(int(time.time()))] = {
+        self.pf['balance_history'][str(int(time.time()))] = {
             'amt': pnl + total_fee,
             'trade_id': t_id}
 
-        print("New balance:", self.pf['current_balance'])
-
-    def post_trade_analysis(self, trade_id):
+    def run_post_trade_analysis(self, trade_id):
         """
         TODO: conduct post-trade analytics.
         """
@@ -459,7 +505,7 @@ class Portfolio:
         # TODO.
 
         self.save_porfolio(portfolio)
-        self.logger.debug("Portfolio verification complete.")
+        self.logger.info("Portfolio verification complete.")
 
     def load_portfolio(self, ID=1):
         """
@@ -490,7 +536,7 @@ class Portfolio:
                 'win_loss_ratio': 0,
                 'gain_to_pain_ratio': 0,
                 'risk_per_trade': self.RISK_PER_TRADE,
-                'max_correlated_trades': self.MAX_CORRELATED_TRADES,
+                'max_correlated_positions': self.MAX_CORRELATED_POSITIONS,
                 'max_accepted_drawdown': self.MAX_ACCEPTED_DRAWDOWN,
                 'max_simultaneous_positions': self.MAX_SIMULTANEOUS_POSITIONS,
                 'default_stop': self.DEFAULT_STOP,
@@ -510,36 +556,39 @@ class Portfolio:
             {"id": portfolio['id']}, portfolio, upsert=True)
 
         if result.acknowledged:
-            self.logger.debug("Portfolio save successful.")
+            self.logger.info("Portfolio save successful.")
         else:
-            self.logger.debug("Portfolio save unsuccessful.")
+            self.logger.info("Portfolio save unsuccessful.")
 
     def within_risk_limits(self, signal):
         """
         Return true if the new signal would be within risk limits if traded.
         """
 
-        # TODO: Finish after signal > order > fill logic is done.
-
         # Position limit check.
         if self.pf['total_active_trades'] < self.pf['max_simultaneous_positions']:
 
-            if (  # Drawdown check.
+            # Drawdown limit check.
+            if (
                 (self.pf['current_drawdown'] / self.pf['current_balance'])
                     * 100) >= self.pf['max_accepted_drawdown'] or (
                     self.pf['current_drawdown'] == 0):
 
-                if not self.correlated(signal):  # Correlation check.
+                # Correlation check.
+                if not self.correlated(signal):
+                    self.logger.info(
+                        "New trade within risk limits.")
                     return True
+
                 else:
-                    self.logger.debug(
-                        "Trade skipped. Correlated positions limit reached.")
+                    self.logger.info(
+                        "New trade skipped. Correlated positions limit reached.")
                     return False
             else:
-                self.logger.debug("Trade skipped. Drawdown limit reached.")
+                self.logger.info("New trade skipped. Drawdown limit reached.")
                 return False
         else:
-            self.logger.debug("Trade skipped. Position limit reached.")
+            self.logger.info("New trade skipped. Position limit reached.")
             return False
 
     def calculate_exposure(self, trade):
@@ -553,7 +602,7 @@ class Portfolio:
         Return true if any active trades would be correlated with trades
         produced by the incoming signal.
         """
-        pass
+        return False
 
     def calculate_stop_price(self, signal):
         """
@@ -587,6 +636,9 @@ class Portfolio:
         # TOOD: Kelly criteron risk management.
         elif self.RISK_PER_TRADE.upper() == "KELLY":
             pass
+
+        else:
+            raise Exception("RISK_PER_TRADE must be an integer, or 'KELLY': " + self.RISK_PER_TRADE)
 
     def update_price(self, events, market_event):
         """
@@ -624,7 +676,7 @@ class Portfolio:
 
             except queue.Empty:
                 if count:
-                    self.logger.debug(
+                    self.logger.info(
                         "Wrote " + str(count) + " new trades to database " +
                         str(self.db_other.name) + ".")
                 break
@@ -640,3 +692,101 @@ class Portfolio:
                         continue
 
                 self.trades_save_to_db.task_done()
+
+    def generate_trade_setup_image(self, trade, op_data, within_risk_limits: bool):
+
+        self.logger.info("Creating signal snapshot image")
+
+        # Create the image directory if it doesnt exist
+        if not os.path.exists("setup_images"):
+            os.mkdir("setup_images")
+
+        # Dump trade data to file for ease of testing next stage
+        # Remove from production
+        # op_data.to_csv('op_data.csv')
+        # with open('trade.json', 'w') as outfile:
+        #     json.dump(trade, outfile)
+
+        # Reformat dataframe for mplfinance compatibility
+        df = op_data.copy(deep=True)
+        df.rename(
+            {'open': 'Open', 'high': 'High', 'low': 'Low',
+             'close': 'Close', 'volume': 'Volume'}, axis=1,
+            inplace=True)
+        df = df.tail(self.SNAPSHOT_SIZE)
+
+        # Get markers for trades triggered by the current bar
+        entry_marker = [np.nan for i in range(self.SNAPSHOT_SIZE)]
+        entry_marker[-1] = trade['entry_price']
+        stop = None
+        stop_marker = [np.nan for i in range(self.SNAPSHOT_SIZE)]
+        for order in trade['orders'].values():
+            if order['order_type'] == "STOP":
+                stop = order['price']
+                stop_marker[-1] = stop
+
+        # TODO: Trades triggered by interaction with historic bars
+
+        # Create plot figures
+        adp, hlines = self.create_addplots(df, mpl, stop, entry_marker,
+                                           stop_marker)
+        mc = mpl.make_marketcolors(up='w', down='black', wick="w", edge='w')
+        style = mpl.make_mpf_style(gridstyle='', base_mpf_style='nightclouds',
+                                   marketcolors=mc)
+        filename = "setup_images/" + str(trade['trade_id']) + "_" + str(trade['signal_timestamp']) + '_' + trade['model'] + "_" + trade['timeframe']
+
+        try:
+            plot = mpl.plot(df, type='candle', addplot=adp, style=style, hlines=hlines,
+                            title="\n" + trade['model'] + " - " + trade['timeframe'],
+                            datetime_format='%d-%m %H:%M', figscale=1, savefig=filename,
+                            tight_layout=False)
+
+        except ValueError:
+            traceback.print_exc()
+            print(df)
+            print(df['Open'])
+            sys.exit(0)
+
+        message = "Trade " + str(trade['trade_id']) + " - " + trade['model'] + " " + trade['timeframe'] + "\n\nEntry: " + str(trade['entry_price']) + " \nStop: " + str(stop) + "\n"
+        options = [[str(trade['trade_id']) + " - Accept", str(trade['trade_id']) + " - Veto"]]
+
+        try:
+            self.telegram.send_image(filename + ".png", message)
+            if within_risk_limits is True:
+                self.telegram.send_option_keyboard(options)
+            else:
+                self.telegram.send_message("Trade would exceed risk limits.")
+
+        except Exception as ex:
+            self.logger.info("Failed to send setup image via telegram.")
+            print(ex)
+            traceback.print_exc()
+
+    def create_addplots(self, df, mpl, stop, entry_marker, stop_marker):
+        """
+        Helper method for generate_trade_setup_image.
+        Formats plot artifcats for mplfinance.
+        """
+
+        adps, hlines = [], {'hlines': [], 'colors': [], 'linestyle': '--',
+                            'linewidths': 0.5}
+
+        # Add technical feature data (indicator values, etc).
+        for col in list(df):
+            if (
+                col != "Open" and col != "High" and col != "Low"
+                    and col != "Close" and col != "Volume"):
+                adps.append(mpl.make_addplot(df[col]))
+
+        # Add entry marker
+        adps.append(mpl.make_addplot(
+            entry_marker, type='scatter', markersize=500, marker="_",
+            color='limegreen'))
+
+        # Add stop marker
+        if stop:
+            adps.append(mpl.make_addplot(
+                stop_marker, type='scatter', markersize=500, marker='_',
+                color='crimson'))
+
+        return adps, hlines

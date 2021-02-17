@@ -35,6 +35,7 @@ class Trade(ABC):
         self.r_pnl = 0                  # Total realised pnl.
         self.fees = 0                   # Total fees/commisions paid.
         self.exposure = None            # Percentage of capital at risk.
+        self.consent = None             # If or not user consents to trade.
 
     @abstractmethod
     def get_trade_dict(self):
@@ -61,7 +62,7 @@ class SingleInstrumentTrade(Trade):
     """
 
     def __init__(self, logger, direction, venue, symbol, model, s_ts=None,
-                 position=None, orders=None):
+                 timeframe=None, entry_price=None, position=None, orders=None):
         super().__init__()
         self.logger = logger
         self.type = "SINGLE_INSTRUMENT"
@@ -69,6 +70,8 @@ class SingleInstrumentTrade(Trade):
         self.instrument_count = 1
         self.direction = direction          # LONG or SHORT.
         self.signal_timestamp = s_ts        # Epoch timestamp of parent signal.
+        self.timeframe = timeframe          # Trade timeframe.
+        self.entry_price = entry_price      # Trade entry price.
         self.venue = venue                  # Exchange or broker traded with.
         self.symbol = symbol                # Instrument ticker code.
         self.model = model                  # Name of triggerstrategy.
@@ -85,6 +88,8 @@ class SingleInstrumentTrade(Trade):
             'instrument_count': self.instrument_count,
             'model': self.model,
             'direction': self.direction,
+            'timeframe': self.timeframe,
+            'entry_price': self.entry_price,
             'u_pnl': self.u_pnl,
             'r_pnl': self.r_pnl,
             'fees': self.fees,
@@ -93,7 +98,8 @@ class SingleInstrumentTrade(Trade):
             'symbol': self.symbol,
             'position': self.position,
             'order_count': self.order_count,
-            'orders': self.orders}
+            'orders': self.orders,
+            'consent': self.consent}
 
 
 class Position:
@@ -104,14 +110,14 @@ class Position:
     def __init__(self, fill_conf):
         self.fill_conf = fill_conf
 
-        # Use BitMEX taker fees as placeholder.
-        self.fees = (fill_conf['avg_fill_price'] / 100) * 0.075
+        # TODO
+        self.fees = None
 
     def __str__(self):
         return str(" ")
 
     def get_fill_conf(self):
-        return fill_conf
+        return self.fill_conf
 
     def get_pos_dict(self):
         return {

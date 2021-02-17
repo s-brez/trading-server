@@ -63,14 +63,14 @@ class Bitmex_WS:
             target=lambda: self.ws.run_forever(),
             daemon=True)
         thread.start()
-        self.logger.debug("Started websocket daemon.")
+        self.logger.info("Started websocket daemon.")
 
         timeout = self.RECONNECT_TIMEOUT
         while not self.ws.sock or not self.ws.sock.connected and timeout:
             sleep(1)
             timeout -= 1
         if not timeout:
-            self.logger.debug("Websocket connection timed out.")
+            self.logger.info("Websocket connection timed out.")
             # Attempt to reconnect
             if not self.ws.sock.connected:
                 sleep(5)
@@ -92,13 +92,13 @@ class Bitmex_WS:
         """
 
         msg = json.loads(msg)
-        # self.logger.debug(json.dumps(msg))
+        # self.logger.info(json.dumps(msg))
         table = msg['table'] if 'table' in msg else None
         action = msg['action'] if 'action' in msg else None
         try:
 
             if 'subscribe' in msg:
-                self.logger.debug(
+                self.logger.info(
                     "Subscribed to " + msg['subscribe'] + ".")
 
             elif action:
@@ -143,7 +143,7 @@ class Bitmex_WS:
                 if action is not None:
                     raise Exception("Unknown action: %s" % action)
         except Exception:
-            self.logger.debug(traceback.format_exc())
+            self.logger.info(traceback.format_exc())
 
     def on_open(self, ws):
         """
@@ -177,11 +177,11 @@ class Bitmex_WS:
             None.
         """
 
-        self.logger.debug("BitMEX websocket error: " + str(msg))
+        self.logger.info("BitMEX websocket error: " + str(msg))
 
         # attempt to reconnect if  ws is not connected
         self.ws = None
-        self.logger.debug("Attempting to reconnect.")
+        self.logger.info("Attempting to reconnect.")
         sleep(self.RECONNECT_TIMEOUT)
         self.connect()
 
