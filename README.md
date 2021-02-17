@@ -1,6 +1,9 @@
 # trading-server
 Multi-asset, multi-strategy, event-driven trade execution and management platform for trading common markets autonomously on 1min+ timeframes.
 
+![telegram ui](https://github.com/s-brez/trading-server/blob/master/demo-telegram-ui.jpg?raw=true)
+
+
 ## Current features
 Trade FX, crypto, CFD's, traditional markets etc (any venue with an API) with unified portfolio management
 
