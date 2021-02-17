@@ -86,7 +86,7 @@ class Broker:
 
             for trade_id in self.orders.keys():
 
-                # Action user responses from telegram
+                # Action user responses from telegram, if any
                 self.register_telegram_responses(trade_id)
 
                 # Get stored trade state from DB
@@ -102,8 +102,8 @@ class Broker:
                         self.logger.info(
                             "Trade " + str(trade_id) + " order batch ready.")
 
-                        for order in self.orders[trade_id]:
-                            print(json.dumps(order))
+                        # for order in self.orders[trade_id]:
+                        #     print(json.dumps(order))
 
                         # Place orders.
                         order_confs = self.exchanges[venue].place_bulk_orders(
@@ -112,8 +112,12 @@ class Broker:
                         # Update portfolio state with order placement details.
                         if order_confs:
                             self.pf.new_order_conf(order_confs, events)
+                            self.logger.info("Orders for trade " + str(trade_id) + " submitted to venue.")
 
-                        # Flag sent orders for removal from self.orders.
+                        else:
+                            self.logger.info("Order submission for " + str(trade_id) + " may have failed or only partially succeeded.")
+                            # raise Exception("Caution: manual order and position check required for trade " + str(trade_id) + ".")
+
                         to_remove.append(trade_id)
 
                     else:
@@ -170,33 +174,50 @@ class Broker:
 
         for response in self.tg.get_updates():
 
+            u_id = None
+            msg_type = None
+            t_id = str(trade_id)
+
+            # Message field may be 'message' or 'edited_message'
+            try:
+                u_id = str(response['message']['from']['id'])
+                msg_type = 'message'
+            except KeyError:
+                u_id = str(response['edited_message']['from']['id'])
+                msg_type = 'edited_message'
+
             # Response must have came from a whitelisted account.
-            if str(response['message']['from']['id']) in self.tg.whitelist:
+            try:
+                if u_id in self.tg.whitelist:
 
-                # Response ID must match trade ID.
-                if str(response['message']['text'][:len(str(trade_id))]) == str(trade_id):
+                    # Response ID must match trade ID.
+                    if str(response[msg_type]['text'][:len(t_id)]) == t_id:
 
-                    # Response timestamp must be greater than signal trigger time.
-                    trade_ts = self.db_other['trades'].find_one({"trade_id": trade_id})['signal_timestamp']
-                    response_ts = response['message']['date']
-                    if response_ts > trade_ts:
+                        # Response timestamp must be greater than signal trigger time.
+                        trade_ts = self.db_other['trades'].find_one({"trade_id": trade_id})['signal_timestamp']
+                        response_ts = response[msg_type]['date']
+                        if response_ts > trade_ts:
 
-                        try:
-                            decision = response['message']['text'].split(" - ", 1)
-                            if decision[1] == "Accept":
-                                self.db_other['trades'].update_one({"trade_id": trade_id}, {"$set": {"consent": True}})
+                            try:
+                                decision = response[msg_type]['text'].split(" - ", 1)
+                                if decision[1] == "Accept":
+                                    self.db_other['trades'].update_one({"trade_id": trade_id}, {"$set": {"consent": True}})
+                                    self.pf.pf['trades'][t_id]['consent'] = True
 
-                            elif decision[1] == "Veto":
-                                self.db_other['trades'].update_one({"trade_id": trade_id}, {"$set": {"consent": False}})
+                                elif decision[1] == "Veto":
+                                    self.db_other['trades'].update_one({"trade_id": trade_id}, {"$set": {"consent": False}})
+                                    self.pf.pf['trades'][t_id]['consent'] = False
 
-                            else:
-                                self.logger.info("Unknown input received as response to trade " + str(trade_id) + " consent message: " + decision[1])
+                                else:
+                                    self.logger.info("Unknown input received as response to trade " + t_id + " consent message: " + decision[1])
 
-                        except Exception:
-                            print(str(response['message']['text'][:len(str(trade_id))]), str(trade_id))
-                            print(response['message']['text'])
-                            print(decision)
-                            traceback.print_exc()
+                            except Exception:
+                                traceback.print_exc()
+
+            # Unexpected response format in updates
+            except Exception:
+                traceback.print_exc()
+                print(json.dumps(response))
 
     def check_fills(self, events):
         """
@@ -209,6 +230,7 @@ class Broker:
                 events.put(fill_event)
 
             self.fill_agent.fills = []
+            self.logger.info("Parsing order fill messages.")
 
         return events
 
