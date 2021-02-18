@@ -221,7 +221,7 @@ class Datahandler:
 
         Returns:
             report: dict showing state and completeness of given symbols
-            stored data. Contains pertinent timestamps, periods of missing bars
+            stored data. Contains pertinent timestamps, periods  of missing bars
             and other relevant info.
 
         Raises:
@@ -235,6 +235,7 @@ class Datahandler:
             self.db_collections[exchange.get_name()].count_documents({
                 "symbol": symbol}))
         origin_ts = exchange.get_origin_timestamp(symbol)
+        # print('Origin ts', symbol, str(origin_ts))
 
         # Handle case where there is no existing data (e.g fresh DB).
         if total_stored == 0:

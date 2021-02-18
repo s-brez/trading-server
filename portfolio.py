@@ -12,6 +12,7 @@ Some rights reserved. See LICENSE.md, AUTHORS.md.
 from trade_types import SingleInstrumentTrade, Order, Position, TradeID
 from event_types import OrderEvent, FillEvent
 
+from datetime import datetime
 import numpy as np
 import traceback
 
@@ -59,7 +60,7 @@ class Portfolio:
 
     def new_signal(self, events, event):
         """
-        Interpret incoming signal events to produce Order Events.
+        Convert incoming Signal events to Order events.
 
         Args:
             events: event queue object.
@@ -253,7 +254,7 @@ class Portfolio:
             if new_size == 0:
                 self.trade_complete(t_id)
             else:
-                self.calculate_pnl_by_trade(t_id)
+                self.calculate_pnl_by_trade(t_id, take_profit=True)
 
         elif fill_conf['metatype'] == "FINAL_TAKE_PROFIT":
 
@@ -306,17 +307,14 @@ class Portfolio:
         trade checks/analytics.
         """
 
-        # Cancel all orders marching trade ID.
         self.cancel_orders_by_trade_id(trade_id)
 
         # Close positions, if still open.
         if self.check_position_open(trade_id):
             self.close_position_by_trade_id(trade_id)
 
-        # Calculate trade pnl.
         self.calculate_pnl_by_trade(trade_id)
 
-        # Run post-trade analytics.
         self.run_post_trade_analysis(trade_id)
 
         # Reduce active trade count by 1.
@@ -423,79 +421,89 @@ class Portfolio:
 
         return self.exchanges[venue].close_position(symbol)
 
-    def calculate_pnl_by_trade(self, trade_id):
+    def calculate_pnl_by_trade(self, trade_id, take_profit=False):
         """
-        Calculate pnl for the given trade and update local portfolio state.
+        Calculate pnl for the given trade and update portfolio state.
         """
 
-        # Match internal order ids with venue ids {venue id: order id}
         t_id = str(trade_id)
-        o_ids = self.pf['trades'][t_id]['orders'].keys()
-        id_pairs = {self.pf['trades'][t_id]['orders'][i]['venue_id']: i for i in o_ids}
+        trade = self.pf['trades'][t_id]
 
-        # Fetch all balance affecting executions.
-        executions = self.exchanges[self.pf['trades'][t_id][
-            'venue']].get_executions(self.pf['trades'][t_id]['symbol'])
+        # Get order executions for trade in period from trade signal to current time.
+        execs = self.exchanges[trade['venue']].get_executions(
+            trade['symbol'], trade['signal_timestamp'], int(datetime.now().timestamp()))
 
-        unique_o_ids = list(set([i['order_id'] for i in executions]))
+        # Handle two-order trades (single exit, single entry).
+        if len(trade['orders']) == 2:
+            entry_oid = trade['orders'][t_id + "-1"]['order_id']
+            exit_oid = trade['orders'][t_id + "-2"]['order_id']
 
-        # Sort execs {{order_id: [exc1, exc2, exc3, etc]}, ... }
-        s_exc = {i: [] for i in unique_o_ids if i in o_ids}
-        for exc in executions:
-            if exc['order_id'] in o_ids:
-                s_exc[exc['order_id']].append(exc)
+        # TODO: Handle trade types with more than 2 orders
+        elif len(trade['orders']) >= 3:
+            entry_oid = None
+            exit_oid = None
+            # tp_oids = []
 
-        # Avg total long and short for the trade.
-        avg_long, long_total, avg_short, short_total, total_fee = 0, 0, 0, 0, 0
+        # Entry executions will match direction of trade and bear the entry order id.
+        entries = [i for i in execs if i['direction'] == trade['direction'] and i['order_id'] == entry_oid]
 
-        for o_id in o_ids:
-            try:
-                for sub_order in s_exc[o_id]:
-                    if sub_order['direction'] == "LONG":
-                        avg_long += sub_order['avg_exc_price'] * sub_order['size']
-                        long_total += sub_order['size']
-                        total_fee += sub_order['total_fee']
+        # API-submitted exit executions should be the reverse
+        exits = [i for i in execs if i['direction'] != trade['direction'] and i['order_id'] == exit_oid]
+        manual_exit = False
 
-                    elif sub_order['direction'] == "SHORT":
-                        avg_short += sub_order['avg_exc_price'] * sub_order['size']
-                        short_total += sub_order['size']
-                        total_fee += sub_order['total_fee']
+        # Exit orders placed manually wont bear the order id and cant be evaluated with certainty
+        # if there were multiple trades with executions in the same period as the current trade.
+        # If manual exit, notify user if the exit total is differnt to entry total.
+        if not exits:
+            exits = [i for i in execs if i['direction'] != trade['direction']]
+            manual_exit = True if exits else None
 
-            # If order ID isnt in executions, order was not executed.
-            except KeyError:
-                pass
+        if entries and exits:
+            avg_entry = sum(i['avg_exc_price'] for i in entries) / len(entries)
+            avg_exit = (sum(i['avg_exc_price'] for i in exits) / len(exits))
+            fees = sum(i['total_fee'] for i in (entries + exits))
+            percent_change = abs((avg_entry - avg_exit) / avg_entry) * 100
+            abs_pnl = abs((trade['orders'][t_id + "-1"]['size'] / 100) * percent_change) - fees
 
-        try:
-            if long_total and avg_long:
-                avg_long /= long_total
-            if short_total and avg_short:
-                avg_short /= short_total
+            if trade['direction'] == "LONG":
+                final_pnl = abs_pnl if avg_exit > avg_entry + fees else -abs_pnl
 
-        except ZeroDivisionError:
-            traceback.print_exc()
-            print("long_total", long_total)
-            print("avg_long", avg_long)
-            print("short_total", short_total)
-            print("avg_short", avg_short)
-            sys.exit(0)
+            elif trade['direction'] == "SHORT":
+                final_pnl = abs_pnl if avg_exit < avg_entry - fees else -abs_pnl
 
-        if self.pf['trades'][t_id]['direction'] == "LONG":
-            pnl = avg_short - avg_long if avg_short and avg_long else 0
-        elif self.pf['trades'][t_id]['direction'] == "SHORT":
-            pnl = avg_long - avg_short if avg_short and avg_long else 0
+            self.pf['current_balance'] += final_pnl
+            self.pf['balance_history'][str(int(time.time()))] = {
+                'amt': final_pnl,
+                'trade_id': t_id}
+
+            self.logger.info("Trade " + t_id + " returned " + str(final_pnl) + " USD.")
+
+        # No matching entry or exit executions exist.
         else:
-            raise Exception(self.pf['trades'][t_id]['direction'])
+            pass
 
-        self.pf['current_balance'] += (pnl + total_fee)
-        self.pf['balance_history'][str(int(time.time()))] = {
-            'amt': pnl + total_fee,
-            'trade_id': t_id}
+        if manual_exit:
+            self.logger.info("Manual exit orders detected for trade " + t_id + ". Please manually verify position is closed and final pnl figure. Avoid closing positions or cancelling orders manually.")            
 
     def run_post_trade_analysis(self, trade_id):
         """
-        TODO: conduct post-trade analytics.
+        Conduct post-trade analytics.
         """
-        pass
+
+        # TODO: Update the following:
+
+        # 'peak_balance'
+        # 'low_balance'
+        # 'avg_r_per_winner'
+        # 'avg_r_per_loser'
+        # 'avg_r_per_trade'
+        # 'total_winning_trades'
+        # 'total_losing_trades'
+        # 'total_consecutive_wins'
+        # 'total_consecutive_losses'
+        # 'win_loss_ratio'
+        # 'gain_to_pain_ratio'
+        # 'total_active_trades'
 
     def verify_portfolio_state(self, portfolio):
         """
@@ -525,7 +533,8 @@ class Portfolio:
                         'amt': 1000,
                         'trade_id': "Initial deposit."}},
                 'current_balance': 1000,
-                'current_drawdown': 0,
+                'peak_balance': 0,
+                'low_balance': 0,
                 'avg_r_per_winner': 0,
                 'avg_r_per_loser': 0,
                 'avg_r_per_trade': 0,
@@ -562,7 +571,7 @@ class Portfolio:
 
     def within_risk_limits(self, signal):
         """
-        Return true if the new signal would be within risk limits if traded.
+        Return true if signal would not exceed risk limits when traded.
         """
 
         # Position limit check.
@@ -595,18 +604,22 @@ class Portfolio:
         """
         Calculate the currect capital at risk for the given trade.
         """
-        pass
+
+        # TODO.
 
     def correlated(self, signal):
         """
         Return true if any active trades would be correlated with trades
         produced by the incoming signal.
         """
+
+        # TODO
+
         return False
 
     def calculate_stop_price(self, signal):
         """
-        Find the stop price for the given signal.
+        Find stop price for the given signal.
         """
 
         if signal['stop_price'] is not None:
@@ -621,7 +634,7 @@ class Portfolio:
 
     def calculate_position_size(self, stop, entry):
         """
-        Find appropriate position size for the given parameters.
+        Find appropriate position size according to portfolio risk parameters
         """
 
         # Fixed percentage per trade risk management.
@@ -638,7 +651,7 @@ class Portfolio:
             pass
 
         else:
-            raise Exception("RISK_PER_TRADE must be an integer, or 'KELLY': " + self.RISK_PER_TRADE)
+            raise Exception("RISK_PER_TRADE must be an integer or 'KELLY': " + self.RISK_PER_TRADE)
 
     def update_price(self, events, market_event):
         """
@@ -654,7 +667,8 @@ class Portfolio:
         Raises:
             None.
         """
-        pass
+
+        # TODO.
 
     def save_new_trades_to_db(self):
         """
@@ -694,10 +708,13 @@ class Portfolio:
                 self.trades_save_to_db.task_done()
 
     def generate_trade_setup_image(self, trade, op_data, within_risk_limits: bool):
+        """
+        Create a snapshot image of trade setup and send to user.
+        """
 
         self.logger.info("Creating signal snapshot image")
 
-        # Create the image directory if it doesnt exist
+        # Create image directory if it doesnt exist
         if not os.path.exists("setup_images"):
             os.mkdir("setup_images")
 
@@ -765,7 +782,7 @@ class Portfolio:
     def create_addplots(self, df, mpl, stop, entry_marker, stop_marker):
         """
         Helper method for generate_trade_setup_image.
-        Formats plot artifcats for mplfinance.
+        Formats plot artifacts for mplfinance.
         """
 
         adps, hlines = [], {'hlines': [], 'colors': [], 'linestyle': '--',
