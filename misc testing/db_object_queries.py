@@ -16,7 +16,7 @@ result = list(coll.find({}, {"_id": 0}).sort([("id", -1)]))  # portfolio
 # coll.update_one({"trade_id": 5}, {"$set": {"consent": True}})
 # result = coll.find_one({"trade_id": 1}, {"_id": 0})  # trades
 
-[print((json.dumps(i, indent=2))) for i in result]
+[print((json.dumps(i, indent=4))) for i in result]
 
 # print(json.dumps(result, indent=2))
 
