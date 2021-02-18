@@ -60,7 +60,7 @@ class Portfolio:
 
     def new_signal(self, events, event):
         """
-        Interpret incoming signal events to produce Order Events.
+        Convert incoming Signal events to Order events.
 
         Args:
             events: event queue object.
@@ -254,7 +254,7 @@ class Portfolio:
             if new_size == 0:
                 self.trade_complete(t_id)
             else:
-                self.calculate_pnl_by_trade(t_id)
+                self.calculate_pnl_by_trade(t_id, take_profit=True)
 
         elif fill_conf['metatype'] == "FINAL_TAKE_PROFIT":
 
@@ -307,17 +307,14 @@ class Portfolio:
         trade checks/analytics.
         """
 
-        # Cancel all orders marching trade ID.
         self.cancel_orders_by_trade_id(trade_id)
 
         # Close positions, if still open.
         if self.check_position_open(trade_id):
             self.close_position_by_trade_id(trade_id)
 
-        # Calculate trade pnl.
         self.calculate_pnl_by_trade(trade_id)
 
-        # Run post-trade analytics.
         self.run_post_trade_analysis(trade_id)
 
         # Reduce active trade count by 1.
@@ -424,7 +421,7 @@ class Portfolio:
 
         return self.exchanges[venue].close_position(symbol)
 
-    def calculate_pnl_by_trade(self, trade_id):
+    def calculate_pnl_by_trade(self, trade_id, take_profit=False):
         """
         Calculate pnl for the given trade and update portfolio state.
         """
@@ -461,32 +458,27 @@ class Portfolio:
             exits = [i for i in execs if i['direction'] != trade['direction']]
             manual_exit = True if exits else None
 
-        for i in entries:
-            print(json.dumps(i, indent=2))
-
-        for i in exits:
-            print(json.dumps(i, indent=2))
-
         if entries and exits:
             avg_entry = sum(i['avg_exc_price'] for i in entries) / len(entries)
-            avg_exit = sum(i['avg_exc_price'] for i in exits) / len(exits)
+            avg_exit = (sum(i['avg_exc_price'] for i in exits) / len(exits))
             fees = sum(i['total_fee'] for i in (entries + exits))
-            diff = abs(avg_entry - avg_exit)
+            percent_change = abs((avg_entry - avg_exit) / avg_entry) * 100
+            abs_pnl = abs((trade['orders'][t_id + "-1"]['size'] / 100) * percent_change) - fees
 
             if trade['direction'] == "LONG":
-                final_pnl = diff - fees if avg_exit > avg_entry else -(diff - fees)
+                final_pnl = abs_pnl if avg_exit > avg_entry + fees else -abs_pnl
 
             elif trade['direction'] == "SHORT":
-                final_pnl = diff - fees if avg_exit < avg_entry else -(diff - fees)
+                final_pnl = abs_pnl if avg_exit < avg_entry - fees else -abs_pnl
 
-            print(final_pnl)
             self.pf['current_balance'] += final_pnl
             self.pf['balance_history'][str(int(time.time()))] = {
                 'amt': final_pnl,
                 'trade_id': t_id}
-            self.logger.info("Trade " + t_id + " returned $" + str(final_pnl) + " USD.")
 
-        # No matching entry or exit executions exist
+            self.logger.info("Trade " + t_id + " returned " + str(final_pnl) + " USD.")
+
+        # No matching entry or exit executions exist.
         else:
             pass
 
@@ -495,9 +487,23 @@ class Portfolio:
 
     def run_post_trade_analysis(self, trade_id):
         """
-        TODO: conduct post-trade analytics.
+        Conduct post-trade analytics.
         """
-        pass
+
+        # TODO: Update the following:
+
+        # 'peak_balance'
+        # 'low_balance'
+        # 'avg_r_per_winner'
+        # 'avg_r_per_loser'
+        # 'avg_r_per_trade'
+        # 'total_winning_trades'
+        # 'total_losing_trades'
+        # 'total_consecutive_wins'
+        # 'total_consecutive_losses'
+        # 'win_loss_ratio'
+        # 'gain_to_pain_ratio'
+        # 'total_active_trades'
 
     def verify_portfolio_state(self, portfolio):
         """
@@ -527,7 +533,8 @@ class Portfolio:
                         'amt': 1000,
                         'trade_id': "Initial deposit."}},
                 'current_balance': 1000,
-                'current_drawdown': 0,
+                'peak_balance': 0,
+                'low_balance': 0,
                 'avg_r_per_winner': 0,
                 'avg_r_per_loser': 0,
                 'avg_r_per_trade': 0,
@@ -564,7 +571,7 @@ class Portfolio:
 
     def within_risk_limits(self, signal):
         """
-        Return true if the new signal would be within risk limits if traded.
+        Return true if signal would not exceed risk limits when traded.
         """
 
         # Position limit check.
@@ -597,18 +604,22 @@ class Portfolio:
         """
         Calculate the currect capital at risk for the given trade.
         """
-        pass
+
+        # TODO.
 
     def correlated(self, signal):
         """
         Return true if any active trades would be correlated with trades
         produced by the incoming signal.
         """
+
+        # TODO
+
         return False
 
     def calculate_stop_price(self, signal):
         """
-        Find the stop price for the given signal.
+        Find stop price for the given signal.
         """
 
         if signal['stop_price'] is not None:
@@ -623,7 +634,7 @@ class Portfolio:
 
     def calculate_position_size(self, stop, entry):
         """
-        Find appropriate position size for the given parameters.
+        Find appropriate position size according to portfolio risk parameters
         """
 
         # Fixed percentage per trade risk management.
@@ -640,7 +651,7 @@ class Portfolio:
             pass
 
         else:
-            raise Exception("RISK_PER_TRADE must be an integer, or 'KELLY': " + self.RISK_PER_TRADE)
+            raise Exception("RISK_PER_TRADE must be an integer or 'KELLY': " + self.RISK_PER_TRADE)
 
     def update_price(self, events, market_event):
         """
@@ -656,7 +667,8 @@ class Portfolio:
         Raises:
             None.
         """
-        pass
+
+        # TODO.
 
     def save_new_trades_to_db(self):
         """
@@ -696,10 +708,13 @@ class Portfolio:
                 self.trades_save_to_db.task_done()
 
     def generate_trade_setup_image(self, trade, op_data, within_risk_limits: bool):
+        """
+        Create a snapshot image of trade setup and send to user.
+        """
 
         self.logger.info("Creating signal snapshot image")
 
-        # Create the image directory if it doesnt exist
+        # Create image directory if it doesnt exist
         if not os.path.exists("setup_images"):
             os.mkdir("setup_images")
 
@@ -767,7 +782,7 @@ class Portfolio:
     def create_addplots(self, df, mpl, stop, entry_marker, stop_marker):
         """
         Helper method for generate_trade_setup_image.
-        Formats plot artifcats for mplfinance.
+        Formats plot artifacts for mplfinance.
         """
 
         adps, hlines = [], {'hlines': [], 'colors': [], 'linestyle': '--',
