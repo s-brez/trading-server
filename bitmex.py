@@ -49,13 +49,16 @@ class Bitmex(Exchange):
         super()
         self.logger = logger
         self.name = "BitMEX"
-        self.symbols = ["XBTUSD"]  # "ETHUSD", "XRPUSD"
+        self.symbols = ["XBTUSD"]  # "ETHUSD", "XRPUSD", "BCHUSD", LTCUSD", "LINKUSDT"]
 
         # Minimum price increment for each instrument.
         self.symbol_min_increment = {
             'XBTUSD': 0.5,
             'ETHUSD': 0.05,
             'XRPUSD': 0.0001}
+            # 'BCHUSD': 0.05,
+            # 'LTCUSD' : 0.01,
+            # 'LINKUSDT': 0.0005}
 
         self.channels = ["trade"]
 
@@ -63,6 +66,9 @@ class Bitmex(Exchange):
             "XBTUSD": 1483228800,
             "ETHUSD": 1533200520,
             "XRPUSD": 1580875200}
+            # 'BCHUSD': ,
+            # 'LTCUSD' : ,
+            # 'LINKUSDT': }
 
         self.api_key, self.api_secret = self.load_api_keys()
 
@@ -284,11 +290,17 @@ class Bitmex(Exchange):
                     'opening_size': pos['openingQty'],
                     'status': status}
 
-    def get_executions(self, symbol, start_timestamp=None, count=500):
+    def get_executions(self, symbol, start_timestamp=None, end_timestamp=None, count=500):
+
+        # Convert epoch ts's to utc human-readable
+        start = str(datetime.utcfromtimestamp(start_timestamp)) if start_timestamp else None
+        end = str(datetime.utcfromtimestamp(end_timestamp)) if end_timestamp else None
+
         payload = {
             'symbol': symbol,
             'count': count,
-            'start': start_timestamp,
+            'startTime': start,
+            'endTime': end,
             'reverse': True}
 
         prepared_request = Request(
