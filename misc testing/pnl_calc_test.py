@@ -10,7 +10,7 @@ import json
 import hmac
 import hashlib
 import time
-
+ 
 
 REQUEST_TIMEOUT = 10
 
@@ -31,80 +31,70 @@ session = Session()
 session.mount('https://', HTTPAdapter(max_retries=retries))
 
 demo_trade = {
-      "trade_id": 1,
-      "signal_timestamp": 1613565960,
-      "type": "SINGLE_INSTRUMENT",
-      "active": False,
-      "venue_count": 1,
-      "instrument_count": 1,
-      "model": "EMA Cross - Testing only",
-      "direction": "SHORT",
-      "timeframe": "1Min",
-      "entry_price": 51440.0,
-      "u_pnl": 0,
-      "r_pnl": 0,
-      "fees": 0,
-      "exposure": None,
-      "venue": "BitMEX",
-      "symbol": "XBTUSD",
-      "position": {
-        "trade_id": 1,
-        "size": 0,
-        "avg_entry_price": 51414,
-        "symbol": "XBTUSD",
-        "direction": "SHORT",
-        "currency": "USD",
-        "opening_timestamp": 1613566023,
-        "opening_size": 50.0,
-        "status": "CLOSED"
-      },
-      "order_count": 2,
-      "orders": {
+    "trade_id": 1,
+    "signal_timestamp": 1613627160,
+    "type": "SINGLE_INSTRUMENT",
+    "active": False,
+    "venue_count": 1,
+    "instrument_count": 1,
+    "model": "EMA Cross - Testing only",
+    "direction": "SHORT",
+    "timeframe": "1Min",
+    "entry_price": 52288.0,
+    "u_pnl": 0,
+    "r_pnl": 0,
+    "fees": 0,
+    "exposure": None,
+    "venue": "BitMEX",
+    "symbol": "XBTUSD",
+    "position": None,
+    "order_count": 2,
+    "orders": {
         "1-1": {
-          "trade_id": 1,
-          "order_id": "1-1",
-          "venue": "BitMEX",
-          "symbol": "XBTUSD",
-          "order_type": "MARKET",
-          "metatype": "ENTRY",
-          "void_price": 52468.799999999996,
-          "direction": "SHORT",
-          "reduce_only": False,
-          "post_only": False,
-          "batch_size": 2,
-          "size": 50.0,
-          "trail": False,
-          "timestamp": 1613566023,
-          "avg_fill_price": 51414,
-          "currency": "USD",
-          "venue_id": "fc3bf4ab-4428-4d5f-bf56-448de0949e93",
-          "price": 51405.5,
-          "status": "FILLED"
+            "trade_id": 1,
+            "order_id": "1-1",
+            "timestamp": None,
+            "avg_fill_price": None,
+            "currency": None,
+            "venue_id": None,
+            "venue": "BitMEX",
+            "symbol": "XBTUSD",
+            "direction": "SHORT",
+            "size": 49.0,
+            "price": 52288.0,
+            "order_type": "MARKET",
+            "metatype": "ENTRY",
+            "void_price": 53333.76,
+            "trail": False,
+            "reduce_only": False,
+            "post_only": False,
+            "batch_size": 0,
+            "status": "UNFILLED"
         },
         "1-2": {
-          "trade_id": 1,
-          "order_id": "1-2",
-          "venue": "BitMEX",
-          "symbol": "XBTUSD",
-          "order_type": "STOP",
-          "metatype": "STOP",
-          "void_price": None,
-          "direction": "LONG",
-          "reduce_only": True,
-          "post_only": False,
-          "batch_size": 2,
-          "size": 50.0,
-          "trail": False,
-          "timestamp": 1613566024,
-          "avg_fill_price": None,
-          "currency": "USD",
-          "venue_id": "9340d737-bc19-4d6f-ad33-81a24e38904a",
-          "price": None,
-          "status": "CANCELLED"
+            "trade_id": 1,
+            "order_id": "1-2",
+            "timestamp": None,
+            "avg_fill_price": None,
+            "currency": None,
+            "venue_id": None,
+            "venue": "BitMEX",
+            "symbol": "XBTUSD",
+            "direction": "LONG",
+            "size": 49.0,
+            "price": 53333.76,
+            "order_type": "STOP",
+            "metatype": "STOP",
+            "void_price": None,
+            "trail": False,
+            "reduce_only": True,
+            "post_only": False,
+            "batch_size": 0,
+            "status": "UNFILLED"
         }
-      },
-      "consent": True
-    }
+    },
+    "consent": True
+}
 
 
 def generate_request_signature(secret, request_type, url, nonce,
@@ -271,28 +261,25 @@ def calculate_pnl_by_trade(trade_id):
         exits = [i for i in execs if i['direction'] != trade['direction']]
         manual_exit = True
 
-    for i in entries:
-        print(json.dumps(i, indent=2))
-
-    for i in exits:
-        print(json.dumps(i, indent=2))
-
     if entries and exits:
         avg_entry = sum(i['avg_exc_price'] for i in entries) / len(entries)
-        avg_exit = sum(i['avg_exc_price'] for i in exits) / len(exits)
+        avg_exit = (sum(i['avg_exc_price'] for i in exits) / len(exits)) + 5000
         fees = sum(i['total_fee'] for i in (entries + exits))
-        diff = abs(avg_entry - avg_exit)
-
+        percent_change = abs((avg_entry - avg_exit) / avg_entry) * 100
+        abs_pnl = abs((trade['orders'][t_id + "-1"]['size'] / 100) * percent_change) - fees
         if trade['direction'] == "LONG":
-            final_pnl = diff - fees if avg_exit > avg_entry else -(diff - fees)
+            final_pnl = abs_pnl if avg_exit > avg_entry + fees else -abs_pnl
 
         elif trade['direction'] == "SHORT":
-            final_pnl = diff - fees if avg_exit < avg_entry else -(diff - fees)
+            final_pnl = abs_pnl if avg_exit < avg_entry - fees else -abs_pnl
 
+        print(avg_entry, avg_exit)
+        print(percent_change)
         print(final_pnl)
 
     # No matching entry or exit executions exist
     else:
         pass
+
 
 calculate_pnl_by_trade(1)
