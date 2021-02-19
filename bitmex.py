@@ -49,28 +49,28 @@ class Bitmex(Exchange):
         super()
         self.logger = logger
         self.name = "BitMEX"
-        self.symbols = ["XBTUSD"]  # "ETHUSD", "XRPUSD", "BCHUSD", LTCUSD", "LINKUSDT"]
+        self.symbols = ["XBTUSD"] # "ETHUSD", "XRPUSD", "BCHUSD", "LTCUSD", "LINKUSDT"]
 
         # Minimum price increment for each instrument.
         self.symbol_min_increment = {
             'XBTUSD': 0.5,
             'ETHUSD': 0.05,
-            'XRPUSD': 0.0001}
-            # 'BCHUSD': 0.05,
-            # 'LTCUSD' : 0.01,
-            # 'LINKUSDT': 0.0005}
+            'XRPUSD': 0.0001,
+            'BCHUSD': 0.05,
+            'LTCUSD': 0.01,
+            'LINKUSDT': 0.0005}
 
         # Websocket subscription channels.
         self.channels = ["trade"]
 
-        # Not needed but saves a few rest polls, thus saves time.
+        # Not needed but saves a few rest polls/saves time.
         self.origin_tss = {
             "XBTUSD": 1483228800,
             "ETHUSD": 1533200520,
-            "XRPUSD": 1580875200}
-            # 'BCHUSD': ,
-            # 'LTCUSD' : ,
-            # 'LINKUSDT': }
+            "XRPUSD": 1580875200,
+            'BCHUSD': 1592280000,
+            'LTCUSD': 1596081600,
+            'LINKUSDT': 1602820800}
 
         self.api_key, self.api_secret = self.load_api_keys()
 
