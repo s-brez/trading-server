@@ -37,7 +37,7 @@ class Portfolio:
     Capital allocations to strategies and risk parameters are defined here.
     """
 
-    MAX_SIMULTANEOUS_POSITIONS = 1
+    MAX_SIMULTANEOUS_POSITIONS = 2
     MAX_CORRELATED_POSITIONS = 2
     MAX_ACCEPTED_DRAWDOWN = 25  # Percentage as integer.
     RISK_PER_TRADE = 1          # Percentage as integer OR 'KELLY'
@@ -532,22 +532,23 @@ class Portfolio:
                     str(int(time.time())): {
                         'amt': 1000,
                         'trade_id': "Initial deposit."}},
+                'starting_balance': 1000,
                 'current_balance': 1000,
                 'peak_balance': 0,
                 'low_balance': 0,
-                'avg_r_per_winner': 0,
-                'avg_r_per_loser': 0,
-                'avg_r_per_trade': 0,
                 'total_winning_trades': 0,
                 'total_losing_trades': 0,
                 'total_consecutive_wins': 0,
                 'total_consecutive_losses': 0,
+                'avg_r_per_winner': 0,
+                'avg_r_per_loser': 0,
+                'avg_r_per_trade': 0,
                 'win_loss_ratio': 0,
                 'gain_to_pain_ratio': 0,
                 'risk_per_trade': self.RISK_PER_TRADE,
+                'max_simultaneous_positions': self.MAX_SIMULTANEOUS_POSITIONS,
                 'max_correlated_positions': self.MAX_CORRELATED_POSITIONS,
                 'max_accepted_drawdown': self.MAX_ACCEPTED_DRAWDOWN,
-                'max_simultaneous_positions': self.MAX_SIMULTANEOUS_POSITIONS,
                 'default_stop': self.DEFAULT_STOP,
                 'model_allocations': {  # Equal allocation by default.
                     i.get_name(): (100 / len(self.models)) for i in self.models},
@@ -577,16 +578,12 @@ class Portfolio:
         # Position limit check.
         if self.pf['total_active_trades'] < self.pf['max_simultaneous_positions']:
 
-            # Drawdown limit check.
-            if (
-                (self.pf['current_drawdown'] / self.pf['current_balance'])
-                    * 100) >= self.pf['max_accepted_drawdown'] or (
-                    self.pf['current_drawdown'] == 0):
+            # Drawdown check.
+            if self.pf['current_balance'] >= (100 - self.pf['max_accepted_drawdown']) * (self.pf['starting_balance'] / 100):
 
                 # Correlation check.
                 if not self.correlated(signal):
-                    self.logger.info(
-                        "New trade within risk limits.")
+                    self.logger.info("New trade within risk limits.")
                     return True
 
                 else:
