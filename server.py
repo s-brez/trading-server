@@ -95,8 +95,8 @@ class Server:
                              self.telegram)
 
         # Start flask api in separate process
-        p = subprocess.Popen(["python", "api.py"])
-        self.logger.info("Started flask API.")
+        # p = subprocess.Popen(["python", "api.py"])
+        # self.logger.info("Started flask API.")
 
         # Processing performance tracking variables.
         self.start_processing = None
