@@ -209,13 +209,7 @@ class Server:
                     # Order placement and Fill Event generation.
                     elif event.type == "ORDER":
                         self.logger.info("Processing order event.")
-
-                        # Do order confirmation and placement in new thread as
-                        # confirmation requires user input.
-                        thread = Thread(target=lambda: self.broker.new_order(
-                                self.events, event))
-                        thread.daemon = True
-                        thread.start()
+                        self.broker.new_order(self.events, event)
 
                     # Final portolio update.
                     elif event.type == "FILL":
