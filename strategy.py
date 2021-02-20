@@ -99,8 +99,8 @@ class Strategy:
             None.
         """
 
-        # Wait for 3 mins of operation to clear up any null bars.
-        if count >= 3:
+        # Wait for 1 mins of operation to clear up any null bars.
+        if count >= 1:
 
             # Get operating timeframes for the current period.
 
@@ -168,15 +168,10 @@ class Strategy:
                 self.data[venue][sym][tf] = self.data[venue][sym][tf].append(
                     new_row)
 
-                self.logger.info(
-                    "Appended new row to " + str(tf) + " dataset.")
-
             # If dataframe is empty, populate a new one.
             elif size == 0:
                 self.data[venue][sym][tf] = self.build_dataframe(
                     venue, sym, tf, bar)
-                self.logger.info(
-                    "Created new df for " + str(tf) + " dataset.")
 
             # Final pad in case of null bars.
             self.data[venue][sym][tf].fillna(method="pad", inplace=True)
