@@ -1,17 +1,17 @@
 # trading-server
-Multi-asset, multi-strategy, event-driven trade execution and management platform for trading common markets autonomously on 1min+ timeframes.
+Multi-asset, multi-strategy, event-driven trade execution and management server for trading common markets autonomously on 1min and higher timeframes.
 
 ![telegram ui](https://github.com/s-brez/trading-server/blob/master/demo-telegram-ui.jpg?raw=true)
 
 
 ## Current features
-Trade FX, crypto, CFD's, traditional markets etc (any venue with an API) with unified portfolio management
+Trade any API-accessible market with unified multi-strategy portfolio management, autonomously or semi-autonomously.
 
-Allocation-based risk management (allocate x% exposure to specific strategies)
+Allocation-based risk management (allocate x% of capital to specific strategies).
 
-Strategy feature library - assemble new strategies from existing features
+Feature library - assemble new strategies from existing features.
 
-Trade consent via Telegram (or write your own messaging client) - Accept, veto or tweak trade setups prior to triggering
+Trade consent via Telegram (or write your own messaging client). Accept, veto or tweak trade setups before they are actioned.
 
 ## WIP features
 
@@ -30,35 +30,23 @@ Accounting and compliance reporting
 Exchange |  Status   | Asset classes
 ---------|-----------|------------
 BitMEX | Complete | Crypto derivatives
-Binance | NA | Crypto spot & derivatives
 FTX | NA | Crypto spot, options & derivatives
-Deribit | NA | Crypto derivatives & options
+Binance | NA | Crypto spot & derivatives
 IG Markets | NA | FX, equity, commodity & index CFD's
 Interactive Brokers | NA | FX, equity, commodity & index CFD's
-Bitfinex | NA | Crypto spot
-OKEx | NA | Crypto spot
-Huobi Global | NA | Crypto spot
-Bithumb | NA | Crypto spot
-Kraken | NA | Crypto spot
-Bitstamp | NA | Crypto spot
-Coinbase | NA | Crypto spot
-Upbit | NA | Crypto spot
-Kucoin | NA | Crypto spot
-Bittrex | NA | Crypto spot
-Poloniex| NA | Crypto spot
-Bitflyer | NA | Crypto spot
+Deribit | NA | Crypto derivatives & options
 
 ## Market data
-1 minute resolution OHLCV bars for all watched instruments are stored with MongoDB (or please write your own DB wrapper and submit a pull request). 
+1 minute resolution OHLCV bars for all watched instruments are stored with MongoDB (or write your own DB wrapper). 
 
-Software currently works for 1Min+ resolution strategies with tick-resolution strategy support planned later. With this in mind, the software converts tick data to 1 min bars where live tick data is available, but doesn't store ticks locally (i.e. it can handle tick data but doesnt yet use it).
+Software works with 1Min+ resolution strategies. Tick-resolution support planned later. With this in mind, the software converts tick data to 1 min bars where live tick data is available, but doesn't store ticks locally (i.e. it can handle tick data but doesnt yet use it).
  
-## Strategy modelling
+## Strategy modellling
 Strategy implementations are not included. A simple moving average cross model is included as a guide only. 
-Custom strategy implementations, collaboration or any other enquiries: sam@sdbgroup.io.
+Custom strategy implementations, collaboration or any other enquiries please email me at sam@sdbgroup.io.
 
 ## Collaboration
-Pull requests and discussion regarding new features are very welcome, please reach out.
+Feature requests and discussion regarding new features are very welcome, please reach out.
 
 ## External libraries
 TA-LIB - https://mrjbq7.github.io/ta-lib/
