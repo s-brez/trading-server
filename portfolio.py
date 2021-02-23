@@ -37,7 +37,7 @@ class Portfolio:
     Capital allocations to strategies and risk parameters are defined here.
     """
 
-    MAX_SIMULTANEOUS_POSITIONS = 2
+    MAX_SIMULTANEOUS_POSITIONS = 1
     MAX_CORRELATED_POSITIONS = 2
     MAX_ACCEPTED_DRAWDOWN = 25  # Percentage as integer.
     RISK_PER_TRADE = 1          # Percentage as integer OR 'KELLY'
@@ -175,12 +175,12 @@ class Portfolio:
             for order in orders:
                 order.batch_size = batch_size
 
-            within_risk_limits = self.within_risk_limits(signal)
+            within_risk_limits, msg = self.within_risk_limits(signal)
 
             # Generate static image of trade setup.
             t_dict = trade.get_trade_dict()
             self.generate_trade_setup_image(
-                t_dict, signal['op_data'], within_risk_limits)
+                t_dict, signal['op_data'], within_risk_limits, msg)
 
             # Only raise orders and add to portfilio if within risk limits.
             if within_risk_limits:
@@ -309,13 +309,14 @@ class Portfolio:
 
         self.cancel_orders_by_trade_id(trade_id)
 
-        # Close positions, if still open.
+        # Close positions if still open.
         if self.check_position_open(trade_id):
             self.close_position_by_trade_id(trade_id)
 
-        self.calculate_pnl_by_trade(trade_id)
-
-        self.run_post_trade_analysis(trade_id)
+        # Only update portfolio metrics if trade was accepted by user.
+        if self.pf['trades'][str(trade_id)]['consent']:
+            self.calculate_pnl_by_trade(trade_id)
+            self.run_post_trade_analysis(trade_id)
 
         # Reduce active trade count by 1.
         self.pf['total_active_trades'] -= 1 if self.pf['total_active_trades'] > 0 else 0
@@ -458,6 +459,7 @@ class Portfolio:
             exits = [i for i in execs if i['direction'] != trade['direction']]
             manual_exit = True if exits else None
 
+        # Find final pnl figures
         if entries and exits:
             avg_entry = sum(i['avg_exc_price'] for i in entries) / len(entries)
             avg_exit = (sum(i['avg_exc_price'] for i in exits) / len(exits))
@@ -471,30 +473,43 @@ class Portfolio:
             elif trade['direction'] == "SHORT":
                 final_pnl = abs_pnl if avg_exit < avg_entry - fees else -abs_pnl
 
+            # Log trade stats
             self.pf['current_balance'] += final_pnl
             self.pf['balance_history'][str(int(time.time()))] = {
                 'amt': final_pnl,
                 'trade_id': t_id}
+            self.pf['trades'][t_id]['u_pnl'] = final_pnl
+            self.pf['trades'][t_id]['fees'] = fees
+            self.pf['trades'][t_id]['exposure'] = None
+            if final_pnl > 0:
+                self.pf['total_winning_trades'] += 1
+            elif final_pnl < 0:
+                self.pf['total_losing_trades'] += 1
 
             self.logger.info("Trade " + t_id + " returned " + str(final_pnl) + " USD.")
 
-        # No matching entry or exit executions exist.
         else:
-            pass
+            raise Exception("No entry or exit executions found for trade " + t_id + ".")
 
         if manual_exit:
             self.logger.info("Manual exit orders detected for trade " + t_id + ". Please manually verify position is closed and final pnl figure. Avoid closing positions or cancelling orders manually.")            
 
     def run_post_trade_analysis(self, trade_id):
         """
-        Conduct post-trade analytics.
+        Conduct post-trade portfolio analytics.
         """
 
-        # TODO: Update the following:
+        if self.pf['current_balance'] > self.pf['peak_balance']:
+            self.pf['peak_balance'] = self.pf['current_balance']
+            self.logger.info("New portfolio value all-time-high: " + str(self.pf['current_balance']))
 
-        # 'peak_balance'
-        # 'low_balance'
+        if self.pf['current_balance'] < self.pf['low_balance']:
+            self.pf['low_balance'] = self.pf['current_balance']
+            self.logger.info("New portfolio value all-time-low: " + str(self.pf['current_balance']))        
+        
         # 'avg_r_per_winner'
+
+
         # 'avg_r_per_loser'
         # 'avg_r_per_trade'
         # 'total_winning_trades'
@@ -532,10 +547,10 @@ class Portfolio:
                     str(int(time.time())): {
                         'amt': 1000,
                         'trade_id': "Initial deposit."}},
-                'starting_balance': 1000,
                 'current_balance': 1000,
-                'peak_balance': 0,
-                'low_balance': 0,
+                'starting_balance': 1000,
+                'peak_balance': 1000,
+                'low_balance': 1000,
                 'total_winning_trades': 0,
                 'total_losing_trades': 0,
                 'total_consecutive_wins': 0,
@@ -583,19 +598,30 @@ class Portfolio:
 
                 # Correlation check.
                 if not self.correlated(signal):
-                    self.logger.info("New trade within risk limits.")
-                    return True
 
+                    # Check conflict with existing same-asset, same-venue trades.
+                    conflicted = []
+
+                    # If signal and same asset/same venue trade same direction,
+                    # and trade is risk-off, add to position. Otherwise skip.
+                    # If signal is opposite directions, notify user.
+                    if conflicted:
+                        pass
+                    
+                    # All risk checks cleared, free to action signal as is.
+                    else:
+                        return True, "New trade within risk limits."
+                        self.logger.info("New trade within all risk limits.")
                 else:
                     self.logger.info(
-                        "New trade skipped. Correlated positions limit reached.")
-                    return False
+                        "New trade skipped. Correlated position limit reached.")
+                    return False, "Correlated position limit reached."
             else:
                 self.logger.info("New trade skipped. Drawdown limit reached.")
-                return False
+                return False, "Drawdown limit reached."
         else:
             self.logger.info("New trade skipped. Position limit reached.")
-            return False
+            return False, "Position limit reached."
 
     def calculate_exposure(self, trade):
         """
@@ -704,7 +730,7 @@ class Portfolio:
 
                 self.trades_save_to_db.task_done()
 
-    def generate_trade_setup_image(self, trade, op_data, within_risk_limits: bool):
+    def generate_trade_setup_image(self, trade, op_data, within_risk_limits: bool, msg: str):
         """
         Create a snapshot image of trade setup and send to user.
         """
@@ -769,7 +795,7 @@ class Portfolio:
             if within_risk_limits is True:
                 self.telegram.send_option_keyboard(options)
             else:
-                self.telegram.send_message("Trade would exceed risk limits.")
+                self.telegram.send_message("Trade would exceed risk limits. " + msg)
 
         except Exception as ex:
             self.logger.info("Failed to send setup image via telegram.")
