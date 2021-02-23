@@ -97,9 +97,9 @@ class SingleInstrumentTrade(Trade):
             'venue': self.venue,
             'symbol': self.symbol,
             'position': self.position,
+            'consent': self.consent,
             'order_count': self.order_count,
-            'orders': self.orders,
-            'consent': self.consent}
+            'orders': self.orders}
 
 
 class Position:
