@@ -37,12 +37,13 @@ class Portfolio:
     Capital allocations to strategies and risk parameters are defined here.
     """
 
-    MAX_SIMULTANEOUS_POSITIONS = 1
-    MAX_CORRELATED_POSITIONS = 2
-    MAX_ACCEPTED_DRAWDOWN = 25  # Percentage as integer.
-    RISK_PER_TRADE = 1          # Percentage as integer OR 'KELLY'
-    DEFAULT_STOP = 2            # Default (%) stop distance if none provided.
-    SNAPSHOT_SIZE = 100         # Lookback period for trade snapshot images
+    MAX_SIMULTANEOUS_POSITIONS = 20
+    MAX_CORRELATED_POSITIONS = 4
+    CORRELATION_THRESHOLD = 0.5     # Level at which instrument considered correlated (-1 to 1)
+    MAX_ACCEPTED_DRAWDOWN = 25      # Percentage as integer.
+    RISK_PER_TRADE = 0.5              # Percentage as integer or float OR 'KELLY'
+    DEFAULT_STOP = 1                # Default (%) stop distance if none provided.
+    SNAPSHOT_SIZE = 100             # Lookback period for trade snapshot images
 
     def __init__(self, exchanges, logger, db_other, db_client, models,
                  telegram):
@@ -489,6 +490,9 @@ class Portfolio:
             self.pf['trades'][t_id]['u_pnl'] = final_pnl
             self.pf['trades'][t_id]['fees'] = fees
             self.pf['trades'][t_id]['exposure'] = None
+            self.pf['trades'][t_id]['exit_price'] = avg_exit
+            self.pf['trades'][t_id]['systematic_close'] = False if manual_exit else True
+
             if final_pnl > 0:
                 self.pf['total_winning_trades'] += 1
             elif final_pnl < 0:
@@ -500,33 +504,47 @@ class Portfolio:
             raise Exception("No entry or exit executions found for trade " + t_id + ".")
 
         if manual_exit:
-            self.logger.info("Manual exit orders detected for trade " + t_id + ". Please manually verify position is closed and final pnl figure. Avoid closing positions or cancelling orders manually.")            
+            self.logger.info("Non-systematic exit orders detected for trade " + t_id + ". Please manually verify final pnl figure and that all orders are closed. Avoid closing positions or cancelling orders manually.")            
 
     def post_trade_analysis(self, trade_id):
         """
         Conduct post-trade portfolio analytics.
         """
 
+        balance_history = list(self.pf['balance_history'].values())
+
+        # 'total_trades'
+        self.pf['total_trades'] += 1
+
+        # 'peak_balance'
+        # 'low_balance'
         if self.pf['current_balance'] > self.pf['peak_balance']:
             self.pf['peak_balance'] = self.pf['current_balance']
             self.logger.info("New portfolio value all-time-high: " + str(self.pf['current_balance']))
-
-        if self.pf['current_balance'] < self.pf['low_balance']:
+        elif self.pf['current_balance'] < self.pf['low_balance']:
             self.pf['low_balance'] = self.pf['current_balance']
             self.logger.info("New portfolio value all-time-low: " + str(self.pf['current_balance']))        
-        
-        # 'avg_r_per_winner'
 
-
-        # 'avg_r_per_loser'
-        # 'avg_r_per_trade'
-        # 'total_winning_trades'
-        # 'total_losing_trades'
         # 'total_consecutive_wins'
         # 'total_consecutive_losses'
+        if len(balance_history) > 1:
+            if balance_history[-1]['amt'] > 0 and balance_history[-2]['amt'] > 0:
+                self.pf['total_consecutive_wins'] += 1
+            elif balance_history[-1]['amt'] < 0 and balance_history[-2]['amt'] < 0:
+                self.pf['total_consecutive_losses'] += 1
+
+        # 'avg_r_per_winner'
+        # 'avg_r_per_loser'
+        if balance_history[-1]['amt'] > 0:
+            # (entry - stop) / exit - entry)
+            pass
+
+        elif balance_history[-1]['amt'] < 0:
+            pass
+
+        # 'avg_r_per_trade'
         # 'win_loss_ratio'
         # 'gain_to_pain_ratio'
-        # 'total_active_trades'
 
     def verify_portfolio_state(self, portfolio):
         """
@@ -554,11 +572,12 @@ class Portfolio:
                 'balance_history': {
                     str(int(time.time())): {
                         'amt': 1000,
-                        'trade_id': "Initial deposit."}},
+                        'trade_id': "initial_deposit"}},
                 'current_balance': 1000,
                 'starting_balance': 1000,
                 'peak_balance': 1000,
                 'low_balance': 1000,
+                'total_trades': 0,
                 'total_winning_trades': 0,
                 'total_losing_trades': 0,
                 'total_consecutive_wins': 0,
@@ -683,7 +702,7 @@ class Portfolio:
         """
 
         # Fixed percentage per trade risk management.
-        if isinstance(self.RISK_PER_TRADE, int):
+        if isinstance(self.RISK_PER_TRADE, int) or isinstance(self.RISK_PER_TRADE, float):
 
             account_size = self.pf['current_balance']
             risked_amt = (account_size / 1000) * self.RISK_PER_TRADE
