@@ -224,6 +224,7 @@ class Portfolio:
             # Create a position record and set trade to active.
             self.pf['trades'][t_id]['position'] = position
             self.pf['trades'][t_id]['active'] = True
+            self.pf['trades'][t_id]['exposure'] = 100
             self.pf['total_active_trades'] += 1
 
         elif fill_conf['metatype'] == "STOP":
@@ -241,6 +242,7 @@ class Portfolio:
 
             self.pf['trades'][t_id]['position']['size'] = new_size
             self.pf['trades'][t_id]['position']['status'] = "CLOSED"
+            self.pf['trades'][t_id]['exposure'] = 0
 
             self.trade_complete(t_id)
 
@@ -250,6 +252,10 @@ class Portfolio:
             size = self.pf['trades'][t_id]['position']['size']
             new_size = size - fill_conf['size']
             self.pf['trades'][t_id]['position']['size'] = new_size
+
+            # TODO: Find adjusted exposure
+            # what % of the position has been closed vs starting size
+            # self.pf['trades'][t_id]['exposure'] = ?
 
             if new_size == 0:
                 self.trade_complete(t_id)
@@ -263,6 +269,7 @@ class Portfolio:
             new_size = size - fill_conf['size']
             self.pf['trades'][t_id]['position']['size'] = new_size
             self.pf['trades'][t_id]['position']['status'] = "CLOSED"
+            self.pf['trades'][t_id]['exposure'] = 0
 
             if new_size != 0:
                 raise Exception(
@@ -316,7 +323,7 @@ class Portfolio:
         # Only update portfolio metrics if trade was accepted by user.
         if self.pf['trades'][str(trade_id)]['consent']:
             self.calculate_pnl_by_trade(trade_id)
-            self.run_post_trade_analysis(trade_id)
+            self.post_trade_analysis(trade_id)
 
         # Reduce active trade count by 1.
         self.pf['total_active_trades'] -= 1 if self.pf['total_active_trades'] > 0 else 0
@@ -435,12 +442,13 @@ class Portfolio:
             trade['symbol'], trade['signal_timestamp'], int(datetime.now().timestamp()))
 
         # Handle two-order trades (single exit, single entry).
-        if len(trade['orders']) == 2:
+        total_orders = len(trade['orders'])
+        if total_orders == 2:
             entry_oid = trade['orders'][t_id + "-1"]['order_id']
             exit_oid = trade['orders'][t_id + "-2"]['order_id']
 
-        # TODO: Handle trade types with more than 2 orders
-        elif len(trade['orders']) >= 3:
+        # TODO: Handle trade types with more than 2 orders (order, tp(s), exit).
+        elif total_orders >= 3:
             entry_oid = None
             exit_oid = None
             # tp_oids = []
@@ -494,7 +502,7 @@ class Portfolio:
         if manual_exit:
             self.logger.info("Manual exit orders detected for trade " + t_id + ". Please manually verify position is closed and final pnl figure. Avoid closing positions or cancelling orders manually.")            
 
-    def run_post_trade_analysis(self, trade_id):
+    def post_trade_analysis(self, trade_id):
         """
         Conduct post-trade portfolio analytics.
         """
@@ -599,15 +607,29 @@ class Portfolio:
                 # Correlation check.
                 if not self.correlated(signal):
 
-                    # Check conflict with existing same-asset, same-venue trades.
-                    conflicted = []
-
-                    # If signal and same asset/same venue trade same direction,
-                    # and trade is risk-off, add to position. Otherwise skip.
-                    # If signal is opposite directions, notify user.
+                    # Existing same-asset, same-venue conflict check.
+                    trades = [t for t in self.pf['trades'].values()]
+                    conflicted = [c for c in trades if c['active'] and c['symbol'] == signal['symbol'] and c['venue'] == signal['venue']]
                     if conflicted:
-                        pass
-                    
+
+                        all_trades_risk_off = True
+                        opposite_dir = False
+                        for trade in conflicted:
+
+                            # If all conflicted trades are risk free and same direction, proceed with signal
+                            if trade['exposure'] and trade['direction'] == signal['direction']:
+                                all_trades_risk_off = False
+
+                            # If signal opposite direction to trade, notify user but take no action.
+                            elif trade['direction'] != signal['direction']:
+                                opposite_dir = True
+
+                        if all_trades_risk_off:
+                            return True, "New trade within risk limits. Compound existing position."
+
+                        elif opposite_dir:
+                            return False, "New signal opposite direction to existing position. Check for a reversal."
+
                     # All risk checks cleared, free to action signal as is.
                     else:
                         return True, "New trade within risk limits."
