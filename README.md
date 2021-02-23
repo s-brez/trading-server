@@ -9,7 +9,9 @@ Trade any API-accessible market with unified multi-strategy portfolio management
 
 Allocation-based risk management (allocate x% of capital to specific strategies).
 
-Feature library - assemble new strategies from existing features.
+Porfolio performance metrics and tracking.
+
+Feature library - assemble new strategies quickly from existing features.
 
 Trade consent via Telegram (or write your own messaging client). Accept, veto or tweak trade setups before they are actioned.
 
@@ -39,10 +41,10 @@ Deribit | NA | Crypto derivatives & options
 ## Market data
 1 minute resolution OHLCV bars for all watched instruments are stored with MongoDB (or write your own DB wrapper). 
 
-Software works with 1Min+ resolution strategies. Tick-resolution support planned later. With this in mind, the software converts tick data to 1 min bars where live tick data is available, but doesn't store ticks locally (i.e. it can handle tick data but doesnt yet use it).
+Software works with 1 minute and above resolution strategies. Tick-resolution support planned later. With this in mind, the software converts tick data to 1 min bars where live tick data is available, but doesn't store ticks locally (i.e. it handles tick data but doesnt use it yet).
  
 ## Strategy modellling
-Strategy implementations are not included. A simple moving average cross model is included as a guide only. 
+Strategy implementations are not included. A simple moving average cross model is included as an example only. 
 Custom strategy implementations, collaboration or any other enquiries please email me at sam@sdbgroup.io.
 
 ## Collaboration
