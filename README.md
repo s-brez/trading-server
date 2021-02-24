@@ -29,14 +29,14 @@ Accounting and compliance reporting
 
 ## Venue support
 
-Exchange |  Status   | Asset classes
+Venue |  Integration status   | Instrument types
 ---------|-----------|------------
-BitMEX | Complete | Crypto derivatives
-FTX | NA | Crypto spot, options & derivatives
-Binance | NA | Crypto spot & derivatives
-IG Markets | NA | FX, equity, commodity & index CFD's
-Interactive Brokers | NA | FX, equity, commodity & index CFD's
-Deribit | NA | Crypto derivatives & options
+[<img src="https://user-images.githubusercontent.com/1294454/27766319-f653c6e6-5ed4-11e7-933d-f0bc3699ae8f.jpg">](https://www.bitmex.com/register/hhGBvP) | Complete | Crypto derivatives
+[<img src="https://user-images.githubusercontent.com/1294454/67149189-df896480-f2b0-11e9-8816-41593e17f9ec.jpg">](https://ftx.com/#a=1778494) | In progress | Crypto spot, options & derivatives
+[<img src="https://user-images.githubusercontent.com/1294454/29604020-d5483cdc-87ee-11e7-94c7-d1a8d9169293.jpg">](https://www.binance.com/en/register?ref=39168428) | Planned | Crypto spot & derivatives
+IG Markets | Planned | FX, equity, commodity & index CFD's
+Interactive Brokers | Planned | FX, equity, commodity & index CFD's
+Deribit | Planned | Crypto derivatives & options
 
 ## Market data
 1 minute resolution OHLCV bars for all watched instruments are stored with MongoDB (or write your own DB wrapper). 
