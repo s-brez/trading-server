@@ -218,20 +218,20 @@ class Portfolio:
 
         fill_conf = fill_event.get_order_conf()
         position = Position(fill_conf).get_pos_dict()
-        t_id = str(position['trade_id'])
+        trade_id = str(position['trade_id'])
 
         if fill_conf['metatype'] == "ENTRY":
 
             # Create a position record and set trade to active.
-            self.pf['trades'][t_id]['position'] = position
-            self.pf['trades'][t_id]['active'] = True
-            self.pf['trades'][t_id]['exposure'] = 100
+            self.pf['trades'][trade_id]['position'] = position
+            self.pf['trades'][trade_id]['active'] = True
+            self.pf['trades'][trade_id]['exposure'] = 100
             self.pf['total_active_trades'] += 1
 
         elif fill_conf['metatype'] == "STOP":
 
             # Update the now closed postiion, trade is done.
-            size = self.pf['trades'][t_id]['position']['size']
+            size = self.pf['trades'][trade_id]['position']['size']
             new_size = size - fill_conf['size']
 
             # Should be 0
@@ -241,42 +241,42 @@ class Portfolio:
             elif new_size < 0:
                 new_size = 0
 
-            self.pf['trades'][t_id]['position']['size'] = new_size
-            self.pf['trades'][t_id]['position']['status'] = "CLOSED"
-            self.pf['trades'][t_id]['exposure'] = 0
+            self.pf['trades'][trade_id]['position']['size'] = new_size
+            self.pf['trades'][trade_id]['position']['status'] = "CLOSED"
+            self.pf['trades'][trade_id]['exposure'] = 0
 
-            self.trade_complete(t_id)
+            self.trade_complete(trade_id)
 
         elif fill_conf['metatype'] == "TAKE_PROFIT":
 
             # Update the modified position.
-            size = self.pf['trades'][t_id]['position']['size']
+            size = self.pf['trades'][trade_id]['position']['size']
             new_size = size - fill_conf['size']
-            self.pf['trades'][t_id]['position']['size'] = new_size
+            self.pf['trades'][trade_id]['position']['size'] = new_size
 
             # TODO: Find adjusted exposure
             # what % of the position has been closed vs starting size
-            # self.pf['trades'][t_id]['exposure'] = ?
+            # self.pf['trades'][trade_id]['exposure'] = ?
 
             if new_size == 0:
-                self.trade_complete(t_id)
+                self.trade_complete(trade_id)
             else:
-                self.calculate_pnl_by_trade(t_id, take_profit=True)
+                self.calculate_pnl_by_trade(trade_id, take_profit=True)
 
         elif fill_conf['metatype'] == "FINAL_TAKE_PROFIT":
 
             # Update the now closed postiion, trade is done.
-            size = self.pf['trades'][t_id]['position']['size']
+            size = self.pf['trades'][trade_id]['position']['size']
             new_size = size - fill_conf['size']
-            self.pf['trades'][t_id]['position']['size'] = new_size
-            self.pf['trades'][t_id]['position']['status'] = "CLOSED"
-            self.pf['trades'][t_id]['exposure'] = 0
+            self.pf['trades'][trade_id]['position']['size'] = new_size
+            self.pf['trades'][trade_id]['position']['status'] = "CLOSED"
+            self.pf['trades'][trade_id]['exposure'] = 0
 
             if new_size != 0:
                 raise Exception(
                     "Position close size error:", new_size)
 
-            self.trade_complete(t_id)
+            self.trade_complete(trade_id)
 
         else:
             raise Exception("Order metatype error:", fill_conf['metatype'])
@@ -299,9 +299,9 @@ class Portfolio:
 
         # Update portfolio state.
         for conf in order_confs:
-            t_id = str(conf['trade_id'])
+            trade_id = str(conf['trade_id'])
             o_id = str(conf['order_id'])
-            self.pf['trades'][t_id]['orders'][o_id] = conf
+            self.pf['trades'][trade_id]['orders'][o_id] = conf
 
             # Create a fill event if order already filled (e.g. market orders).
             if conf['status'] == "FILLED":
@@ -322,7 +322,7 @@ class Portfolio:
             self.close_position_by_trade_id(trade_id)
 
         # Only update portfolio metrics if trade was accepted by user.
-        if self.pf['trades'][str(trade_id)]['consent']:
+        if self.pf['trades'][trade_id]['consent']:
             self.calculate_pnl_by_trade(trade_id)
             self.post_trade_analysis(trade_id)
 
@@ -330,10 +330,13 @@ class Portfolio:
         self.pf['total_active_trades'] -= 1 if self.pf['total_active_trades'] > 0 else 0
 
         # Mark trade as inactive
-        self.pf['trades'][str(trade_id)]['active'] = False
+        self.pf['trades'][trade_id]['active'] = False
 
         # Save updated portfolio state to DB.
         self.save_porfolio(self.pf)
+
+        # Update trades DB to reflect portfolio state.
+        self.update_trades_db(trade_id)
 
     def cancel_orders_by_trade_id(self, trade_id):
         """
@@ -341,13 +344,12 @@ class Portfolio:
         local portfolio state.
         """
 
-        t_id = str(trade_id)
-        o_ids = self.pf['trades'][t_id]['orders'].keys()
+        o_ids = self.pf['trades'][trade_id]['orders'].keys()
         v_ids = [
-            self.pf['trades'][t_id]['orders'][o]['venue_id'] for o in o_ids if
-            self.pf['trades'][t_id]['orders'][o]['status'] != "FILLED"]
+            self.pf['trades'][trade_id]['orders'][o]['venue_id'] for o in o_ids if
+            self.pf['trades'][trade_id]['orders'][o]['status'] != "FILLED"]
 
-        venue = self.pf['trades'][t_id]['venue']
+        venue = self.pf['trades'][trade_id]['venue']
 
         cancel_confs = self.exchanges[venue].cancel_orders(v_ids)
 
@@ -356,9 +358,9 @@ class Portfolio:
             # Handle cancellation failure messages
             try:
                 if cancel_confs['error']["message"] == 'Not Found':
-                    self.pf['trades'][t_id]['active'] = False
+                    self.pf['trades'][trade_id]['active'] = False
                     for o in o_ids:
-                        self.pf['trades'][t_id]['orders'][o]['status'] == "FILLED"
+                        self.pf['trades'][trade_id]['orders'][o]['status'] == "FILLED"
 
                 # Handle other error messages here
                 else:
@@ -367,17 +369,17 @@ class Portfolio:
             # Handle successful cancellation messages
             except KeyError:
 
-                self.pf['trades'][t_id]['active'] = False
+                self.pf['trades'][trade_id]['active'] = False
 
                 for order_id in o_ids:
                     for venue_id in set(v_ids):
 
                         # Set order status to cancelled
-                        if self.pf['trades'][t_id]['orders'][order_id][
+                        if self.pf['trades'][trade_id]['orders'][order_id][
                             'venue_id'] == venue_id and cancel_confs[
                                 venue_id] == "SUCCESS":
 
-                            self.pf['trades'][t_id]['orders'][order_id][
+                            self.pf['trades'][trade_id]['orders'][order_id][
                                 'status'] = "CANCELLED"
 
         # No active cancellations ocurred, trade was vetoed
@@ -389,19 +391,18 @@ class Portfolio:
         Return true if position is still open according to local portfolio.
         """
 
-        t_id = str(trade_id)
-        if self.pf['trades'][t_id]['position'] is None:
+        if self.pf['trades'][trade_id]['position'] is None:
             return False
-        if self.pf['trades'][t_id]['position']['status'] == "OPEN":
+        if self.pf['trades'][trade_id]['position']['status'] == "OPEN":
             return True
-        elif self.pf['trades'][t_id]['position']['status'] == "CLOSED":
+        elif self.pf['trades'][trade_id]['position']['status'] == "CLOSED":
             return False
         else:
             raise Exception(
                 "Position status error:",
-                self.pf['trades'][t_id]['position']['status'])
+                self.pf['trades'][trade_id]['position']['status'])
 
-    def close_position_by_trade_id(self, t_id):
+    def close_position_by_trade_id(self, trade_id):
         """
         This method will close only the remaining amount for the given trade -
         it will not necessarily close an entire position, unless there is only
@@ -414,14 +415,14 @@ class Portfolio:
         """
 
         close = self.exchanges[
-            self.pf['trades'][t_id]['venue']].close_position(
-                self.pf['trades'][t_id]['symbol'],
-                self.pf['trades'][t_id]['position']['size'],
-                self.pf['trades'][t_id]['direction'])
+            self.pf['trades'][trade_id]['venue']].close_position(
+                self.pf['trades'][trade_id]['symbol'],
+                self.pf['trades'][trade_id]['position']['size'],
+                self.pf['trades'][trade_id]['direction'])
 
         if close:
-            self.pf['trades'][t_id]['position']['size'] = 0
-            self.pf['trades'][t_id]['position']['status'] = "CLOSED"
+            self.pf['trades'][trade_id]['position']['size'] = 0
+            self.pf['trades'][trade_id]['position']['status'] = "CLOSED"
 
     def close_position_absolute(self, venue, symbol):
         """
@@ -435,8 +436,7 @@ class Portfolio:
         Calculate pnl for the given trade and update portfolio state.
         """
 
-        t_id = str(trade_id)
-        trade = self.pf['trades'][t_id]
+        trade = self.pf['trades'][trade_id]
 
         # Get order executions for trade in period from trade signal to current time.
         execs = self.exchanges[trade['venue']].get_executions(
@@ -445,8 +445,8 @@ class Portfolio:
         # Handle two-order trades (single exit, single entry).
         total_orders = len(trade['orders'])
         if total_orders == 2:
-            entry_oid = trade['orders'][t_id + "-1"]['order_id']
-            exit_oid = trade['orders'][t_id + "-2"]['order_id']
+            entry_oid = trade['orders'][trade_id + "-1"]['order_id']
+            exit_oid = trade['orders'][trade_id + "-2"]['order_id']
 
         # TODO: Handle trade types with more than 2 orders (order, tp(s), exit).
         elif total_orders >= 3:
@@ -474,7 +474,7 @@ class Portfolio:
             avg_exit = (sum(i['avg_exc_price'] for i in exits) / len(exits))
             fees = sum(i['total_fee'] for i in (entries + exits))
             percent_change = abs((avg_entry - avg_exit) / avg_entry) * 100
-            abs_pnl = abs((trade['orders'][t_id + "-1"]['size'] / 100) * percent_change) - fees
+            abs_pnl = abs((trade['orders'][trade_id + "-1"]['size'] / 100) * percent_change) - fees
 
             if trade['direction'] == "LONG":
                 final_pnl = abs_pnl if avg_exit > avg_entry + fees else -abs_pnl
@@ -486,25 +486,25 @@ class Portfolio:
             self.pf['current_balance'] += final_pnl
             self.pf['balance_history'][str(int(time.time()))] = {
                 'amt': final_pnl,
-                'trade_id': t_id}
-            self.pf['trades'][t_id]['u_pnl'] = final_pnl
-            self.pf['trades'][t_id]['fees'] = fees
-            self.pf['trades'][t_id]['exposure'] = None
-            self.pf['trades'][t_id]['exit_price'] = avg_exit
-            self.pf['trades'][t_id]['systematic_close'] = False if manual_exit else True
+                'trade_id': trade_id}
+            self.pf['trades'][trade_id]['u_pnl'] = final_pnl
+            self.pf['trades'][trade_id]['fees'] = fees
+            self.pf['trades'][trade_id]['exposure'] = None
+            self.pf['trades'][trade_id]['exit_price'] = avg_exit
+            self.pf['trades'][trade_id]['systematic_close'] = False if manual_exit else True
 
             if final_pnl > 0:
                 self.pf['total_winning_trades'] += 1
             elif final_pnl < 0:
                 self.pf['total_losing_trades'] += 1
 
-            self.logger.info("Trade " + t_id + " returned " + str(final_pnl) + " USD.")
+            self.logger.info("Trade " + trade_id + " returned " + str(final_pnl) + " USD.")
 
         else:
-            raise Exception("No entry or exit executions found for trade " + t_id + ".")
+            raise Exception("No entry or exit executions found for trade " + trade_id + ".")
 
         if manual_exit:
-            self.logger.info("Non-systematic exit orders detected for trade " + t_id + ". Please manually verify final pnl figure and that all orders are closed. Avoid closing positions or cancelling orders manually.")            
+            self.logger.info("Non-systematic exit orders detected for trade " + trade_id + ". Please manually verify final pnl figure and that all orders are closed. Avoid closing positions or cancelling orders manually.")            
 
     def post_trade_analysis(self, trade_id):
         """
@@ -733,6 +733,11 @@ class Portfolio:
         """
 
         # TODO.
+
+    def update_trades_db(self, trade_id):
+        """
+        Update trade DB to reflect trade state of local portfolio
+        """
 
     def save_new_trades_to_db(self):
         """
