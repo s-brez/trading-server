@@ -34,7 +34,7 @@ class Trade(ABC):
         self.u_pnl = 0                  # Total unrealised pnl.
         self.r_pnl = 0                  # Total realised pnl.
         self.fees = 0                   # Total fees/commisions paid.
-        self.exposure = None            # Percentage of capital at risk.
+        self.exposure = None            # Percentage of possible loss remaining at risk.
         self.consent = None             # If or not user consents to trade.
         self.systematic_close = None    # If or not trade was closed properly.
 
@@ -92,7 +92,7 @@ class SingleInstrumentTrade(Trade):
             'direction': self.direction,
             'timeframe': self.timeframe,
             'entry_price': self.entry_price,
-            'exit_price': self.entry_price,
+            'exit_price': self.exit_price,
             'systematic_close': self.systematic_close,
             'u_pnl': self.u_pnl,
             'r_pnl': self.r_pnl,
