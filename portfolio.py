@@ -226,6 +226,7 @@ class Portfolio:
             self.pf['trades'][trade_id]['position'] = position
             self.pf['trades'][trade_id]['active'] = True
             self.pf['trades'][trade_id]['exposure'] = 100
+            self.pf['trades'][trade_id]['entry_price'] = position['avg_entry_price']
             self.pf['total_active_trades'] += 1
 
         elif fill_conf['metatype'] == "STOP":
@@ -244,6 +245,8 @@ class Portfolio:
             self.pf['trades'][trade_id]['position']['size'] = new_size
             self.pf['trades'][trade_id]['position']['status'] = "CLOSED"
             self.pf['trades'][trade_id]['exposure'] = 0
+
+            # If ther order was cancelled there will not be 
 
             self.trade_complete(trade_id)
 
@@ -382,6 +385,13 @@ class Portfolio:
                             self.pf['trades'][trade_id]['orders'][order_id][
                                 'status'] = "CANCELLED"
 
+                            # Set price from trade records; no execution to match for cancellations
+                            price = self.db_other['trades'].find_one(
+                                {"trade_id": int(trade_id)}, {"_id": 0})['orders'][order_id]['price']
+
+                            self.pf['trades'][trade_id]['orders'][order_id][
+                                'price'] = price
+
         # No active cancellations ocurred, trade was vetoed
         else:
             pass
@@ -393,7 +403,7 @@ class Portfolio:
 
         if self.pf['trades'][trade_id]['position'] is None:
             return False
-        if self.pf['trades'][trade_id]['position']['status'] == "OPEN":
+        elif self.pf['trades'][trade_id]['position']['status'] == "OPEN":
             return True
         elif self.pf['trades'][trade_id]['position']['status'] == "CLOSED":
             return False
@@ -535,12 +545,17 @@ class Portfolio:
 
         # 'avg_r_per_winner'
         # 'avg_r_per_loser'
-        if balance_history[-1]['amt'] > 0:
-            # (entry - stop) / exit - entry)
-            pass
+        if len(balance_history) > 1:
+            for transaction in balance_history[1:]:
+                # (entry - stop) / exit - entry)
+                # find trade RR
+                pass
 
-        elif balance_history[-1]['amt'] < 0:
-            pass
+                if transaction['amt'] > 0:
+                    pass
+
+                elif transaction['amt'] < 0:
+                    pass
 
         # 'avg_r_per_trade'
         # 'win_loss_ratio'
@@ -627,32 +642,41 @@ class Portfolio:
                 if not self.correlated(signal):
 
                     # Existing same-asset, same-venue conflict check.
+                    print("Conflict check:")
+                    print("trades.values()")
                     trades = [t for t in self.pf['trades'].values()]
+                    print(trades)
+                    print("conflicted trades")
                     conflicted = [c for c in trades if c['active'] and c['symbol'] == signal['symbol'] and c['venue'] == signal['venue']]
+                    print(conflicted)
+
                     if conflicted:
 
                         all_trades_risk_off = True
-                        opposite_dir = False
+
                         for trade in conflicted:
 
-                            # If all conflicted trades are risk free and same direction, proceed with signal
+                            # If all conflicted trades are risk free and same direction as signal, proceed with signal
                             if trade['exposure'] and trade['direction'] == signal['direction']:
                                 all_trades_risk_off = False
 
                             # If signal opposite direction to trade, notify user but take no action.
                             elif trade['direction'] != signal['direction']:
-                                opposite_dir = True
+                                self.logger.info("New signal is opposite direction to existing position.")
+                                return False, "New signal is opposite direction to existing position. Check for a possible reversal."
 
                         if all_trades_risk_off:
+                            self.logger.info("Existing position is risk-free. Adding to existing position.")
                             return True, "New trade within risk limits. Compound existing position."
 
-                        elif opposite_dir:
-                            return False, "New signal opposite direction to existing position. Check for a reversal."
+                        else:
+                            self.logger.info("Existing position matching new signal is not risk-free.")
+                            return False, "An existing position matching new signal is not risk-free."
 
                     # All risk checks cleared, free to action signal as is.
                     else:
-                        return True, "New trade within risk limits."
                         self.logger.info("New trade within all risk limits.")
+                        return True, "New trade within risk limits."
                 else:
                     self.logger.info(
                         "New trade skipped. Correlated position limit reached.")
