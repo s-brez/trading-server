@@ -1,7 +1,7 @@
 # trading-server
 Multi-asset, multi-strategy, event-driven trade execution and management server for trading common markets autonomously on 1min and higher timeframes.
 
-[<img src="https://github.com/s-brez/trading-server/blob/master/demo-telegram-ui.jpg">]
+<img src="https://drive.google.com/uc?export=view&id=1bhYYNtHvn9V9sOXlzox0XvxF4V1XRI44">
 
 
 
