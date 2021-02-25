@@ -347,52 +347,49 @@ class Portfolio:
         local portfolio state.
         """
 
-        o_ids = self.pf['trades'][trade_id]['orders'].keys()
+        o_ids = list(self.pf['trades'][trade_id]['orders'].keys())
         v_ids = [
             self.pf['trades'][trade_id]['orders'][o]['venue_id'] for o in o_ids if
             self.pf['trades'][trade_id]['orders'][o]['status'] != "FILLED"]
 
         venue = self.pf['trades'][trade_id]['venue']
 
+        print("orders to cancel:")
+        print(v_ids)
         cancel_confs = self.exchanges[venue].cancel_orders(v_ids)
 
+        print("v_ids")
+        print(v_ids)
+
+        print("o_ids")
+        print(o_ids)
+
+        print("cancel_confs")
+        print(json.dumps(cancel_confs, indent=2))
+
         if cancel_confs:
+            for v_id in v_ids:
+                if cancel_confs[v_id]['venue_id'] in v_ids:
+                    if cancel_confs[v_id]['status'] == "CANCELLED" or cancel_confs[v_id]['status'] == "FILLED":
+                        self.pf['trades'][trade_id]['active'] = False
+                        for o in o_ids:
+                            self.pf['trades'][trade_id]['orders'][o]['status'] == cancel_confs[v_id]['status']
 
-            # Handle cancellation failure messages
-            try:
-                if cancel_confs['error']["message"] == 'Not Found':
-                    self.pf['trades'][trade_id]['active'] = False
-                    for o in o_ids:
-                        self.pf['trades'][trade_id]['orders'][o]['status'] == "FILLED"
+                        if cancel_confs[v_id]['order_type'] == 'Stop':
+                            self.pf['trades'][trade_id]['exit_price'] = cancel_confs[v_id]['price']
 
-                # Handle other error messages here
-                else:
-                    raise Exception("Unhandled case", cancel_confs['error']["message"])
+                    else:
+                        print(json.dumps(cancel_confs[v_id], indent=2))
+                        raise Exception("Unexpected response format.")
 
-            # Handle successful cancellation messages
-            except KeyError:
+            # Set price from trade records for cancelled orders
+            # price = self.db_other['trades'].find_one(
+            #     {"trade_id": int(trade_id)}, {"_id": 0})['orders'][order_id]['price']
 
-                self.pf['trades'][trade_id]['active'] = False
+            # self.pf['trades'][trade_id]['orders'][order_id][
+            #     'price'] = price
 
-                for order_id in o_ids:
-                    for venue_id in set(v_ids):
-
-                        # Set order status to cancelled
-                        if self.pf['trades'][trade_id]['orders'][order_id][
-                            'venue_id'] == venue_id and cancel_confs[
-                                venue_id] == "SUCCESS":
-
-                            self.pf['trades'][trade_id]['orders'][order_id][
-                                'status'] = "CANCELLED"
-
-                            # Set price from trade records; no execution to match for cancellations
-                            price = self.db_other['trades'].find_one(
-                                {"trade_id": int(trade_id)}, {"_id": 0})['orders'][order_id]['price']
-
-                            self.pf['trades'][trade_id]['orders'][order_id][
-                                'price'] = price
-
-        # No active cancellations ocurred, trade was vetoed
+        # No active cancellations or order state modification ocurred
         else:
             pass
 
@@ -497,7 +494,8 @@ class Portfolio:
             self.pf['balance_history'][str(int(time.time()))] = {
                 'amt': final_pnl,
                 'trade_id': trade_id}
-            self.pf['trades'][trade_id]['u_pnl'] = final_pnl
+            self.pf['trades'][trade_id]['u_pnl'] = 0
+            self.pf['trades'][trade_id]['r_pnl'] = final_pnl
             self.pf['trades'][trade_id]['fees'] = fees
             self.pf['trades'][trade_id]['exposure'] = None
             self.pf['trades'][trade_id]['exit_price'] = avg_exit
@@ -642,13 +640,8 @@ class Portfolio:
                 if not self.correlated(signal):
 
                     # Existing same-asset, same-venue conflict check.
-                    print("Conflict check:")
-                    print("trades.values()")
                     trades = [t for t in self.pf['trades'].values()]
-                    print(trades)
-                    print("conflicted trades")
                     conflicted = [c for c in trades if c['active'] and c['symbol'] == signal['symbol'] and c['venue'] == signal['venue']]
-                    print(conflicted)
 
                     if conflicted:
 

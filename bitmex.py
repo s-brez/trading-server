@@ -600,8 +600,6 @@ class Bitmex(Exchange):
 
     def cancel_orders(self, order_ids: list):
 
-        # Only cancel orders if they have been submitted to venue
-        # order_ids will only contain ids if orders already submitted
         if order_ids[0] is not None:
 
             payload = {"orderID": order_ids}
@@ -620,17 +618,56 @@ class Bitmex(Exchange):
             response = self.session.send(request).json()
 
             response = [response] if not isinstance(response, list) else response
+
             cancel_confs = {}
 
             for i in response:
+
                 try:
-                    if i['orderID'] is not None:
-                        cancel_confs[i['orderID']] = "SUCCESS"
-                    elif i['error'] is not None:
-                        cancel_confs[i['orderID']] = i['error']
+                    price = i['stopPx'] if i['ordType'] == "Stop" else i['price']
                 except KeyError:
-                    cancel_confs = i
-                    # print(traceback.format_exc(), ke)
+                    print(json.dumps(response, indent=2))
+                    raise Exception("Unexpected response format: ", i)
+
+                try:
+                    # Order was filled or cancelled previously.
+                    if i['error'] is not None:
+                        if i['error'] == "Unable to cancel order due to existing state: Filled":
+                            cancel_confs[i['orderID']] = {
+                                'venue_id': i['orderID'],
+                                'order_id': i['clOrdID'],
+                                'status': "FILLED",
+                                'order_type': i['ordType'],
+                                'price': price
+                            }
+
+                        elif i['error'] == "Unable to cancel order due to existing state: Canceled":
+                            cancel_confs[i['orderID']] = {
+                                'venue_id': i['orderID'],
+                                'order_id': i['clOrdID'],
+                                'status': "CANCELLED",
+                                'order_type': i['ordType'],
+                                'price': price
+                            }
+
+                        else:
+                            print(json.dumps(i['error'], indent=2))
+                            raise Exception("Unhandled cancellation message case: ", i['error'])
+
+                # Order state unchanged since placement.
+                except KeyError:
+                    if i['ordStatus'] == "Canceled":
+                        cancel_confs[i['orderID']] = {
+                            'venue_id': i['orderID'],
+                            'order_id': i['clOrdID'],
+                            'status': "CANCELLED",
+                            'order_type': i['ordType'],
+                            'price': price
+                        }
+                    else:
+                        print(json.dumps(i['ordStatus'], indent=2))
+                        raise Exception("Unhandled cancellation message case: ", i['ordStatus'])
+
             return cancel_confs
 
         else:
