@@ -42,8 +42,9 @@ class Portfolio:
     CORRELATION_THRESHOLD = 0.5     # Level at which instrument considered correlated (-1 to 1)
     MAX_ACCEPTED_DRAWDOWN = 25      # Percentage as integer.
     RISK_PER_TRADE = 0.5              # Percentage as integer or float OR 'KELLY'
-    DEFAULT_STOP = 1                # Default (%) stop distance if none provided.
     SNAPSHOT_SIZE = 100             # Lookback period for trade snapshot images
+    DEFAULT_STOP = 1                # Default (%) stop distance if none provided.
+    DEFAULT_START = 1000            # Default porfolio size if none given.  
 
     def __init__(self, exchanges, logger, db_other, db_client, models,
                  telegram):
@@ -171,6 +172,9 @@ class Portfolio:
             # Queue the trade for storage.
             self.trades_save_to_db.put(trade.get_trade_dict())
 
+            # Store trade immediately
+            self.pf.save_new_trades_to_db()
+
             # Set order batch size and queue orders for execution.
             batch_size = len(orders)
             for order in orders:
@@ -185,7 +189,6 @@ class Portfolio:
 
             # Only raise orders and add to portfilio if within risk limits.
             if within_risk_limits:
-
                 self.pf['trades'][str(trade_id)] = t_dict
                 self.save_porfolio(self.pf)
                 for order in orders:
@@ -354,18 +357,7 @@ class Portfolio:
 
         venue = self.pf['trades'][trade_id]['venue']
 
-        print("orders to cancel:")
-        print(v_ids)
         cancel_confs = self.exchanges[venue].cancel_orders(v_ids)
-
-        print("v_ids")
-        print(v_ids)
-
-        print("o_ids")
-        print(o_ids)
-
-        print("cancel_confs")
-        print(json.dumps(cancel_confs, indent=2))
 
         if cancel_confs:
             for v_id in v_ids:
@@ -584,12 +576,12 @@ class Portfolio:
                 'id': ID,
                 'balance_history': {
                     str(int(time.time())): {
-                        'amt': 1000,
+                        'amt': self.DEFAULT_START,
                         'trade_id': "initial_deposit"}},
-                'current_balance': 1000,
-                'starting_balance': 1000,
-                'peak_balance': 1000,
-                'low_balance': 1000,
+                'current_balance': self.DEFAULT_START,
+                'starting_balance': self.DEFAULT_START,
+                'peak_balance': self.DEFAULT_START,
+                'low_balance': self.DEFAULT_START,
                 'total_trades': 0,
                 'total_winning_trades': 0,
                 'total_losing_trades': 0,
@@ -644,9 +636,7 @@ class Portfolio:
                     conflicted = [c for c in trades if c['active'] and c['symbol'] == signal['symbol'] and c['venue'] == signal['venue']]
 
                     if conflicted:
-
                         all_trades_risk_off = True
-
                         for trade in conflicted:
 
                             # If all conflicted trades are risk free and same direction as signal, proceed with signal

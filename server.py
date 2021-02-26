@@ -186,7 +186,7 @@ class Server:
                 self.data.save_new_bars_to_db()
                 self.strategy.trim_datasets()
                 self.strategy.save_new_signals_to_db()
-                self.portfolio.save_new_trades_to_db()
+                # self.portfolio.save_new_trades_to_db()
                 self.broker.check_consent(self.events)
 
                 break
