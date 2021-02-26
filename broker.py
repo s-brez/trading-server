@@ -132,6 +132,10 @@ class Broker:
                     self.pf.trade_complete(trade_id)
                     to_remove.append(trade_id)
 
+                # Unkown consent case
+                else:
+                    raise Exception("Unknown case for trade consent:", trade['consent'])
+
             # Remove sent orders after iteration complete.
             for t_id in to_remove:
                 del self.orders[t_id]
