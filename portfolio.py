@@ -54,6 +54,7 @@ class Portfolio:
         self.db_client = db_client
         self.models = models
         self.telegram = telegram
+        self.broker = None
 
         self.trades_save_to_db = queue.Queue(0)
         self.id_gen = TradeID(db_other)
@@ -173,7 +174,7 @@ class Portfolio:
             self.trades_save_to_db.put(trade.get_trade_dict())
 
             # Store trade immediately
-            self.pf.save_new_trades_to_db()
+            self.save_new_trades_to_db()
 
             # Set order batch size and queue orders for execution.
             batch_size = len(orders)
@@ -350,12 +351,14 @@ class Portfolio:
         local portfolio state.
         """
 
-        o_ids = list(self.pf['trades'][trade_id]['orders'].keys())
-        v_ids = [
-            self.pf['trades'][trade_id]['orders'][o]['venue_id'] for o in o_ids if
-            self.pf['trades'][trade_id]['orders'][o]['status'] != "FILLED"]
+        t_id = str(trade_id)
 
-        venue = self.pf['trades'][trade_id]['venue']
+        o_ids = list(self.pf['trades'][t_id]['orders'].keys())
+        v_ids = [
+            self.pf['trades'][t_id]['orders'][o]['venue_id'] for o in o_ids if
+            self.pf['trades'][t_id]['orders'][o]['status'] != "FILLED"]
+
+        venue = self.pf['trades'][t_id]['venue']
 
         cancel_confs = self.exchanges[venue].cancel_orders(v_ids)
 
@@ -363,12 +366,12 @@ class Portfolio:
             for v_id in v_ids:
                 if cancel_confs[v_id]['venue_id'] in v_ids:
                     if cancel_confs[v_id]['status'] == "CANCELLED" or cancel_confs[v_id]['status'] == "FILLED":
-                        self.pf['trades'][trade_id]['active'] = False
+                        self.pf['trades'][t_id]['active'] = False
                         for o in o_ids:
-                            self.pf['trades'][trade_id]['orders'][o]['status'] == cancel_confs[v_id]['status']
+                            self.pf['trades'][t_id]['orders'][o]['status'] == cancel_confs[v_id]['status']
 
                         if cancel_confs[v_id]['order_type'] == 'Stop':
-                            self.pf['trades'][trade_id]['exit_price'] = cancel_confs[v_id]['price']
+                            self.pf['trades'][t_id]['exit_price'] = cancel_confs[v_id]['price']
 
                     else:
                         print(json.dumps(cancel_confs[v_id], indent=2))
@@ -535,6 +538,7 @@ class Portfolio:
 
         # 'avg_r_per_winner'
         # 'avg_r_per_loser'
+        # 'avg_r_per_trade'
         if len(balance_history) > 1:
             for transaction in balance_history[1:]:
                 # (entry - stop) / exit - entry)
@@ -547,7 +551,6 @@ class Portfolio:
                 elif transaction['amt'] < 0:
                     pass
 
-        # 'avg_r_per_trade'
         # 'win_loss_ratio'
         # 'gain_to_pain_ratio'
 
@@ -619,7 +622,7 @@ class Portfolio:
 
     def within_risk_limits(self, signal):
         """
-        Return true if signal would not exceed risk limits when traded.
+        Return true if signal would not exceed risk limits or cause conflicts when traded.
         """
 
         # Position limit check.
@@ -631,13 +634,15 @@ class Portfolio:
                 # Correlation check.
                 if not self.correlated(signal):
 
-                    # Existing same-asset, same-venue conflict check.
+                    # Same-asset, same-venue trade conflict checks.
                     trades = [t for t in self.pf['trades'].values()]
-                    conflicted = [c for c in trades if c['active'] and c['symbol'] == signal['symbol'] and c['venue'] == signal['venue']]
+                    conflicted_active_trades = [t for t in trades if t['active'] and t['symbol'] == signal['symbol'] and t['venue'] == signal['venue']]
+                    conflicted_pending_trades = [t for t in trades if not t['active'] and not t['position'] and t['symbol'] == signal['symbol'] and t['venue'] == signal['venue']]
 
-                    if conflicted:
+                    if conflicted_active_trades:
+
                         all_trades_risk_off = True
-                        for trade in conflicted:
+                        for trade in conflicted_active_trades:
 
                             # If all conflicted trades are risk free and same direction as signal, proceed with signal
                             if trade['exposure'] and trade['direction'] == signal['direction']:
@@ -649,17 +654,32 @@ class Portfolio:
                                 return False, "New signal is opposite direction to existing position. Check for a possible reversal."
 
                         if all_trades_risk_off:
-                            self.logger.info("Existing position is risk-free. Adding to existing position.")
-                            return True, "New trade within risk limits. Compound existing position."
 
+                            # Check if signal superceeds any pending signals
+                            if (signal['symbol'], signal['venue']) not in [(t['symbol'], t['venue']) for t in conflicted_pending_trades]:
+
+                                self.logger.info("Existing position is risk-free. Adding to existing position.")
+                                return True, "New trade within risk limits. Compound existing position."
+
+                            # New signal conflicts with older pending signal(s), procee
+                            else:
+                                self.superceed_older_signals(signal, conflicted_pending_trades)
+                                return True, "New trade within risk limits."
                         else:
                             self.logger.info("Existing position matching new signal is not risk-free.")
                             return False, "An existing position matching new signal is not risk-free."
 
-                    # All risk checks cleared, free to action signal as is.
+                    # Check if signal superceeds any pending signals
                     else:
-                        self.logger.info("New trade within all risk limits.")
-                        return True, "New trade within risk limits."
+                        if (signal['symbol'], signal['venue']) not in [(t['symbol'], t['venue']) for t in conflicted_pending_trades]:
+                            # All risk checks cleared, free to action signal as is.
+                            self.logger.info("New trade within all risk limits.")
+                            return True, "New trade within risk limits."
+
+                        # New signal conflicts with older pending signal(s)
+                        else:
+                            self.superceed_older_signals(signal, conflicted_pending_trades)
+                            return True, "New trade within risk limits."
                 else:
                     self.logger.info(
                         "New trade skipped. Correlated position limit reached.")
@@ -670,6 +690,16 @@ class Portfolio:
         else:
             self.logger.info("New trade skipped. Position limit reached.")
             return False, "Position limit reached."
+
+    def superceed_older_signals(self, signal, conflicted_pending_trades: list):
+
+        # Remove existing pending trades that conflict with the given signal
+        for trade in conflicted_pending_trades:
+            t_id = str(trade['trade_id'])
+            if trade['signal_timestamp'] < signal['entry_timestamp']:
+                del self.broker.orders[trade['trade_id']]
+                self.trade_complete(str(trade['trade_id']))
+                self.logger.info("New signal superceeds pending trade. Trade " + t_id + " cancelled.")
 
     def calculate_exposure(self, trade):
         """

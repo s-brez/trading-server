@@ -102,9 +102,6 @@ class Broker:
                         self.logger.info(
                             "Trade " + str(trade_id) + " order batch ready.")
 
-                        # for order in self.orders[trade_id]:
-                        #     print(json.dumps(order))
-
                         # Place orders.
                         order_confs = self.exchanges[venue].place_bulk_orders(
                             self.orders[trade_id])

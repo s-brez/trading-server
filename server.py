@@ -94,6 +94,8 @@ class Server:
                              self.db_other, self.db_client, self.live_trading,
                              self.telegram)
 
+        self.portfolio.broker = self.broker
+
         # Start flask api in separate process
         # p = subprocess.Popen(["python", "api.py"])
         # self.logger.info("Started flask API.")
@@ -170,6 +172,9 @@ class Server:
         while True:
 
             try:
+
+                # Check for user commands
+
                 # Get events from queue
                 event = self.events.get(False)
 
