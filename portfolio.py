@@ -44,7 +44,7 @@ class Portfolio:
     RISK_PER_TRADE = 0.5              # Percentage as integer or float OR 'KELLY'
     SNAPSHOT_SIZE = 100             # Lookback period for trade snapshot images
     DEFAULT_STOP = 1                # Default (%) stop distance if none provided.
-    DEFAULT_START = 1000            # Default porfolio size if none given.  
+    DEFAULT_START = 1000            # Default portfolio size if none given.  
 
     def __init__(self, exchanges, logger, db_other, db_client, models,
                  telegram):
@@ -191,7 +191,7 @@ class Portfolio:
             # Only raise orders and add to portfilio if within risk limits.
             if within_risk_limits:
                 self.pf['trades'][str(trade_id)] = t_dict
-                self.save_porfolio(self.pf)
+                self.save_portfolio(self.pf)
                 for order in orders:
                     events.put(OrderEvent(order.get_order_dict()))
 
@@ -288,7 +288,7 @@ class Portfolio:
         else:
             raise Exception("Order metatype error:", fill_conf['metatype'])
 
-        self.save_porfolio(self.pf)
+        self.save_portfolio(self.pf)
 
     def new_order_conf(self, order_confs: list, events):
         """
@@ -314,7 +314,7 @@ class Portfolio:
             if conf['status'] == "FILLED":
                 events.put(FillEvent(conf))
 
-        self.save_porfolio(self.pf)
+        self.save_portfolio(self.pf)
 
     def trade_complete(self, trade_id):
         """
@@ -329,18 +329,19 @@ class Portfolio:
             self.close_position_by_trade_id(trade_id)
 
         # Only update portfolio metrics if trade was accepted by user.
-        if self.pf['trades'][trade_id]['consent']:
+        if self.pf['trades'][trade_id]['consent'] != "SUPERCEEDED" and self.pf['trades'][trade_id]['consent'] is not None:
             self.calculate_pnl_by_trade(trade_id)
             self.post_trade_analysis(trade_id)
 
         # Reduce active trade count by 1.
-        self.pf['total_active_trades'] -= 1 if self.pf['total_active_trades'] > 0 else 0
+        if self.pf['total_active_trades'] > 0:
+            self.pf['total_active_trades'] -= 1 
 
         # Mark trade as inactive
         self.pf['trades'][trade_id]['active'] = False
 
         # Save updated portfolio state to DB.
-        self.save_porfolio(self.pf)
+        self.save_portfolio(self.pf, output=False)
 
         # Update trades DB to reflect portfolio state.
         self.update_trades_db(trade_id)
@@ -368,6 +369,7 @@ class Portfolio:
                     if cancel_confs[v_id]['status'] == "CANCELLED" or cancel_confs[v_id]['status'] == "FILLED":
                         self.pf['trades'][t_id]['active'] = False
                         for o in o_ids:
+                            # print("Setting new order status:", o, cancel_confs[v_id]['status'])
                             self.pf['trades'][t_id]['orders'][o]['status'] == cancel_confs[v_id]['status']
 
                         if cancel_confs[v_id]['order_type'] == 'Stop':
@@ -393,16 +395,18 @@ class Portfolio:
         Return true if position is still open according to local portfolio.
         """
 
-        if self.pf['trades'][trade_id]['position'] is None:
+        t_id = str(trade_id)
+
+        if self.pf['trades'][t_id]['position'] is None:
             return False
-        elif self.pf['trades'][trade_id]['position']['status'] == "OPEN":
+        elif self.pf['trades'][t_id]['position']['status'] == "OPEN":
             return True
-        elif self.pf['trades'][trade_id]['position']['status'] == "CLOSED":
+        elif self.pf['trades'][t_id]['position']['status'] == "CLOSED":
             return False
         else:
             raise Exception(
                 "Position status error:",
-                self.pf['trades'][trade_id]['position']['status'])
+                self.pf['trades'][t_id]['position']['status'])
 
     def close_position_by_trade_id(self, trade_id):
         """
@@ -514,8 +518,6 @@ class Portfolio:
         Conduct post-trade portfolio analytics.
         """
 
-        balance_history = list(self.pf['balance_history'].values())
-
         # 'total_trades'
         self.pf['total_trades'] += 1
 
@@ -528,31 +530,44 @@ class Portfolio:
             self.pf['low_balance'] = self.pf['current_balance']
             self.logger.info("New portfolio value all-time-low: " + str(self.pf['current_balance']))        
 
-        # 'total_consecutive_wins'
-        # 'total_consecutive_losses'
+        balance_history = [i for i in list(self.pf['balance_history'].values())[1:]]
+
         if len(balance_history) > 1:
+
+            # 'total_consecutive_wins'
+            # 'total_consecutive_losses'
             if balance_history[-1]['amt'] > 0 and balance_history[-2]['amt'] > 0:
                 self.pf['total_consecutive_wins'] += 1
             elif balance_history[-1]['amt'] < 0 and balance_history[-2]['amt'] < 0:
                 self.pf['total_consecutive_losses'] += 1
 
-        # 'avg_r_per_winner'
-        # 'avg_r_per_loser'
-        # 'avg_r_per_trade'
-        if len(balance_history) > 1:
-            for transaction in balance_history[1:]:
-                # (entry - stop) / exit - entry)
-                # find trade RR
-                pass
+            # 'avg_r_per_trade'
+            # 'avg_r_per_winner'
+            # 'avg_r_per_loser'
+            winners_r, losers_r, total_r = [], [], []
+            for transaction in balance_history:
+                trade = self.pf['trades'][transaction['trade_id']]
+                entry = trade['position']['avg_entry_price']
+                stop = list(trade['orders'].values())[-1]['price']
+                exit = trade["exit_price"]
+                rr = (exit - entry) / (entry - stop)
+                total_r.append(rr)
 
                 if transaction['amt'] > 0:
-                    pass
+                    winners_r.append(rr)
 
                 elif transaction['amt'] < 0:
-                    pass
+                    losers_r.append(rr)
 
-        # 'win_loss_ratio'
-        # 'gain_to_pain_ratio'
+            self.pf['avg_r_per_trade'] = round(sum(total_r) / len(total_r), 2)
+            self.pf['avg_r_per_winner'] = round(sum(winners_r) / len(winners_r), 2)
+            self.pf['avg_r_per_loser'] = round(sum(losers_r) / len(losers_r), 2)
+
+            # 'win_loss_ratio'
+            if self.pf['total_winning_trades'] and self.pf['total_losing_trades']:
+                self.pf['win_loss_ratio'] = self.pf['total_winning_trades'] / self.pf['total_losing_trades']
+            elif self.pf['total_winning_trades'] and not self.pf['total_losing_trades']:
+                self.pf['win_loss_ratio'] = self.pf['total_winning_trades']
 
     def verify_portfolio_state(self, portfolio):
         """
@@ -561,7 +576,7 @@ class Portfolio:
 
         # TODO.
 
-        self.save_porfolio(portfolio)
+        self.save_portfolio(portfolio)
         self.logger.info("Portfolio verification complete.")
 
     def load_portfolio(self, ID=1):
@@ -594,7 +609,6 @@ class Portfolio:
                 'avg_r_per_loser': 0,
                 'avg_r_per_trade': 0,
                 'win_loss_ratio': 0,
-                'gain_to_pain_ratio': 0,
                 'risk_per_trade': self.RISK_PER_TRADE,
                 'max_simultaneous_positions': self.MAX_SIMULTANEOUS_POSITIONS,
                 'max_correlated_positions': self.MAX_CORRELATED_POSITIONS,
@@ -607,7 +621,7 @@ class Portfolio:
 
             return default_portfolio
 
-    def save_porfolio(self, portfolio):
+    def save_portfolio(self, portfolio, output=True):
         """
         Save portfolio state to DB.
         """
@@ -615,8 +629,9 @@ class Portfolio:
         result = self.db_other['portfolio'].replace_one(
             {"id": portfolio['id']}, portfolio, upsert=True)
 
-        if result.acknowledged:
+        if result.acknowledged and output:
             self.logger.info("Portfolio save successful.")
+
         else:
             self.logger.info("Portfolio save unsuccessful.")
 
@@ -637,7 +652,7 @@ class Portfolio:
                     # Same-asset, same-venue trade conflict checks.
                     trades = [t for t in self.pf['trades'].values()]
                     conflicted_active_trades = [t for t in trades if t['active'] and t['symbol'] == signal['symbol'] and t['venue'] == signal['venue']]
-                    conflicted_pending_trades = [t for t in trades if not t['active'] and not t['position'] and t['symbol'] == signal['symbol'] and t['venue'] == signal['venue']]
+                    conflicted_pending_trades = [t for t in trades if not t['active'] and not t['position'] and t['consent'] != "SUPERCEEDED" and t['symbol'] == signal['symbol'] and t['venue'] == signal['venue']]
 
                     if conflicted_active_trades:
 
@@ -655,13 +670,12 @@ class Portfolio:
 
                         if all_trades_risk_off:
 
-                            # Check if signal superceeds any pending signals
+                            # Check if signal should superceeds any pending signals.
                             if (signal['symbol'], signal['venue']) not in [(t['symbol'], t['venue']) for t in conflicted_pending_trades]:
-
                                 self.logger.info("Existing position is risk-free. Adding to existing position.")
                                 return True, "New trade within risk limits. Compound existing position."
 
-                            # New signal conflicts with older pending signal(s), procee
+                            # New signal conflicts with older pending signal(s),
                             else:
                                 self.superceed_older_signals(signal, conflicted_pending_trades)
                                 return True, "New trade within risk limits."
@@ -669,7 +683,7 @@ class Portfolio:
                             self.logger.info("Existing position matching new signal is not risk-free.")
                             return False, "An existing position matching new signal is not risk-free."
 
-                    # Check if signal superceeds any pending signals
+                    # Check if signal should superceeds any pending signals.
                     else:
                         if (signal['symbol'], signal['venue']) not in [(t['symbol'], t['venue']) for t in conflicted_pending_trades]:
                             # All risk checks cleared, free to action signal as is.
@@ -692,14 +706,36 @@ class Portfolio:
             return False, "Position limit reached."
 
     def superceed_older_signals(self, signal, conflicted_pending_trades: list):
+        """
+        Remove pending, unactioned trades that conflict with the given signal.
+        """
 
-        # Remove existing pending trades that conflict with the given signal
         for trade in conflicted_pending_trades:
+
             t_id = str(trade['trade_id'])
+
             if trade['signal_timestamp'] < signal['entry_timestamp']:
-                del self.broker.orders[trade['trade_id']]
-                self.trade_complete(str(trade['trade_id']))
-                self.logger.info("New signal superceeds pending trade. Trade " + t_id + " cancelled.")
+
+                try:
+
+                    self.pf['trades'][t_id]['consent'] = "SUPERCEEDED"
+
+                    del self.broker.orders[trade['trade_id']]
+                    self.trade_complete(t_id)
+                    self.logger.info("New signal superceeds a pending trade. Trade " + t_id + " cancelled.")
+
+                except:
+                    traceback.print_exc()
+                    print("orders:", type(self.broker.orders))
+                    print(json.dumps(self.broker.orders, indent=2))
+
+                    print("conflicted trade")
+                    print(json.dumps(trade, indent=2))
+
+                    print("conflicted_pending_trades")
+                    print(json.dumps(conflicted_pending_trades, indent=2))
+
+                    sys.exit(0)
 
     def calculate_exposure(self, trade):
         """
