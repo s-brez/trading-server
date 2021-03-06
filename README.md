@@ -1,20 +1,21 @@
 # trading-server
 Multi-asset, multi-strategy, event-driven trade execution and management server for trading common markets autonomously on 1min and higher timeframes.
 
-<img src="https://drive.google.com/uc?export=view&id=1bhYYNtHvn9V9sOXlzox0XvxF4V1XRI44">
-
-
 
 ## Current features
 Trade any API-accessible market with unified multi-strategy portfolio management, autonomously or semi-autonomously.
 
 Allocation-based risk management (allocate x% of capital to specific strategies).
 
-Porfolio performance metrics and tracking.
+Porfolio performance metrics and tracking. Tracks the following:
+
+<img src="https://drive.google.com/uc?export=view&id=1Nmai4R5nZbEeaW3Xj5w1005o4AC9ieI4">
 
 Feature library - assemble new strategies quickly from existing features.
 
 Trade consent via Telegram (or write your own messaging client). Accept, veto or tweak trade setups before they are actioned.
+
+<img src="https://drive.google.com/uc?export=view&id=1bhYYNtHvn9V9sOXlzox0XvxF4V1XRI44">
 
 ## WIP features
 
