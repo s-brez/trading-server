@@ -94,9 +94,11 @@ class Server:
                              self.db_other, self.db_client, self.live_trading,
                              self.telegram)
 
+        self.portfolio.broker = self.broker
+
         # Start flask api in separate process
-        p = subprocess.Popen(["python", "api.py"])
-        self.logger.info("Started flask API.")
+        # p = subprocess.Popen(["python", "api.py"])
+        # self.logger.info("Started flask API.")
 
         # Processing performance tracking variables.
         self.start_processing = None
@@ -170,6 +172,9 @@ class Server:
         while True:
 
             try:
+
+                # Check for user commands
+
                 # Get events from queue
                 event = self.events.get(False)
 
@@ -186,7 +191,7 @@ class Server:
                 self.data.save_new_bars_to_db()
                 self.strategy.trim_datasets()
                 self.strategy.save_new_signals_to_db()
-                self.portfolio.save_new_trades_to_db()
+                # self.portfolio.save_new_trades_to_db()
                 self.broker.check_consent(self.events)
 
                 break
@@ -209,13 +214,7 @@ class Server:
                     # Order placement and Fill Event generation.
                     elif event.type == "ORDER":
                         self.logger.info("Processing order event.")
-
-                        # Do order confirmation and placement in new thread as
-                        # confirmation requires user input.
-                        thread = Thread(target=lambda: self.broker.new_order(
-                                self.events, event))
-                        thread.daemon = True
-                        thread.start()
+                        self.broker.new_order(self.events, event)
 
                     # Final portolio update.
                     elif event.type == "FILL":

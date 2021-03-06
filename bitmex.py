@@ -49,28 +49,28 @@ class Bitmex(Exchange):
         super()
         self.logger = logger
         self.name = "BitMEX"
-        self.symbols = ["XBTUSD"]  # "ETHUSD", "XRPUSD", "BCHUSD", LTCUSD", "LINKUSDT"]
+        self.symbols = ["XBTUSD"] # "ETHUSD", "XRPUSD", "BCHUSD", "LTCUSD", "LINKUSDT"]
 
         # Minimum price increment for each instrument.
         self.symbol_min_increment = {
             'XBTUSD': 0.5,
             'ETHUSD': 0.05,
-            'XRPUSD': 0.0001}
-            # 'BCHUSD': 0.05,
-            # 'LTCUSD' : 0.01,
-            # 'LINKUSDT': 0.0005}
+            'XRPUSD': 0.0001,
+            'BCHUSD': 0.05,
+            'LTCUSD': 0.01,
+            'LINKUSDT': 0.0005}
 
         # Websocket subscription channels.
         self.channels = ["trade"]
 
-        # Not needed but saves a few rest polls, thus saves time.
+        # Not needed but saves a few rest polls/saves time.
         self.origin_tss = {
             "XBTUSD": 1483228800,
             "ETHUSD": 1533200520,
-            "XRPUSD": 1580875200}
-            # 'BCHUSD': ,
-            # 'LTCUSD' : ,
-            # 'LINKUSDT': }
+            "XRPUSD": 1580875200,
+            'BCHUSD': 1592280000,
+            'LTCUSD': 1596081600,
+            'LINKUSDT': 1602820800}
 
         self.api_key, self.api_secret = self.load_api_keys()
 
@@ -573,6 +573,8 @@ class Bitmex(Exchange):
                         else:
                             raise Exception(res['ordStatus'])
 
+                        price = res['stopPx'] if res['stopPx'] else res['price']
+
                         new = {
                             'trade_id': order['trade_id'],
                             'order_id': order['order_id'],
@@ -591,7 +593,7 @@ class Bitmex(Exchange):
                             'avg_fill_price': res['avgPx'],
                             'currency': res['currency'],
                             'venue_id': res['orderID'],
-                            'price': res['price'],
+                            'price': price,
                             'status': fill}
 
                         updated_orders.append(new)
@@ -600,8 +602,6 @@ class Bitmex(Exchange):
 
     def cancel_orders(self, order_ids: list):
 
-        # Only cancel orders if they have been submitted to venue
-        # order_ids will only contain ids if orders already submitted
         if order_ids[0] is not None:
 
             payload = {"orderID": order_ids}
@@ -620,17 +620,56 @@ class Bitmex(Exchange):
             response = self.session.send(request).json()
 
             response = [response] if not isinstance(response, list) else response
+
             cancel_confs = {}
 
             for i in response:
+
                 try:
-                    if i['orderID'] is not None:
-                        cancel_confs[i['orderID']] = "SUCCESS"
-                    elif i['error'] is not None:
-                        cancel_confs[i['orderID']] = i['error']
+                    price = i['stopPx'] if i['ordType'] == "Stop" else i['price']
                 except KeyError:
-                    cancel_confs = i
-                    # print(traceback.format_exc(), ke)
+                    print(json.dumps(response, indent=2))
+                    raise Exception("Unexpected response format: ", i)
+
+                try:
+                    # Order was filled or cancelled previously.
+                    if i['error'] is not None:
+                        if i['error'] == "Unable to cancel order due to existing state: Filled":
+                            cancel_confs[i['orderID']] = {
+                                'venue_id': i['orderID'],
+                                'order_id': i['clOrdID'],
+                                'status': "FILLED",
+                                'order_type': i['ordType'],
+                                'price': price
+                            }
+
+                        elif i['error'] == "Unable to cancel order due to existing state: Canceled":
+                            cancel_confs[i['orderID']] = {
+                                'venue_id': i['orderID'],
+                                'order_id': i['clOrdID'],
+                                'status': "CANCELLED",
+                                'order_type': i['ordType'],
+                                'price': price
+                            }
+
+                        else:
+                            print(json.dumps(i['error'], indent=2))
+                            raise Exception("Unhandled cancellation message case: ", i['error'])
+
+                # Order state unchanged since placement.
+                except KeyError:
+                    if i['ordStatus'] == "Canceled":
+                        cancel_confs[i['orderID']] = {
+                            'venue_id': i['orderID'],
+                            'order_id': i['clOrdID'],
+                            'status': "CANCELLED",
+                            'order_type': i['ordType'],
+                            'price': price
+                        }
+                    else:
+                        print(json.dumps(i['ordStatus'], indent=2))
+                        raise Exception("Unhandled cancellation message case: ", i['ordStatus'])
+
             return cancel_confs
 
         else:

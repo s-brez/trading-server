@@ -34,8 +34,9 @@ class Trade(ABC):
         self.u_pnl = 0                  # Total unrealised pnl.
         self.r_pnl = 0                  # Total realised pnl.
         self.fees = 0                   # Total fees/commisions paid.
-        self.exposure = None            # Percentage of capital at risk.
+        self.exposure = None            # Percentage of possible loss remaining at risk.
         self.consent = None             # If or not user consents to trade.
+        self.systematic_close = None    # If or not trade was closed properly.
 
     @abstractmethod
     def get_trade_dict(self):
@@ -72,6 +73,7 @@ class SingleInstrumentTrade(Trade):
         self.signal_timestamp = s_ts        # Epoch timestamp of parent signal.
         self.timeframe = timeframe          # Trade timeframe.
         self.entry_price = entry_price      # Trade entry price.
+        self.exit_price = None              # Trade exit price.
         self.venue = venue                  # Exchange or broker traded with.
         self.symbol = symbol                # Instrument ticker code.
         self.model = model                  # Name of triggerstrategy.
@@ -90,6 +92,8 @@ class SingleInstrumentTrade(Trade):
             'direction': self.direction,
             'timeframe': self.timeframe,
             'entry_price': self.entry_price,
+            'exit_price': self.exit_price,
+            'systematic_close': self.systematic_close,
             'u_pnl': self.u_pnl,
             'r_pnl': self.r_pnl,
             'fees': self.fees,
@@ -97,9 +101,9 @@ class SingleInstrumentTrade(Trade):
             'venue': self.venue,
             'symbol': self.symbol,
             'position': self.position,
+            'consent': self.consent,
             'order_count': self.order_count,
-            'orders': self.orders,
-            'consent': self.consent}
+            'orders': self.orders}
 
 
 class Position:

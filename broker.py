@@ -102,9 +102,6 @@ class Broker:
                         self.logger.info(
                             "Trade " + str(trade_id) + " order batch ready.")
 
-                        # for order in self.orders[trade_id]:
-                        #     print(json.dumps(order))
-
                         # Place orders.
                         order_confs = self.exchanges[venue].place_bulk_orders(
                             self.orders[trade_id])
@@ -131,6 +128,10 @@ class Broker:
                 elif trade['consent'] is False:
                     self.pf.trade_complete(trade_id)
                     to_remove.append(trade_id)
+
+                # Unkown consent case
+                else:
+                    raise Exception("Unknown case for trade consent:", trade['consent'])
 
             # Remove sent orders after iteration complete.
             for t_id in to_remove:
@@ -298,9 +299,6 @@ class FillAgent:
                             conf['order_id'],
                             conf['status'],
                             conf))
-
-            # print("Portfolio:", portfolio_order_snapshot)
-            # print("Actual:", actual_order_snapshot)
 
             # Compare actual order state to local portfolio state.
             for port, actual in zip(
