@@ -573,6 +573,8 @@ class Bitmex(Exchange):
                         else:
                             raise Exception(res['ordStatus'])
 
+                        price = res['stopPx'] if res['stopPx'] else res['price']
+
                         new = {
                             'trade_id': order['trade_id'],
                             'order_id': order['order_id'],
@@ -591,7 +593,7 @@ class Bitmex(Exchange):
                             'avg_fill_price': res['avgPx'],
                             'currency': res['currency'],
                             'venue_id': res['orderID'],
-                            'price': res['price'],
+                            'price': price,
                             'status': fill}
 
                         updated_orders.append(new)
