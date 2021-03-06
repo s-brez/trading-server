@@ -1,8 +1,10 @@
-from urllib3.exceptions import NewConnectionError, MaxRetryError
+from urllib3.exceptions import NewConnectionError, MaxRetryError, TimeoutError
+from requests.exceptions import ConnectionError
 from time import sleep
 from os import system
 import subprocess
 import platform
+import socket
 
 from server import Server
 
@@ -13,6 +15,7 @@ server = Server()
 
 try:
     server.run()
+
 except (ConnectionError, NewConnectionError, MaxRetryError, TimeoutError):
 
     # kill all python proccesses, wait and restart
@@ -27,3 +30,6 @@ except (ConnectionError, NewConnectionError, MaxRetryError, TimeoutError):
         print("Server restart in 1 minute.")
         sleep(RETRY_TIME)
         subprocess.check_output(["python", "server_test.py"])
+
+    else:
+        print("Unknown kernel. Terminating.")
