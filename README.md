@@ -1,5 +1,5 @@
 # trading-server
-A multi-asset, multi-strategy, event-driven trade execution and management server for trading common markets with many algorithms/bots at many venues simultenously, with unified risk management and reporting.
+A multi-asset, multi-strategy, event-driven trade execution and management server for running many algorithms/bots at many venues simultenously, with unified risk management and reporting.
 
 Note this is not a standalone trading algorithm/bot. 
 
