@@ -1,5 +1,7 @@
 # trading-server
-Multi-asset, multi-strategy, event-driven trade execution and management server for trading common markets autonomously on 1min and higher timeframes.
+A multi-asset, multi-strategy, event-driven trade execution and management server for trading common markets with many algorithms/bots at many venues simultenously, with unified risk management and reporting.
+
+Note this is not a standalone trading algorithm/bot. 
 
 
 ## Current features
@@ -19,7 +21,7 @@ Trade consent via Telegram (or write your own messaging client). Accept, veto or
 
 ## WIP features
 
-Account multicasting - trade as many accounts on as many platforms as desired
+Account multicasting - trade as many accounts on as many platforms as desired.
 
 UI - web dashboard for portfolio stats and individual trade metrics 
 
@@ -46,7 +48,7 @@ Deribit | Planned | Crypto derivatives & options
 Software works with 1 minute and above resolution strategies. Tick-resolution support planned later. With this in mind, the software converts tick data to 1 min bars where live tick data is available, but doesn't store ticks locally (i.e. it handles tick data but doesnt use it yet).
  
 ## Strategy modellling
-Strategy implementations are not included. A simple moving average cross model is included as an example only. 
+Individual strategy implementations are not included. A simple moving average cross model is included as an example only. 
 Custom strategy implementations, collaboration or any other enquiries please email me at sam@sdbgroup.io.
 
 ## Collaboration
