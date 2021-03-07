@@ -105,22 +105,6 @@ class Portfolio:
                 False,                  # Reduce-only order.
                 False))                 # Post-only order.
 
-            # Stop order.
-            orders.append(Order(
-                self.logger,
-                trade_id,
-                None,
-                signal['symbol'],
-                signal['venue'],
-                event.inverse_direction(),
-                size,
-                stop[0],
-                "STOP",
-                "STOP",
-                None,
-                signal['trail'],
-                True,
-                False))
 
             # Take profit order(s).
             if signal['targets']:
@@ -147,6 +131,23 @@ class Portfolio:
                         False,
                         True,
                         False))
+
+            # Stop order.
+            orders.append(Order(
+                self.logger,
+                trade_id,
+                None,
+                signal['symbol'],
+                signal['venue'],
+                event.inverse_direction(),
+                size,
+                stop[0],
+                "STOP",
+                "STOP",
+                None,
+                signal['trail'],
+                True,
+                False))
 
             # Set sequential order ID's, based on trade ID.
             count = 1
@@ -365,21 +366,41 @@ class Portfolio:
 
         if cancel_confs:
             for v_id in v_ids:
-                if cancel_confs[v_id]['venue_id'] in v_ids:
-                    if cancel_confs[v_id]['status'] == "CANCELLED" or cancel_confs[v_id]['status'] == "FILLED":
-                        self.pf['trades'][t_id]['active'] = False
-                        for o in o_ids:
-                            # print("Setting new order status:", o, cancel_confs[v_id]['status'])
-                            self.pf['trades'][t_id]['orders'][o]['status'] == cancel_confs[v_id]['status']
 
-                        if cancel_confs[v_id]['order_type'] == 'Stop':
-                            self.pf['trades'][t_id]['exit_price'] = cancel_confs[v_id]['price']
+                # Cancellation/fill cases
+                try:
+                    if cancel_confs[v_id]['venue_id'] in v_ids:
+                        if cancel_confs[v_id]['status'] == "CANCELLED" or cancel_confs[v_id]['status'] == "FILLED":
+                            self.pf['trades'][t_id]['active'] = False
+                            for o in o_ids:
+                                # print("Setting new order status:", o, cancel_confs[v_id]['status'])
+                                self.pf['trades'][t_id]['orders'][o]['status'] == cancel_confs[v_id]['status']
 
-                    else:
+                            if cancel_confs[v_id]['order_type'] == 'Stop':
+                                self.pf['trades'][t_id]['exit_price'] = cancel_confs[v_id]['price']
+
+                        else:
+                            print(json.dumps(cancel_confs[v_id], indent=2))
+                            raise Exception("Unexpected response format.")
+
+                # Error cases
+                except KeyError:
+                    try: 
+                        if cancel_confs[v_id] == "NOT FOUND":
+                            
+                            self.logger.warning("Not found error needs to be handled here.")
+                            # TODO
+
+                        else:
+                            print(json.dumps(cancel_confs[v_id], indent=2))
+                            raise Exception("Unexpected response format.")
+
+                    except KeyError:
                         print(json.dumps(cancel_confs[v_id], indent=2))
                         raise Exception("Unexpected response format.")
 
-            # Set price from trade records for cancelled orders
+
+            # Set price from trade records for cancelled or not foundorders
             # price = self.db_other['trades'].find_one(
             #     {"trade_id": int(trade_id)}, {"_id": 0})['orders'][order_id]['price']
 
@@ -448,70 +469,81 @@ class Portfolio:
         execs = self.exchanges[trade['venue']].get_executions(
             trade['symbol'], trade['signal_timestamp'], int(datetime.now().timestamp()))
 
-        # Handle two-order trades (single exit, single entry).
         total_orders = len(trade['orders'])
+
+        # Two-order trades (Entry and stop).
         if total_orders == 2:
             entry_oid = trade['orders'][trade_id + "-1"]['order_id']
-            exit_oid = trade['orders'][trade_id + "-2"]['order_id']
+            stop_oid = trade['orders'][trade_id + "-2"]['order_id']
 
-        # TODO: Handle trade types with more than 2 orders (order, tp(s), exit).
+        # 3 or more order trades (Entry, tp(s) and stop).
         elif total_orders >= 3:
-            entry_oid = None
-            exit_oid = None
-            # tp_oids = []
+            entry_oid = trade['orders'][trade_id + "-1"]['order_id']
+            tp_oids = []
+            for i in range(2, total_orders - 1):
+                tp_oids.append(trade['orders'][trade_id + "-" + str(i)]['order_id'])
+            stop_oid = trade['orders'][trade_id + "-" + str(total_orders - 1)]['order_id']
 
         # Entry executions will match direction of trade and bear the entry order id.
         entries = [i for i in execs if i['direction'] == trade['direction'] and i['order_id'] == entry_oid]
 
         # API-submitted exit executions should be the reverse
-        exits = [i for i in execs if i['direction'] != trade['direction'] and i['order_id'] == exit_oid]
+        stops = [i for i in execs if i['direction'] != trade['direction'] and i['order_id'] == stop_oid]
+        tps = [i for i in execs if i['direction'] != trade['direction'] and i['order_id'] in tp_oids]
         manual_exit = False
 
         # Exit orders placed manually wont bear the order id and cant be evaluated with certainty
         # if there were multiple trades with executions in the same period as the current trade.
         # If manual exit, notify user if the exit total is differnt to entry total.
-        if not exits:
-            exits = [i for i in execs if i['direction'] != trade['direction']]
-            manual_exit = True if exits else None
+        if not stops or not tps:
+            stops = [i for i in execs if i['direction'] != trade['direction']]
+            manual_exit = True
 
-        # Find final pnl figures
-        if entries and exits:
+        # Final pnl figures for 2 order trades and manual exits
+        if entries and stops and not tps:
             avg_entry = sum(i['avg_exc_price'] for i in entries) / len(entries)
-            avg_exit = (sum(i['avg_exc_price'] for i in exits) / len(exits))
-            fees = sum(i['total_fee'] for i in (entries + exits))
-            percent_change = abs((avg_entry - avg_exit) / avg_entry) * 100
-            abs_pnl = abs((trade['orders'][trade_id + "-1"]['size'] / 100) * percent_change) - fees
+            avg_exit = (sum(i['avg_exc_price'] for i in stops) / len(stops))
+            fees = sum(i['total_fee'] for i in (entries + stops))
 
-            if trade['direction'] == "LONG":
-                final_pnl = abs_pnl if avg_exit > avg_entry + fees else -abs_pnl
-
-            elif trade['direction'] == "SHORT":
-                final_pnl = abs_pnl if avg_exit < avg_entry - fees else -abs_pnl
-
-            # Log trade stats
-            self.pf['current_balance'] += final_pnl
-            self.pf['balance_history'][str(int(time.time()))] = {
-                'amt': final_pnl,
-                'trade_id': trade_id}
-            self.pf['trades'][trade_id]['u_pnl'] = 0
-            self.pf['trades'][trade_id]['r_pnl'] = final_pnl
-            self.pf['trades'][trade_id]['fees'] = fees
-            self.pf['trades'][trade_id]['exposure'] = None
-            self.pf['trades'][trade_id]['exit_price'] = avg_exit
-            self.pf['trades'][trade_id]['systematic_close'] = False if manual_exit else True
-
-            if final_pnl > 0:
-                self.pf['total_winning_trades'] += 1
-            elif final_pnl < 0:
-                self.pf['total_losing_trades'] += 1
-
-            self.logger.info("Trade " + trade_id + " returned " + str(final_pnl) + " USD.")
+        # Final pnl for 3+ order trades.
+        elif total_orders >= 3 and ((entries and stops) or (entries and tps)):
+            avg_entry = sum(i['avg_exc_price'] for i in entries) / len(entries)
+            avg_exit = (sum(i['avg_exc_price'] for i in stops + tps) / (len(stops) + len(tps)))
+            fees = sum(i['total_fee'] for i in (entries + stops + tps))
 
         else:
             raise Exception("No entry or exit executions found for trade " + trade_id + ".")
 
+        percent_change = abs((avg_entry - avg_exit) / avg_entry) * 100
+        abs_pnl = abs((trade['orders'][trade_id + "-1"]['size'] / 100) * percent_change) - fees
+
+        if trade['direction'] == "LONG":
+            final_pnl = abs_pnl if avg_exit > avg_entry + fees else -abs_pnl
+
+        elif trade['direction'] == "SHORT":
+            final_pnl = abs_pnl if avg_exit < avg_entry - fees else -abs_pnl
+
+        # Log trade stats
+        self.pf['current_balance'] += final_pnl
+        self.pf['balance_history'][str(int(time.time()))] = {
+            'amt': final_pnl,
+            'trade_id': trade_id}
+        self.pf['trades'][trade_id]['u_pnl'] = 0
+        self.pf['trades'][trade_id]['r_pnl'] = final_pnl
+        self.pf['trades'][trade_id]['fees'] = fees
+        self.pf['trades'][trade_id]['exposure'] = None
+        self.pf['trades'][trade_id]['exit_price'] = avg_exit
+        self.pf['trades'][trade_id]['systematic_close'] = False if manual_exit else True
+
+        if final_pnl > 0:
+            self.pf['total_winning_trades'] += 1
+        elif final_pnl < 0:
+            self.pf['total_losing_trades'] += 1
+
+        self.logger.info("Trade " + trade_id + " returned " + str(final_pnl) + " USD.")
+
         if manual_exit:
-            self.logger.info("Non-systematic exit orders detected for trade " + trade_id + ". Please manually verify final pnl figure and that all orders are closed. Avoid closing positions or cancelling orders manually.")            
+            self.logger.warning("Non-systematic postion closure detected for trade " + trade_id + ". Manually verify final pnl figures for this trade and that all orders are closed. Avoid closing positions or cancelling orders manually.")            
 
     def post_trade_analysis(self, trade_id):
         """
@@ -532,6 +564,7 @@ class Portfolio:
 
         balance_history = [i for i in list(self.pf['balance_history'].values())[1:]]
 
+        print(len(balance_history))
         if len(balance_history) > 1:
 
             # 'total_consecutive_wins'
@@ -600,6 +633,7 @@ class Portfolio:
                 'starting_balance': self.DEFAULT_START,
                 'peak_balance': self.DEFAULT_START,
                 'low_balance': self.DEFAULT_START,
+                'total_active_trades': 0,
                 'total_trades': 0,
                 'total_winning_trades': 0,
                 'total_losing_trades': 0,
@@ -609,14 +643,13 @@ class Portfolio:
                 'avg_r_per_loser': 0,
                 'avg_r_per_trade': 0,
                 'win_loss_ratio': 0,
+                'default_stop': self.DEFAULT_STOP,
                 'risk_per_trade': self.RISK_PER_TRADE,
                 'max_simultaneous_positions': self.MAX_SIMULTANEOUS_POSITIONS,
                 'max_correlated_positions': self.MAX_CORRELATED_POSITIONS,
                 'max_accepted_drawdown': self.MAX_ACCEPTED_DRAWDOWN,
-                'default_stop': self.DEFAULT_STOP,
                 'model_allocations': {  # Equal allocation by default.
                     i.get_name(): (100 / len(self.models)) for i in self.models},
-                'total_active_trades': 0,
                 'trades': {}}
 
             return default_portfolio
@@ -873,6 +906,10 @@ class Portfolio:
              'close': 'Close', 'volume': 'Volume'}, axis=1,
             inplace=True)
         df = df.tail(self.SNAPSHOT_SIZE)
+
+
+        # TODO: trim the columns that arent needed for this particular model.
+        # e.g testing strategy doesnt need MACD.
 
         # Get markers for trades triggered by the current bar
         entry_marker = [np.nan for i in range(self.SNAPSHOT_SIZE)]
