@@ -606,6 +606,9 @@ class Bitmex(Exchange):
 
             payload = {"orderID": order_ids}
 
+            print("IDS to cancel")
+            print(json.dumps(payload, indent=2))
+
             prepared_request = Request(
                 "DELETE",
                 self.BASE_URL_TESTNET + self.ORDERS_URL,
@@ -619,17 +622,33 @@ class Bitmex(Exchange):
 
             response = self.session.send(request).json()
 
+
             response = [response] if not isinstance(response, list) else response
+
+            print("Response:")
+            print(json.dumps(response, indent=2))
 
             cancel_confs = {}
 
             for i in response:
 
                 try:
+                    # Suceessful cancellation case
                     price = i['stopPx'] if i['ordType'] == "Stop" else i['price']
                 except KeyError:
-                    print(json.dumps(response, indent=2))
-                    raise Exception("Unexpected response format: ", i)
+
+                    try:
+                        # Failed to cancel because order not found
+                        if i['error'] is not None:
+                            if i['error'] == "Unable to cancel order: Not found or not owned by user":
+                                cancel_confs[i['orderID']] = "NOT FOUND"
+                            else:
+                                print(json.dumps(i['error'], indent=2))
+                                raise Exception("Unhandled cancellation message case: ", i['error'])
+
+                    except KeyError:
+                        print(json.dumps(i['error'], indent=2))
+                        raise Exception("Unhandled cancellation message case: ", i['error'])
 
                 try:
                     # Order was filled or cancelled previously.
