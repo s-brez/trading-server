@@ -3,3 +3,4 @@
 op_data.csv
 trade.json
 *.png
+model.py
