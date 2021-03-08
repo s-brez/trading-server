@@ -1,7 +1,7 @@
 # trading-server
-A multi-asset, multi-strategy, event-driven trade execution and management server for running many algorithms/bots at many venues simultenously, with unified risk management and reporting.
+A multi-asset, multi-strategy, event-driven trade execution and management platform for running many algorithms/bots at many venues simultenously, all with unified risk management and reporting.
 
-Note this is not a standalone trading algorithm/bot. 
+This is not a standalone trading bot. You need to install and run this on a server or VPS using your own trading algorithms.
 
 
 ## Current features
@@ -43,9 +43,9 @@ Interactive Brokers | Planned | FX, equity, commodity & index CFD's
 Deribit | Planned | Crypto derivatives & options
 
 ## Market data
-1 minute resolution OHLCV bars for all watched instruments are stored with MongoDB (or write your own DB wrapper). 
+1 minute resolution OHLCV bars for all watched instruments are stored with MongoDB. 
 
-Software works with 1 minute and above resolution strategies. Tick-resolution support planned later. With this in mind, the software converts tick data to 1 min bars where live tick data is available, but doesn't store ticks locally (i.e. it handles tick data but doesnt use it yet).
+This software works with 1 minute and above resolution strategies. Tick-resolution support planned later. With this in mind, the software converts tick data to 1 min bars where live tick data is available, but doesn't store ticks locally (i.e. it handles tick data but doesnt use it as is, yet).
  
 ## Strategy modellling
 Individual strategy implementations are not included. A simple moving average cross model is included as an example only. 
