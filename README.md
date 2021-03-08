@@ -1,13 +1,26 @@
 # trading-server
-A multi-asset, multi-strategy, event-driven trade execution and management platform for running many algorithms/bots at many venues simultenously, all with unified risk management and reporting.
+A multi-asset, multi-strategy, event-driven trade execution and management platform for running many algorithms/bots at many venues simultaneously, with unified risk management and reporting.
 
 This is not a standalone trading bot. You need to install and run this on a server or VPS using your own trading algorithms.
+
+## Installation
+
+Using python 3.9
+
+1. Install mongodb (https://www.mongodb.com/)
+2. Install TA-Lib python bindings (links to wheels here https://blog.quantinsti.com/install-ta-lib-python/) and binaries (https://mrjbq7.github.io/ta-lib/install.html)
+3. Set up a telegram bot, record the bot key in enviroment variable TELEGRAM_BOT_TOKEN. 
+4. Create a whitelist for telegram account ID's you want to have control of the server, recorded in environment variable TELEGRAM_BOT_WHITELIST, eg [<USER_ID_1>, <USER_ID_2>]
+5. Set up accounts for all venues you will trade at, recording API keys and secret keys in environment variables <VENUE_NAME>_API_KEY and <VENUE_NAME>_API_SECRET
+6. Configure what venues, instruments, models and timeframes you want to trade in server.py and model.py.
+7. Install dependencies in requirments.txt
+8. Run the server with python server_test.py. Note it will take some time to fetch historical data for the instruments you are trading.
 
 
 ## Current features
 Trade any API-accessible market with unified multi-strategy portfolio management, autonomously or semi-autonomously.
 
-Allocation-based risk management (allocate x% of capital to specific strategies).
+Allocation-based risk management (allocate x% of capital to specific strategies with y% exposure per strategy).
 
 Porfolio performance metrics and tracking. Tracks the following:
 
