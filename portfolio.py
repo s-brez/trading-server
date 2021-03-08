@@ -501,14 +501,18 @@ class Portfolio:
 
         # Final pnl figures for 2 order trades and manual exits
         if entries and stops and not tps:
-            avg_entry = sum(i['avg_exc_price'] for i in entries) / len(entries)
-            avg_exit = (sum(i['avg_exc_price'] for i in stops) / len(stops))
+            avg_entry = np.average([i['avg_exc_price'] for i in entries], weights=[i['size'] for i in entries])
+            avg_exit = np.average([i['avg_exc_price'] for i in stops], weights=[i['size'] for i in stops])
+            # avg_entry = sum(i['avg_exc_price'] for i in entries) / len(entries)
+            # avg_exit = (sum(i['avg_exc_price'] for i in stops) / len(stops))
             fees = sum(i['total_fee'] for i in (entries + stops))
 
         # Final pnl for 3+ order trades.
         elif total_orders >= 3 and ((entries and stops) or (entries and tps)):
-            avg_entry = sum(i['avg_exc_price'] for i in entries) / len(entries)
-            avg_exit = (sum(i['avg_exc_price'] for i in stops + tps) / (len(stops) + len(tps)))
+            avg_entry = np.average([i['avg_exc_price'] for i in entries], weights=[i['size'] for i in entries])
+            avg_exit = np.average([i['avg_exc_price'] for i in stops + tps], weights=[i['size'] for i in stops + tps])
+            # avg_entry = sum(i['avg_exc_price'] for i in entries) / len(entries)
+            # avg_exit = (sum(i['avg_exc_price'] for i in stops + tps) / (len(stops) + len(tps)))
             fees = sum(i['total_fee'] for i in (entries + stops + tps))
 
         else:
@@ -565,6 +569,7 @@ class Portfolio:
         balance_history = [i for i in list(self.pf['balance_history'].values())[1:]]
 
         print(len(balance_history))
+        print(json.dumps(balance_history, indent=2))
         if len(balance_history) > 1:
 
             # 'total_consecutive_wins'
