@@ -57,13 +57,14 @@ class Server:
     # Mins between recurring data diagnostics.
     DIAG_DELAY = 45
 
-    def __init__(self):
+    def __init__(self, logger):
 
         # Set False for forward testing.
         self.live_trading = True
 
-        self.log_level = logging.INFO
-        self.logger = self.setup_logger()
+        # self.log_level = logging.INFO
+        # self.logger = self.setup_logger()
+        self.logger = logger
 
         # Check DB state OK before connecting to any exchanges
         self.db_client = MongoClient(
