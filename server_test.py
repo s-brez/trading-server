@@ -1,35 +1,49 @@
 from urllib3.exceptions import NewConnectionError, MaxRetryError, TimeoutError
 from requests.exceptions import ConnectionError
-from time import sleep
-from os import system
-import subprocess
-import platform
-import socket
-
 from server import Server
+from time import sleep
+from os import kill, getpid
+import platform
+import logging
+import signal
+import psutil
 
-RETRY_TIME = 60
+
+TIMEOUT_DURATION = 60
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+ch = logging.StreamHandler()
+formatter = logging.Formatter(
+    "%(asctime)s:%(levelname)s:%(module)s - %(message)s",
+    datefmt="%d-%m-%Y %H:%M:%S")
+ch.setFormatter(formatter)
+logger.addHandler(ch)
+
 
 host_os = platform.system()
-server = Server()
+server = Server(logger)
 
-try:
-    server.run()
+error_count = 0
 
-except (ConnectionError, NewConnectionError, MaxRetryError, TimeoutError):
+while True:
 
-    # kill all python proccesses, wait and restart
-    if host_os == "Windows":
-        system('cmd /k "taskkill /IM python.exe /F"')
-        print("Server restart in 1 minute.")
-        sleep(RETRY_TIME)
-        system('cmd /k "python server_test.py"')
+    try:
+        logger.info("Starting server.")
+        server.run()
 
-    elif host_os == "Linux":
-        subprocess.check_output(["pkill" "-9" "python"])
-        print("Server restart in 1 minute.")
-        sleep(RETRY_TIME)
-        subprocess.check_output(["python", "server_test.py"])
+    # Stop server, kill all python proccesses except this one, restart server.
+    except (ConnectionError, NewConnectionError, MaxRetryError, TimeoutError):
 
-    else:
-        print("Unknown kernel. Terminating.")
+        logger.info("Connection error. Terminating")
+        error_count += 1
+        server = None
+
+        current_pid = getpid()
+        py_pids = [p.pid for p in psutil.process_iter() if "python" in str(p.name)]
+        to_kill = [x for x in py_pids if x != current_pid]
+
+        for pid in to_kill:
+            kill(pid, signal.SIGTERM)
+
+        sleep(TIMEOUT_DURATION * error_count)
