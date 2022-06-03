@@ -75,12 +75,13 @@ class Bitmex(Exchange):
 
         self.api_key, self.api_secret = self.load_api_keys()
 
-        # Connect to websocket stream.
-        self.ws = Bitmex_WS(
-            self.logger, self.symbols, self.channels, self.WS_URL,
-            self.api_key, self.api_secret)
-        if not self.ws.ws.sock.connected:
-            self.logger.info("Failed to to connect to BitMEX websocket.")
+        # Connect to websocket stream if in live operation.
+        if live_trading:
+            self.ws = Bitmex_WS(
+                self.logger, self.symbols, self.channels, self.WS_URL,
+                self.api_key, self.api_secret)
+            if not self.ws.ws.sock.connected:
+                self.logger.info("Failed to to connect to BitMEX websocket.")
 
         # Set default https request retry behaviour.
         retries = Retry(

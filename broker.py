@@ -38,8 +38,11 @@ class Broker:
         # Container for order batches {trade_id: [order objects]}.
         self.orders = {}
 
-        # Start FillAgent.
-        self.fill_agent = FillAgent(self.logger, self.pf, self.exchanges)
+        # Start FillAgent if in live operation
+        if live_trading:
+            self.fill_agent = FillAgent(self.logger, self.pf, self.exchanges)
+        else:
+            self.fill_agent = None
 
     def new_order(self, events, order_event):
         """
