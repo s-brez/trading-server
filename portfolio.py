@@ -41,7 +41,7 @@ class Portfolio:
     MAX_CORRELATED_POSITIONS = 4
     CORRELATION_THRESHOLD = 0.5     # Level at which instrument considered correlated (-1 to 1)
     MAX_ACCEPTED_DRAWDOWN = 25      # Percentage as integer.
-    RISK_PER_TRADE = 0.5              # Percentage as integer or float OR 'KELLY'
+    RISK_PER_TRADE = 0.5            # Percentage as integer or float OR 'KELLY'
     SNAPSHOT_SIZE = 100             # Lookback period for trade snapshot images
     DEFAULT_STOP = 1                # Default (%) stop distance if none provided.
     DEFAULT_START = 1000            # Default portfolio size if none given.  
@@ -104,8 +104,8 @@ class Portfolio:
                 stop[0],                # Order invalidation price.
                 False,                  # Trail.
                 False,                  # Reduce-only order.
-                False))                 # Post-only order.
-
+                False,                  # Post-only order.
+                signal['entry_timestamp']))
 
             # Take profit order(s).
             if signal['targets']:
@@ -131,7 +131,8 @@ class Portfolio:
                         stop[0],
                         False,
                         True,
-                        False))
+                        False,
+                        signal['entry_timestamp']))
 
             # Stop order.
             orders.append(Order(
@@ -148,7 +149,8 @@ class Portfolio:
                 None,
                 signal['trail'],
                 True,
-                False))
+                False,
+                signal['entry_timestamp']))
 
             # Set sequential order ID's, based on trade ID.
             count = 1
@@ -172,11 +174,13 @@ class Portfolio:
             # Finalise trade object. Must be called to set ID + order count
             trade.set_batch_size_and_id(trade_id)
 
-            # Queue the trade for storage.
-            self.trades_save_to_db.put(trade.get_trade_dict())
+            if self.live_trading:
 
-            # Store trade immediately
-            self.save_new_trades_to_db()
+                # Queue the trade for storage.
+                self.trades_save_to_db.put(trade.get_trade_dict())
+
+                # Store trade immediately
+                self.save_new_trades_to_db()
 
             # Set order batch size and queue orders for execution.
             batch_size = len(orders)
@@ -632,8 +636,24 @@ class Portfolio:
 
     def load_portfolio(self, ID=1):
         """
-        Load portfolio matching ID from database or return empty portfolio.
+        Load portfolio matching ID from database or return new empty portfolio.
         """
+
+        # Sequentially number test portfolios separate to live portfolios.
+        if not self.live_trading:
+
+            found = False
+            count = 1
+
+            while not found:
+                new_id = "test_" + str(count)
+                result = self.db_other['portfolio'].find_one(
+                    {"id": new_id}, {"_id": 0})
+                if result:
+                    count += 1
+                else:
+                    found = True
+                    ID = new_id
 
         portfolio = self.db_other['portfolio'].find_one({"id": ID}, {"_id": 0})
 
@@ -947,34 +967,46 @@ class Portfolio:
         mc = mpl.make_marketcolors(up='w', down='black', wick="w", edge='w')
         style = mpl.make_mpf_style(gridstyle='', base_mpf_style='nightclouds',
                                    marketcolors=mc)
-        filename = "setup_images/" + str(trade['trade_id']) + "_" + str(trade['signal_timestamp']) + '_' + trade['model'] + "_" + trade['timeframe']
+        if self.live_trading:
+            filename = "setup_images/" + str(trade['trade_id']) + "_" + str(trade['signal_timestamp']) + '_' + trade['model'] + "_" + trade['timeframe']
+        else:
+            if not os.path.exists(self.pf['id']):
+                os.makedirs(self.pf['id'])
+            filename = self.pf['id'] + "/" + str(trade['trade_id']) + "_" + str(trade['signal_timestamp']) + '_' + trade['model'] + "_" + trade['timeframe'] 
 
         try:
             plot = mpl.plot(df, type='candle', addplot=adp, style=style, hlines=hlines,
                             title="\n" + trade['model'] + " - " + trade['timeframe'],
                             datetime_format='%d-%m %H:%M', figscale=1, savefig=filename,
                             tight_layout=False)
-
         except ValueError:
             traceback.print_exc()
             print(df)
             print(df['Open'])
             sys.exit(0)
 
-        message = "Trade " + str(trade['trade_id']) + " - " + trade['model'] + " " + trade['timeframe'] + "\n\nEntry: " + str(trade['entry_price']) + " \nStop: " + str(stop) + "\n"
-        options = [[str(trade['trade_id']) + " - Accept", str(trade['trade_id']) + " - Veto"]]
+        # Send the snapshot to telegram auth bot if in live operation.
+        if self.live_trading:
 
-        try:
-            self.telegram.send_image(filename + ".png", message)
-            if within_risk_limits is True:
-                self.telegram.send_option_keyboard(options)
-            else:
-                self.telegram.send_message("Trade would exceed risk limits. " + msg)
+            message = "Trade " + str(trade['trade_id']) + " - " + trade['model'] + " " + trade['timeframe'] + "\n\nEntry: " + str(trade['entry_price']) + " \nStop: " + str(stop) + "\n"
+            options = [[str(trade['trade_id']) + " - Accept", str(trade['trade_id']) + " - Veto"]]
 
-        except Exception as ex:
-            self.logger.info("Failed to send setup image via telegram.")
-            print(ex)
-            traceback.print_exc()
+            try:
+                self.telegram.send_image(filename + ".png", message)
+                if within_risk_limits is True:
+                    self.telegram.send_option_keyboard(options)
+                else:
+                    self.telegram.send_message("Trade would exceed risk limits. " + msg)
+
+            except Exception as ex:
+                self.logger.info("Failed to send setup image via telegram.")
+                print(ex)
+                traceback.print_exc()
+
+        # If in test mode save the file in a new folder, skip user confirmation.
+        else:
+            pass
+
 
     def create_addplots(self, df, mpl, stop, entry_marker, stop_marker):
         """

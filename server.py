@@ -169,7 +169,7 @@ class Server:
 
             try:
 
-                # Check for user commands
+                # TODO: Check for user commands
 
                 # Get events from queue
                 event = self.events.get(False)

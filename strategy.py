@@ -18,8 +18,10 @@ import pandas as pd
 import calendar
 import pymongo
 import queue
+import json
 import time
 import copy
+import sys
 
 
 class Strategy:
@@ -281,10 +283,18 @@ class Strategy:
 
                         # Put generated signal in the main event queue.
                         if result:
+
+                            # print(json.dumps(event.get_bar(), indent=2))
+
+                            result.entry_timestamp = event.get_bar()['timestamp']  # noqa
+
+                            # print(result.entry_timestamp)
+
                             events.put(result)
 
                             # Put signal in separate save-later queue.
-                            self.signals_save_to_db.put(result)
+                            if self.live_trading:
+                                self.signals_save_to_db.put(result)
 
     def build_dataframe(self, exc, sym, tf, current_bar=None, lookback=150):
         """
@@ -506,7 +516,6 @@ class Strategy:
                 " timeframe datasets in " + str(duration) + " seconds.")
 
     def load_local_data(self, exchange, empty=False):
-
         """
         Create and return a dictionary of dataframes for all symbols and
         timeframes for the given venue.

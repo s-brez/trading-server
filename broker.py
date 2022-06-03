@@ -12,6 +12,7 @@ Some rights reserved. See LICENSE.md, AUTHORS.md.
 from messaging_clients import Telegram
 from event_types import FillEvent
 from threading import Thread
+from dateutil import parser
 from time import sleep
 import traceback
 import datetime
@@ -38,7 +39,7 @@ class Broker:
         # Container for order batches {trade_id: [order objects]}.
         self.orders = {}
 
-        # Start FillAgent if in live operation
+        # Simulate fills when in testing mode (no need to monitor for fills).
         if live_trading:
             self.fill_agent = FillAgent(self.logger, self.pf, self.exchanges)
         else:
@@ -89,52 +90,120 @@ class Broker:
 
             for trade_id in self.orders.keys():
 
-                # Action user responses from telegram, if any
-                self.register_telegram_responses(trade_id)
+                if self.live_trading:
 
-                # Get stored trade state from DB
-                trade = dict(self.db_other['trades'].find_one({"trade_id": trade_id}, {"_id": 0}))
+                    # Action user responses from telegram, if any
+                    self.register_telegram_responses(trade_id)
 
-                # Count received orders for that trade
-                order_count = len(self.orders[trade_id])
-                venue = self.orders[trade_id][0]['venue']
+                    # Get stored trade state from DB
+                    trade = dict(self.db_other['trades'].find_one({"trade_id": trade_id}, {"_id": 0}))
 
-                # User has accepted the trade.
-                if trade['consent'] is True:
-                    if order_count == trade['order_count']:
-                        self.logger.info(
-                            "Trade " + str(trade_id) + " order batch ready.")
+                    # Count received orders for that trade
+                    order_count = len(self.orders[trade_id])
+                    venue = self.orders[trade_id][0]['venue']
 
-                        # Place orders.
-                        order_confs = self.exchanges[venue].place_bulk_orders(
-                            self.orders[trade_id])
+                    # User has accepted the trade.
+                    if trade['consent'] is True:
+                        if order_count == trade['order_count']:
+                            self.logger.info(
+                                "Trade " + str(trade_id) + " order batch ready.")
 
-                        # Update portfolio state with order placement details.
-                        if order_confs:
-                            self.pf.new_order_conf(order_confs, events)
-                            self.logger.info("Orders for trade " + str(trade_id) + " submitted to venue.")
+                            # Place orders.
+                            order_confs = self.exchanges[venue].place_bulk_orders(
+                                self.orders[trade_id])
+
+                            # Update portfolio state with order placement details.
+                            if order_confs:
+                                self.pf.new_order_conf(order_confs, events)
+                                self.logger.info("Orders for trade " + str(trade_id) + " submitted to venue.")
+
+                            else:
+                                self.logger.info("Order submission for " + str(trade_id) + " may have failed or only partially succeeded.")
+                                # raise Exception("Caution: manual order and position check required for trade " + str(trade_id) + ".")
+
+                            to_remove.append(trade_id)
 
                         else:
-                            self.logger.info("Order submission for " + str(trade_id) + " may have failed or only partially succeeded.")
-                            # raise Exception("Caution: manual order and position check required for trade " + str(trade_id) + ".")
+                            self.logger.info("Order batch for trade " + str(trade_id) + " not yet ready.")
 
+                    # User has not yet made a decision.
+                    elif trade['consent'] is None:
+                        self.logger.info("Trade " + str(trade_id) + " awaiting user review.")
+
+                    # User has rejected the trade.
+                    elif trade['consent'] is False:
+                        self.pf.trade_complete(trade_id)
                         to_remove.append(trade_id)
 
+                    # Unkown consent case.
                     else:
-                        self.logger.info("Order batch for trade " + str(trade_id) + " not yet ready.")
+                        raise Exception("Unknown case for trade consent:", trade['consent'])  # noqa
 
-                # User has not yet made a decision.
-                elif trade['consent'] is None:
-                    self.logger.info("Trade " + str(trade_id) + " awaiting user review.")
-
-                # User has rejected the trade.
-                elif trade['consent'] is False:
-                    self.pf.trade_complete(trade_id)
-                    to_remove.append(trade_id)
-
-                # Unkown consent case
+                # Simulate fills and placements where appropriate for testing mode.  # noqa
                 else:
-                    raise Exception("Unknown case for trade consent:", trade['consent'])
+
+                    order_confs = []
+                    for order in self.orders[trade_id]:
+
+                        print(json.dumps(order, indent=2))
+
+                        # Market entry
+                        if order['order_type'] == "MARKET" and order['metatype'] == "ENTRY":  # noqa
+                            fill_status = "FILLED"
+
+                        # Stop limit entry
+                        elif order['order_type'] == "STOP_LIMIT" and order['metatype'] == "ENTRY":  # noqa
+                            fill_status = "NEW"
+
+                        # Limit entry
+                        elif order['order_type'] == "LIMIT" and order['metatype'] == "ENTRY":  # noqa
+                            fill_status = "NEW"
+
+                        # Limit partial take profit
+                        elif order['order_type'] == "LIMIT" and order['metatype'] == "TAKE_PROFIT":  # noqa
+                            fill_status = "NEW"
+
+                        # Limit final take profit
+                        elif order['order_type'] == "LIMIT" and order['metatype'] == "FINAL_TAKE_PROFIT":  # noqa
+                            fill_status = "NEW"
+
+                        # Stop limit take profit
+                        elif order['order_type'] == "STOP_LIMIT" and order['metatype'] == "TAKE_PROFIT":  # noqa
+                            fill_status = "NEW"
+
+                        # Stop market
+                        elif order['order_type'] == "STOP" and order['metatype'] == "ENTRY":  # noqa
+                            fill_status = "NEW"
+
+                        else:
+                            fill_status = "NEW"
+
+                        new_order_conf = {
+                            'trade_id': order['trade_id'],
+                            'order_id': order['order_id'],
+                            'venue': order['venue'],
+                            'symbol': order['symbol'],
+                            'order_type': order['order_type'],
+                            'metatype': order['metatype'],
+                            'void_price': order['void_price'],
+                            'direction': order['direction'],
+                            'reduce_only': order['reduce_only'],
+                            'post_only': order['post_only'],
+                            'batch_size': order['batch_size'],
+                            'size': order['size'],
+                            'trail': order['trail'],
+                            'timestamp': order['timestamp'],
+                            'avg_fill_price': order['price'],
+                            'currency': order['currency'],
+                            'venue_id': order['venue_id'],
+                            'price': order['price'],
+                            'status': fill_status}
+
+                        order_confs.append(new_order_conf)
+
+                    self.pf.new_order_conf(order_confs, events)
+
+                    to_remove.append(trade_id)
 
             # Remove sent orders after iteration complete.
             for t_id in to_remove:

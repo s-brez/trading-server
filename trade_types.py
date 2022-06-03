@@ -143,11 +143,12 @@ class Order:
 
     def __init__(self, logger, trade_id, order_id, symbol, venue,
                  direction, size, price, order_type, metatype, void_price,
-                 trail, reduce_only, post_only, status="UNFILLED"):
+                 trail, reduce_only, post_only, timestamp,
+                 status="UNFILLED"):
         self.logger = logger
         self.trade_id = trade_id        # Parent trade ID.
         self.order_id = None            # Internal use order ID.
-        self.timestamp = None           # Order placement timestamp.
+        self.timestamp = timestamp      # Order placement timestamp.
         self.avg_fill_price = None      # Actual fill price
         self.currency = None            # Instrument denomination currency.
         self.venue_id = None            # Order ID as used by venue.
