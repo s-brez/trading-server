@@ -115,6 +115,20 @@ class Datahandler:
 
         return new_market_events
 
+
+    def get_historic_data(self, timestamp):
+        """
+        Return a list of market events (new bars) for all symbols from
+        all exchanges for the parameter timestamp.
+
+        Args:
+            None.
+        Returns:
+            new_market_events: list containing new market events.
+        Raises:
+            None.
+        """
+
     def track_tick_processing_performance(self, duration):
         """
         Track tick processing time statistics.
