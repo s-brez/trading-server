@@ -10,7 +10,7 @@ Some rights reserved. See LICENSE.md, AUTHORS.md.
 """
 
 from datetime import date, datetime, timedelta
-from model import EMACrossTestingOnly
+from model import EMACrossTestingOnly, EQTrendFollowing
 from pymongo import MongoClient, errors
 from features import Features
 from dateutil import parser
@@ -103,7 +103,6 @@ class Strategy:
         if count >= 1:
 
             # Get operating timeframes for the current period.
-
             timestamp = event.get_bar()['timestamp']
             timeframes = self.get_relevant_timeframes(timestamp)
 
@@ -179,20 +178,6 @@ class Strategy:
             # TODO: df.append() is slow and copies the whole dataframe. Later
             # need to swap to a data structure other than a dataframe for live
             # data addition. Like an in-memory csv/DB, or list of dicts, etc.
-
-        # Log model and timeframe details.
-        for model in self.models:
-
-            venue = exc.get_name()
-            inst = model.get_instruments()[venue][sym]
-
-            if inst == sym:
-                self.logger.info(
-                    model.get_name() + ": " + venue + ": " + inst)
-                self.logger.info(
-                    "Operating timeframes: " + str(op_timeframes))
-                self.logger.info(
-                    "Required timeframes: " + str(timeframes))
 
     def calculate_features(self, event, timeframes):
         """
@@ -275,14 +260,14 @@ class Strategy:
 
             venue = exc.get_name()
             inst = model.get_instruments()[venue][sym]
-
             if inst == sym:
                 for tf in op_timeframes:
                     if tf in model.get_operating_timeframes():
 
-                        # Get non-op, but still required timeframe codes.
                         req_tf = model.get_required_timeframes(
                             [tf], result=True)
+
+                        self.logger.info("Required timeframes: " + str(req_tf))
 
                         # Get non-trigger data as list of {tf : dataframe}.
                         req_data = [
@@ -481,8 +466,7 @@ class Strategy:
             None.
         """
 
-        models = []
-        models.append(EMACrossTestingOnly(logger))
+        models = [EMACrossTestingOnly(logger), EQTrendFollowing(logger)]
         self.logger.info("Initialised models.")
         return models
 

@@ -61,11 +61,8 @@ class Datahandler:
             None.
         """
 
-        if self.live_trading:
-            market_data = self.get_new_data()
-
-        else:
-            market_data = self.get_historic_data()
+        market_data = self.get_new_data() if \
+            self.live_trading else self.get_historic_data()
 
         for event in market_data:
             events.put(event)
