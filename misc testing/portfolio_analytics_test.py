@@ -19,7 +19,9 @@ pf = coll.find_one({}, {"_id": 0})  # portfolio
 
 
 balance_history = [i for i in list(pf['balance_history'].values())[1:]]
-if balance_history:
+
+
+if len(balance_history) > 1:
 
     winners_r, losers_r, total_r = [], [], []
 
@@ -42,6 +44,7 @@ if balance_history:
     pf['avg_r_per_trade'] = round(sum(total_r) / len(total_r), 2)
 
     # 'avg_r_per_winner'
+    print(len(winners_r)) 
     pf['avg_r_per_winner'] = round(sum(winners_r) / len(winners_r), 2)
 
     # 'avg_r_per_loser'

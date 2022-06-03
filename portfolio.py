@@ -465,9 +465,11 @@ class Portfolio:
 
         trade = self.pf['trades'][trade_id]
 
-        # Get order executions for trade in period from trade signal to current time.
+        # Get order executions in period from trade signal to current time.
         execs = self.exchanges[trade['venue']].get_executions(
-            trade['symbol'], trade['signal_timestamp'], int(datetime.now().timestamp()))
+            trade['symbol'],
+            trade['signal_timestamp'],
+            int(datetime.now().timestamp()))
 
         total_orders = len(trade['orders'])
 
@@ -481,7 +483,8 @@ class Portfolio:
             entry_oid = trade['orders'][trade_id + "-1"]['order_id']
             tp_oids = []
             for i in range(2, total_orders - 1):
-                tp_oids.append(trade['orders'][trade_id + "-" + str(i)]['order_id'])
+                tp_oids.append(
+                    trade['orders'][trade_id + "-" + str(i)]['order_id'])
             stop_oid = trade['orders'][trade_id + "-" + str(total_orders - 1)]['order_id']
 
         # Entry executions will match direction of trade and bear the entry order id.
@@ -492,27 +495,31 @@ class Portfolio:
         tps = [i for i in execs if i['direction'] != trade['direction'] and i['order_id'] in tp_oids]
         manual_exit = False
 
+        print("entry_oid", entry_oid)
+        print("tps:", tps)
+        print("tp_oids", tp_oids)
+        if stop_oid:
+            print("exit_oid", stop_oid)
+        if stops:
+            print("stops:", stops)
+
         # Exit orders placed manually wont bear the order id and cant be evaluated with certainty
         # if there were multiple trades with executions in the same period as the current trade.
         # If manual exit, notify user if the exit total is differnt to entry total.
-        if not stops or not tps:
+        if not stops and not tps:
             stops = [i for i in execs if i['direction'] != trade['direction']]
             manual_exit = True
 
+        avg_entry = np.average([i['avg_exc_price'] for i in entries], weights=[i['size'] for i in entries])
+        
         # Final pnl figures for 2 order trades and manual exits
         if entries and stops and not tps:
-            avg_entry = np.average([i['avg_exc_price'] for i in entries], weights=[i['size'] for i in entries])
             avg_exit = np.average([i['avg_exc_price'] for i in stops], weights=[i['size'] for i in stops])
-            # avg_entry = sum(i['avg_exc_price'] for i in entries) / len(entries)
-            # avg_exit = (sum(i['avg_exc_price'] for i in stops) / len(stops))
             fees = sum(i['total_fee'] for i in (entries + stops))
 
         # Final pnl for 3+ order trades.
         elif total_orders >= 3 and ((entries and stops) or (entries and tps)):
-            avg_entry = np.average([i['avg_exc_price'] for i in entries], weights=[i['size'] for i in entries])
             avg_exit = np.average([i['avg_exc_price'] for i in stops + tps], weights=[i['size'] for i in stops + tps])
-            # avg_entry = sum(i['avg_exc_price'] for i in entries) / len(entries)
-            # avg_exit = (sum(i['avg_exc_price'] for i in stops + tps) / (len(stops) + len(tps)))
             fees = sum(i['total_fee'] for i in (entries + stops + tps))
 
         else:
@@ -572,6 +579,7 @@ class Portfolio:
         print(json.dumps(balance_history, indent=2))
         if len(balance_history) > 1:
 
+
             # 'total_consecutive_wins'
             # 'total_consecutive_losses'
             if balance_history[-1]['amt'] > 0 and balance_history[-2]['amt'] > 0:
@@ -597,9 +605,13 @@ class Portfolio:
                 elif transaction['amt'] < 0:
                     losers_r.append(rr)
 
-            self.pf['avg_r_per_trade'] = round(sum(total_r) / len(total_r), 2)
-            self.pf['avg_r_per_winner'] = round(sum(winners_r) / len(winners_r), 2)
-            self.pf['avg_r_per_loser'] = round(sum(losers_r) / len(losers_r), 2)
+            self.pf['avg_r_per_trade'] = round(sum(total_r) / len(total_r), 4)
+
+            if winners_r:
+                self.pf['avg_r_per_winner'] = round(sum(winners_r) / len(winners_r), 4)
+
+            if losers_r:
+                self.pf['avg_r_per_loser'] = round(sum(losers_r) / len(losers_r), 4)
 
             # 'win_loss_ratio'
             if self.pf['total_winning_trades'] and self.pf['total_losing_trades']:

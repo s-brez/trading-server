@@ -139,21 +139,6 @@ class Server:
                     self.events = self.data.update_market_data(self.events)
                     self.clear_event_queue()
 
-                    # Run diagnostics at 3 and 7 mins to be sure missed
-                    # bars are rectified before ongoing system operation.
-                    # if (self.cycle_count == 2 or self.cycle_count == 5):
-                    #     thread = Thread(
-                    #         target=lambda: self.data.run_data_diagnostics(0))
-                    #     thread.daemon = True
-                    #     thread.start()
-
-                    # # Check data integrity periodically thereafter.
-                    # if (self.cycle_count % self.DIAG_DELAY == 0):
-                    #     thread = Thread(
-                    #         target=lambda: self.data.run_data_diagnostics(0))
-                    #     thread.daemon = True
-                    #     thread.start()
-
                 # Sleep til the next minute begins.
                 sleep(self.seconds_til_next_minute())
                 self.cycle_count += 1
