@@ -1,5 +1,5 @@
 # trading-server
-A multi-asset, multi-strategy, event-driven trading platform for running many strategies at many venues simultaneously with portfolio-based risk management and capital allocation. Allows backtesting across all desired instruments and venues and strategies under a single parameterised portfolio.
+A multi-asset, multi-strategy, event-driven trading platform for running many strategies at many venues simultaneously with portfolio-based risk management and capital allocation. Allows backtesting across all desired instruments, venues and strategies under a single parameterised portfolio.
 
 ## Installation
 
