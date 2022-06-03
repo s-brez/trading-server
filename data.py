@@ -31,15 +31,15 @@ class Datahandler:
     Strategy object to consume.
     """
 
-    def __init__(self, exchanges, logger, db, db_client):
+    def __init__(self, exchanges, logger, db, db_client, live_trading):
         self.exchanges = exchanges
         self.logger = logger
         self.db = db
         self.db_client = db_client
         self.db_collections = {
             i.get_name(): db[i.get_name()] for i in self.exchanges}
-        self.live_trading = False
-        self.ready = False
+        self.live_trading = live_trading
+        self.ready = False if self.live_trading else True
         self.total_instruments = self.get_total_instruments()
         self.bars_save_to_db = queue.Queue(0)
 
@@ -62,15 +62,13 @@ class Datahandler:
             None.
         """
 
-        market_data = self.get_new_data() if \
-            self.live_trading else self.get_historic_data(timestamp)
+        if self.live_trading:
+            market_data = self.get_new_data()
+        else:
+            market_data, timestamp = self.get_historic_data(timestamp)
 
         for event in market_data:
             events.put(event)
-
-        # Increment timestamp if using.
-        if timestamp:
-            timestamp += 60
 
         return events, timestamp
 
@@ -125,8 +123,7 @@ class Datahandler:
         Return a list of market events (new bars) for all symbols from
         all exchanges for the parameter timestamp.
 
-        If timestamp is None, start from the beginning of the data for each
-        symbol. Otherwise start from that timestamp
+        If timestamp is None, start from the earliest stored data.
 
         Args:
             None.
@@ -136,28 +133,45 @@ class Datahandler:
             None.
         """
 
-        print("Timestamp:", timestamp)
-        # if timestamp is none, replace it with the first timestamp for a given symbol
-        for exchange in self.exchanges:
-            for symbol in exchange.get_symbols():
-                print(exchange)
-                print(symbol)
+        # If timestamp null, sub with earliest timestamp of active symbols.
+        if not timestamp:
+            timestamps = {}
+            for exchange in self.exchanges:
+                for symbol in exchange.get_symbols():
 
-        sys.exit(0)
+                    timestamps[int(exchange.get_origin_timestamp(symbol))] = {
+                        "venue": exchange.get_name(),
+                        "symbol": symbol
+                    }
 
+            timestamp = min(timestamps.keys())
+
+        # Fetch 1-min bars matching timestamp from DB
         new_market_events = []
         for exchange in self.exchanges:
             for symbol in exchange.get_symbols():
 
-                # Fetch 1-min bars matching the timestamp from DB
-                bars = {}
+                result = self.db_collections[exchange.get_name()].find({
+                    'timestamp': timestamp, 'symbol': symbol
+                })[0]
 
-                for bar in bars[symbol]:
-                    event = MarketEvent(exchange, bar)
-                    new_market_events.append(event)
+                bar = {
+                    'symbol': result['symbol'],
+                    'timestamp': result['timestamp'],
+                    'open': result['open'],
+                    'high': result['high'],
+                    'low': result['low'],
+                    'close': result['close'],
+                    'volume': result['volume'],
+                }
 
-        return new_market_events
+                event = MarketEvent(exchange, bar)
+                new_market_events.append(event)
 
+                self.logger.info(
+                    "Current timestamp: " + str(result['timestamp']))
+
+        return new_market_events, timestamp
 
     def track_tick_processing_performance(self, duration):
         """

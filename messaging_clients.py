@@ -27,9 +27,10 @@ class Telegram(MessagingClient):
 
     URL = "https://api.telegram.org/bot"
 
-    def __init__(self, logger):
+    def __init__(self, logger, live_trading):
         super().__init__()
         self.logger = logger
+        self.live_trading = live_trading
         self.token = self.get_token()
         self.whitelist = self.get_whitelist()
 

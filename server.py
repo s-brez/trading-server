@@ -67,6 +67,7 @@ class Server:
         # self.log_level = logging.INFO
         # self.logger = self.setup_logger()
         self.logger = logger
+        self.timestamp = None
 
         self.db_client = MongoClient(
             self.DB_URL,
@@ -78,15 +79,16 @@ class Server:
         self.exchanges = self.exchange_wrappers(
             self.logger, self.VENUES, self.live_trading)
 
-        self.telegram = Telegram(self.logger)
+        self.telegram = Telegram(self.logger, self.live_trading)
 
         self.events = queue.Queue(0)
 
         self.data = Datahandler(self.exchanges, self.logger, self.db_prices,
-                                self.db_client)
+                                self.db_client, self.live_trading)
 
         self.strategy = Strategy(self.exchanges, self.logger, self.db_prices,
-                                 self.db_other, self.db_client, self.live_trading)
+                                 self.db_other, self.db_client,
+                                 self.live_trading)
 
         self.portfolio = Portfolio(self.exchanges, self.logger, self.db_other,
                                    self.db_client, self.strategy.models,
@@ -127,7 +129,6 @@ class Server:
 
             sleep(self.seconds_til_next_minute())
 
-        timestamp = None
         while True:
             if self.live_trading:
 
@@ -138,19 +139,24 @@ class Server:
 
                     # Fetch and queue events for processing.
                     self.events = self.broker.check_fills(self.events)
-                    self.events, timestamp = self.data.update_market_data(
-                        self.events)
+                    self.events, self.timestamp = self.data.update_market_data(
+                        self.events, self.timestamp)
                     self.clear_event_queue()
 
                 # Sleep til the next minute begins.
                 sleep(self.seconds_til_next_minute())
                 self.cycle_count += 1
 
-            # Update data w/o delay when in test mode, no diagnostics.
+            # Update data w/o delay when in test mode.
             else:
-                self.events, timestamp = self.data.update_market_data(
-                    self.events, timestamp)
+                self.cycle_count += 1
+                self.events, self.timestamp = self.data.update_market_data(
+                    self.events, self.timestamp)
                 self.clear_event_queue()
+
+                # Increment timestamp.
+                if self.timestamp:
+                    self.timestamp += 60
 
     def clear_event_queue(self):
         """
@@ -169,20 +175,23 @@ class Server:
                 event = self.events.get(False)
 
             except queue.Empty:
+
                 # Log processing performance stats
-                self.end_processing = time.time()
-                duration = round(
-                    self.end_processing - self.start_processing, 5)
-                self.logger.info(
-                    "Processed " + str(count) + " events in " +
-                    str(duration) + " seconds.")
+                if self.live_trading:
+                    self.end_processing = time.time()
+                    duration = round(
+                        self.end_processing - self.start_processing, 5)
+                    self.logger.info(
+                        "Processed " + str(count) + " events in " +
+                        str(duration) + " seconds.")
 
                 # Do non-time critical work now that events are processed.
-                self.data.save_new_bars_to_db()
-                self.strategy.trim_datasets()
-                self.strategy.save_new_signals_to_db()
-                # self.portfolio.save_new_trades_to_db()
+                if self.live_trading:
+                    self.data.save_new_bars_to_db()
+                    self.strategy.save_new_signals_to_db()
+                    # self.portfolio.save_new_trades_to_db()
                 self.broker.check_consent(self.events)
+                self.strategy.trim_datasets()
 
                 break
 
@@ -192,6 +201,7 @@ class Server:
 
                     # Signal Event generation.
                     if event.type == "MARKET":
+                        self.logger.info("Processing new market data.")
                         self.strategy.new_data(
                             self.events, event, self.cycle_count)
                         self.portfolio.update_price(self.events, event)

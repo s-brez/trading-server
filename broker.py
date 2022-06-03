@@ -142,7 +142,8 @@ class Broker:
 
         else:
             pass
-            self.logger.info("No trades awaiting review.")
+            if self.live_trading:
+                self.logger.info("No trades awaiting review.")
 
     def check_overdue_trades(self):
         """
