@@ -47,8 +47,9 @@ class Portfolio:
     DEFAULT_START = 1000            # Default portfolio size if none given.  
 
     def __init__(self, exchanges, logger, db_other, db_client, models,
-                 telegram):
+                 telegram, live_trading):
         self.exchanges = {i.get_name(): i for i in exchanges}
+        self.live_trading = live_trading
         self.logger = logger
         self.db_other = db_other
         self.db_client = db_client

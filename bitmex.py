@@ -45,11 +45,12 @@ class Bitmex(Exchange):
     BULK_ORDERS_URL = "/order/bulk"
     TRADE_HIST_URL = "/execution/tradeHistory"
 
-    def __init__(self, logger):
+    def __init__(self, logger, live_trading):
         super()
         self.logger = logger
         self.name = "BitMEX"
         self.symbols = ["XBTUSD"] # "ETHUSD", "XRPUSD", "BCHUSD", "LTCUSD", "LINKUSDT"]
+        self.live_trading = live_trading
 
         # Minimum price increment for each instrument.
         self.symbol_min_increment = {

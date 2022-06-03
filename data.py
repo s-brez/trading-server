@@ -18,6 +18,7 @@ import pymongo
 import queue
 import time
 import json
+import sys
 
 
 class Datahandler:
@@ -49,7 +50,7 @@ class Datahandler:
         self.std_dev_parse_time = 0
         self.var_parse_time = 0
 
-    def update_market_data(self, events):
+    def update_market_data(self, events, timestamp):
         """
         Pushes new market events to the event queue.
 
@@ -62,12 +63,16 @@ class Datahandler:
         """
 
         market_data = self.get_new_data() if \
-            self.live_trading else self.get_historic_data()
+            self.live_trading else self.get_historic_data(timestamp)
 
         for event in market_data:
             events.put(event)
 
-        return events
+        # Increment timestamp if using.
+        if timestamp:
+            timestamp += 60
+
+        return events, timestamp
 
     def get_new_data(self):
         """
@@ -115,11 +120,13 @@ class Datahandler:
 
         return new_market_events
 
-
     def get_historic_data(self, timestamp):
         """
         Return a list of market events (new bars) for all symbols from
         all exchanges for the parameter timestamp.
+
+        If timestamp is None, start from the beginning of the data for each
+        symbol. Otherwise start from that timestamp
 
         Args:
             None.
@@ -128,6 +135,29 @@ class Datahandler:
         Raises:
             None.
         """
+
+        print("Timestamp:", timestamp)
+        # if timestamp is none, replace it with the first timestamp for a given symbol
+        for exchange in self.exchanges:
+            for symbol in exchange.get_symbols():
+                print(exchange)
+                print(symbol)
+
+        sys.exit(0)
+
+        new_market_events = []
+        for exchange in self.exchanges:
+            for symbol in exchange.get_symbols():
+
+                # Fetch 1-min bars matching the timestamp from DB
+                bars = {}
+
+                for bar in bars[symbol]:
+                    event = MarketEvent(exchange, bar)
+                    new_market_events.append(event)
+
+        return new_market_events
+
 
     def track_tick_processing_performance(self, duration):
         """

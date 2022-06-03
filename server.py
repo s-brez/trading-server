@@ -15,6 +15,7 @@ from time import sleep
 import subprocess
 import datetime
 
+import sys
 import logging
 import time
 import queue
@@ -46,6 +47,8 @@ class Server:
        11. Strategy prepares data for the next minutes calculuations.
        12. Sleep until current minute elapses."""
 
+    TEST_MODE_FLAG = "-t"
+
     DB_URL = 'mongodb://127.0.0.1:27017/'
     DB_PRICES = 'asset_price_master'
     DB_OTHER = 'holdings_trades_signals_master'
@@ -59,14 +62,12 @@ class Server:
 
     def __init__(self, logger):
 
-        # Set False for forward testing.
-        self.live_trading = True
+        self.live_trading = False if self.TEST_MODE_FLAG in sys.argv else True
 
         # self.log_level = logging.INFO
         # self.logger = self.setup_logger()
         self.logger = logger
 
-        # Check DB state OK before connecting to any exchanges
         self.db_client = MongoClient(
             self.DB_URL,
             serverSelectionTimeoutMS=self.DB_TIMEOUT_MS)
@@ -74,22 +75,22 @@ class Server:
         self.db_other = self.db_client[self.DB_OTHER]
         self.check_db_status(self.VENUES)
 
-        self.exchanges = self.exchange_wrappers(self.logger, self.VENUES)
+        self.exchanges = self.exchange_wrappers(
+            self.logger, self.VENUES, self.live_trading)
+
         self.telegram = Telegram(self.logger)
 
-        # Main event queue.
         self.events = queue.Queue(0)
 
-        # Producer/consumer worker classes.
         self.data = Datahandler(self.exchanges, self.logger, self.db_prices,
                                 self.db_client)
 
         self.strategy = Strategy(self.exchanges, self.logger, self.db_prices,
-                                 self.db_other, self.db_client)
+                                 self.db_other, self.db_client, self.live_trading)
 
         self.portfolio = Portfolio(self.exchanges, self.logger, self.db_other,
                                    self.db_client, self.strategy.models,
-                                   self.telegram)
+                                   self.telegram, self.live_trading)
 
         self.broker = Broker(self.exchanges, self.logger, self.portfolio,
                              self.db_other, self.db_client, self.live_trading,
@@ -114,18 +115,19 @@ class Server:
         self.data.live_trading = self.live_trading
         self.broker.live_trading = self.live_trading
 
+        self.cycle_count = 0
+
         # Check data is current, repair if necessary before live trading.
-        # No need to do so if backtesting, just use existing stored data.
+        # No need to do so in testing mode, use existing stored data instead.
         if self.live_trading:
             self.data.run_data_diagnostics(1)
 
             # Run twice to account for first diag runtime
             self.data.run_data_diagnostics(0)
 
-        self.cycle_count = 0
+            sleep(self.seconds_til_next_minute())
 
-        sleep(self.seconds_til_next_minute())
-
+        timestamp = None
         while True:
             if self.live_trading:
 
@@ -136,16 +138,18 @@ class Server:
 
                     # Fetch and queue events for processing.
                     self.events = self.broker.check_fills(self.events)
-                    self.events = self.data.update_market_data(self.events)
+                    self.events, timestamp = self.data.update_market_data(
+                        self.events)
                     self.clear_event_queue()
 
                 # Sleep til the next minute begins.
                 sleep(self.seconds_til_next_minute())
                 self.cycle_count += 1
 
-            # Update data w/o delay when backtesting, no diagnostics.
-            elif not self.live_trading:
-                self.events = self.data.update_market_data(self.events)
+            # Update data w/o delay when in test mode, no diagnostics.
+            else:
+                self.events, timestamp = self.data.update_market_data(
+                    self.events, timestamp)
                 self.clear_event_queue()
 
     def clear_event_queue(self):
@@ -235,7 +239,7 @@ class Server:
 
         return logger
 
-    def exchange_wrappers(self, logger, op_venues):
+    def exchange_wrappers(self, logger, op_venues, live_trading):
         """
         Create and return a list of exchange wrappers.
 
@@ -251,7 +255,7 @@ class Server:
 
         # TODO: load exchange wrappers from 'op_venues' list param
 
-        venues = [Bitmex(logger)]
+        venues = [Bitmex(logger, live_trading)]
         self.logger.info("Initialised exchange connectors.")
 
         return venues
@@ -325,7 +329,7 @@ class Server:
 
     def db_indices(self):
         """
-        Return index information as a list of dicts.
+        Return DB index information as a list of dicts.
 
         """
 

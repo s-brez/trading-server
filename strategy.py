@@ -59,12 +59,14 @@ class Strategy:
     # Maximum lookback in use by any strategy.
     MAX_LOOKBACK = 150
 
-    def __init__(self, exchanges, logger, db_prices, db_other, db_client):
+    def __init__(self, exchanges, logger, db_prices, db_other, db_client,
+                 live_trading):
         self.exchanges = exchanges
         self.logger = logger
         self.db_prices = db_prices
         self.db_other = db_other
         self.db_client = db_client
+        self.live_trading = live_trading
         self.db_collections_price = {
             i.get_name(): db_prices[i.get_name()] for i in self.exchanges}
 
